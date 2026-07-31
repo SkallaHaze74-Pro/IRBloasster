@@ -23,8 +23,10 @@ class ConsumerIrTransmitter(
     suspend fun transmit(signal: IrSignal): Result<Unit> = transmissionMutex.withLock {
         withContext(Dispatchers.IO) {
             runCatching {
-                val irManager = manager
-                require(irManager?.hasIrEmitter() == true) { "No Android Consumer IR emitter detected" }
+                val irManager = requireNotNull(manager) {
+                    "No Android Consumer IR service detected"
+                }
+                require(irManager.hasIrEmitter()) { "No Android Consumer IR emitter detected" }
                 require(signal.patternMicros.isNotEmpty()) { "IR pattern is empty" }
 
                 repeat(signal.repeatCount.coerceAtLeast(1)) { index ->
