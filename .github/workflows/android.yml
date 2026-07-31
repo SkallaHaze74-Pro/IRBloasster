@@ -19,10 +19,9 @@ jobs:
           java-version: 21
 
       - name: Set up Gradle
-        uses: gradle/actions/setup-gradle@v3
+        uses: 
+gradle/actions/setup-gradle@v3
 
-      - name: Accept Android SDK licences
-        run: yes | "$ANDROID_HOME"/cmdline-tools/latest/bin/sdkmanager --licenses
-
-      - name: Build (assembleDebug)
-        run: ./gradlew --no-daemon assembleDebug
+      - name: Build debug APK
+        run: ./gradlew --no-daemon
+assembleDebug
