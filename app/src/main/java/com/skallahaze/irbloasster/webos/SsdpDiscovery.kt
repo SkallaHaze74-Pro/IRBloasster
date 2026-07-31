@@ -11,8 +11,8 @@ import java.net.InetAddress
 import java.net.InetSocketAddress
 import java.util.Locale
 
-class SsdpDiscovery(private val context: Context) {
-    data class Result(
+internal class SsdpDiscovery(private val context: Context) {
+    internal data class Result(
         val devices: List<DiscoveredTv>,
         val error: String? = null
     )
