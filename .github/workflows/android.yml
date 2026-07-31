@@ -1,25 +1,30 @@
-name: SmartIR Android APK
+name: Android CI
 
 on:
   push:
-    branches: [main, ci-workflow]
+    branches:
+      - main
+      - livingroom-controller-v0.2
   pull_request:
-    branches: [main]
+    branches:
+      - main
+      - ci-workflow
   workflow_dispatch:
 
 permissions:
   contents: read
 
 concurrency:
-  group: smartir-${{ github.workflow }}-${{ github.ref }}
+  group: android-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
   build:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
 
     steps:
-      - name: Checkout
+      - name: Check out repository
         uses: actions/checkout@v4
 
       - name: Set up JDK 17
@@ -27,19 +32,21 @@ jobs:
         with:
           distribution: temurin
           java-version: "17"
+          cache: gradle
 
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
 
-      - name: Build debug APK
-        run: |
-          chmod +x gradlew
-          ./gradlew --no-daemon clean assembleDebug
+      - name: Make Gradle wrapper executable
+        run: chmod +x gradlew
 
-      - name: Upload SmartIR APK
+      - name: Run unit tests and build debug APK
+        run: ./gradlew --no-daemon testDebugUnitTest assembleDebug
+
+      - name: Upload debug APK
         uses: actions/upload-artifact@v4
         with:
-          name: SmartIR-debug
+          name: LivingRoomController-debug
           path: app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
           retention-days: 14
