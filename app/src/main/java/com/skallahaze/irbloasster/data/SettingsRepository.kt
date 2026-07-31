@@ -1,10 +1,18 @@
 package com.skallahaze.irbloasster.data
 
 import android.content.Context
+import android.security.keystore.KeyGenParameterSpec
+import android.security.keystore.KeyProperties
+import android.util.Base64
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import com.skallahaze.irbloasster.ir.SonyCommandMode
+import java.security.KeyStore
+import javax.crypto.Cipher
+import javax.crypto.KeyGenerator
+import javax.crypto.SecretKey
+import javax.crypto.spec.GCMParameterSpec
 
 enum class ThemePreference(val title: String) {
     SYSTEM("System"),
@@ -17,6 +25,7 @@ class SettingsRepository(context: Context) {
         "smart_ir_settings",
         Context.MODE_PRIVATE,
     )
+    private val secureStore = SecureStringStore()
 
     private var currentSonyMode by mutableStateOf(
         runCatching {
@@ -42,6 +51,14 @@ class SettingsRepository(context: Context) {
     val webOsHost: String
         get() = currentWebOsHost
 
+    private var currentWebOsMac by mutableStateOf(preferences.getString(KEY_WEBOS_MAC, "").orEmpty())
+    val webOsMac: String
+        get() = currentWebOsMac
+
+    private var currentAutoConnect by mutableStateOf(preferences.getBoolean(KEY_AUTO_CONNECT, true))
+    val autoConnect: Boolean
+        get() = currentAutoConnect
+
     fun setSonyMode(value: SonyCommandMode) {
         currentSonyMode = value
         preferences.edit().putString(KEY_SONY_MODE, value.name).apply()
@@ -59,17 +76,74 @@ class SettingsRepository(context: Context) {
 
     fun setWebOsHost(value: String) {
         currentWebOsHost = value.trim()
+            .removePrefix("ws://")
+            .removePrefix("wss://")
+            .substringBefore('/')
+            .removeSuffix(":3000")
+            .removeSuffix(":3001")
         preferences.edit().putString(KEY_WEBOS_HOST, currentWebOsHost).apply()
     }
 
-    fun getWebOsClientKey(): String = preferences.getString(KEY_WEBOS_CLIENT_KEY, "").orEmpty()
+    fun setWebOsMac(value: String) {
+        currentWebOsMac = value.trim().uppercase()
+        preferences.edit().putString(KEY_WEBOS_MAC, currentWebOsMac).apply()
+    }
+
+    fun setAutoConnect(value: Boolean) {
+        currentAutoConnect = value
+        preferences.edit().putBoolean(KEY_AUTO_CONNECT, value).apply()
+    }
+
+    fun getWebOsClientKey(): String {
+        val encrypted = preferences.getString(KEY_WEBOS_CLIENT_KEY_SECURE, "").orEmpty()
+        if (encrypted.isNotBlank()) {
+            secureStore.decrypt(encrypted)?.let { return it }
+        }
+
+        val legacy = preferences.getString(KEY_WEBOS_CLIENT_KEY, "").orEmpty()
+        if (legacy.isNotBlank()) {
+            setWebOsClientKey(legacy)
+        }
+        return legacy
+    }
 
     fun setWebOsClientKey(value: String) {
-        preferences.edit().putString(KEY_WEBOS_CLIENT_KEY, value).apply()
+        if (value.isBlank()) {
+            preferences.edit()
+                .remove(KEY_WEBOS_CLIENT_KEY_SECURE)
+                .remove(KEY_WEBOS_CLIENT_KEY)
+                .apply()
+            return
+        }
+
+        val encrypted = secureStore.encrypt(value)
+        if (encrypted != null) {
+            preferences.edit()
+                .putString(KEY_WEBOS_CLIENT_KEY_SECURE, encrypted)
+                .remove(KEY_WEBOS_CLIENT_KEY)
+                .apply()
+        } else {
+            // Very old or vendor-broken keystores still keep the app usable.
+            preferences.edit().putString(KEY_WEBOS_CLIENT_KEY, value).apply()
+        }
+    }
+
+    fun isWebOsClientKeyEncrypted(): Boolean =
+        preferences.getString(KEY_WEBOS_CLIENT_KEY_SECURE, "").orEmpty().isNotBlank()
+
+    fun getWebOsCertificateFingerprint(): String =
+        preferences.getString(KEY_WEBOS_CERTIFICATE, "").orEmpty()
+
+    fun setWebOsCertificateFingerprint(value: String) {
+        preferences.edit().putString(KEY_WEBOS_CERTIFICATE, value.trim()).apply()
     }
 
     fun clearWebOsPairing() {
-        preferences.edit().remove(KEY_WEBOS_CLIENT_KEY).apply()
+        preferences.edit()
+            .remove(KEY_WEBOS_CLIENT_KEY_SECURE)
+            .remove(KEY_WEBOS_CLIENT_KEY)
+            .remove(KEY_WEBOS_CERTIFICATE)
+            .apply()
     }
 
     private companion object {
@@ -77,6 +151,55 @@ class SettingsRepository(context: Context) {
         const val KEY_HAPTICS = "haptics"
         const val KEY_THEME = "theme"
         const val KEY_WEBOS_HOST = "webos_host"
+        const val KEY_WEBOS_MAC = "webos_mac"
+        const val KEY_AUTO_CONNECT = "auto_connect"
         const val KEY_WEBOS_CLIENT_KEY = "webos_client_key"
+        const val KEY_WEBOS_CLIENT_KEY_SECURE = "webos_client_key_secure"
+        const val KEY_WEBOS_CERTIFICATE = "webos_certificate_fingerprint"
+    }
+}
+
+private class SecureStringStore {
+    fun encrypt(value: String): String? = runCatching {
+        val cipher = Cipher.getInstance(TRANSFORMATION)
+        cipher.init(Cipher.ENCRYPT_MODE, getOrCreateKey())
+        val iv = Base64.encodeToString(cipher.iv, Base64.NO_WRAP)
+        val payload = Base64.encodeToString(cipher.doFinal(value.toByteArray(Charsets.UTF_8)), Base64.NO_WRAP)
+        "$VERSION:$iv:$payload"
+    }.getOrNull()
+
+    fun decrypt(encoded: String): String? = runCatching {
+        val parts = encoded.split(':', limit = 3)
+        require(parts.size == 3 && parts[0] == VERSION) { "Unknown secure value format" }
+        val iv = Base64.decode(parts[1], Base64.NO_WRAP)
+        val payload = Base64.decode(parts[2], Base64.NO_WRAP)
+        val cipher = Cipher.getInstance(TRANSFORMATION)
+        cipher.init(Cipher.DECRYPT_MODE, getOrCreateKey(), GCMParameterSpec(128, iv))
+        cipher.doFinal(payload).toString(Charsets.UTF_8)
+    }.getOrNull()
+
+    private fun getOrCreateKey(): SecretKey {
+        val keyStore = KeyStore.getInstance(ANDROID_KEYSTORE).apply { load(null) }
+        (keyStore.getKey(KEY_ALIAS, null) as? SecretKey)?.let { return it }
+
+        val generator = KeyGenerator.getInstance(KeyProperties.KEY_ALGORITHM_AES, ANDROID_KEYSTORE)
+        generator.init(
+            KeyGenParameterSpec.Builder(
+                KEY_ALIAS,
+                KeyProperties.PURPOSE_ENCRYPT or KeyProperties.PURPOSE_DECRYPT,
+            )
+                .setBlockModes(KeyProperties.BLOCK_MODE_GCM)
+                .setEncryptionPaddings(KeyProperties.ENCRYPTION_PADDING_NONE)
+                .setRandomizedEncryptionRequired(true)
+                .build(),
+        )
+        return generator.generateKey()
+    }
+
+    private companion object {
+        const val ANDROID_KEYSTORE = "AndroidKeyStore"
+        const val KEY_ALIAS = "smartir_webos_client_key"
+        const val TRANSFORMATION = "AES/GCM/NoPadding"
+        const val VERSION = "v1"
     }
 }
