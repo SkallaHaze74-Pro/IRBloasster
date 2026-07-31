@@ -4,8 +4,7 @@ plugins {
 }
 
 android {
-    namespace 
-"com.example.irbloasster"
+    namespace "com.example.irbloasster"
     compileSdk 34
 
     defaultConfig {
