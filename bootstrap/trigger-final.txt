@@ -1,1 +1,1 @@
-Trigger complete verified Living Room Controller source import.
+Trigger source import with workflow-safe commit.
