@@ -18,44 +18,48 @@ class SettingsRepository(context: Context) {
         Context.MODE_PRIVATE,
     )
 
-    var sonyMode by mutableStateOf(
+    private var currentSonyMode by mutableStateOf(
         runCatching {
             SonyCommandMode.valueOf(preferences.getString(KEY_SONY_MODE, SonyCommandMode.AV1.name).orEmpty())
         }.getOrDefault(SonyCommandMode.AV1),
     )
-        private set
+    val sonyMode: SonyCommandMode
+        get() = currentSonyMode
 
-    var hapticsEnabled by mutableStateOf(preferences.getBoolean(KEY_HAPTICS, true))
-        private set
+    private var currentHapticsEnabled by mutableStateOf(preferences.getBoolean(KEY_HAPTICS, true))
+    val hapticsEnabled: Boolean
+        get() = currentHapticsEnabled
 
-    var themePreference by mutableStateOf(
+    private var currentThemePreference by mutableStateOf(
         runCatching {
             ThemePreference.valueOf(preferences.getString(KEY_THEME, ThemePreference.SYSTEM.name).orEmpty())
         }.getOrDefault(ThemePreference.SYSTEM),
     )
-        private set
+    val themePreference: ThemePreference
+        get() = currentThemePreference
 
-    var webOsHost by mutableStateOf(preferences.getString(KEY_WEBOS_HOST, "").orEmpty())
-        private set
+    private var currentWebOsHost by mutableStateOf(preferences.getString(KEY_WEBOS_HOST, "").orEmpty())
+    val webOsHost: String
+        get() = currentWebOsHost
 
-    fun updateSonyMode(value: SonyCommandMode) {
-        sonyMode = value
+    fun setSonyMode(value: SonyCommandMode) {
+        currentSonyMode = value
         preferences.edit().putString(KEY_SONY_MODE, value.name).apply()
     }
 
-    fun updateHapticsEnabled(value: Boolean) {
-        hapticsEnabled = value
+    fun setHapticsEnabled(value: Boolean) {
+        currentHapticsEnabled = value
         preferences.edit().putBoolean(KEY_HAPTICS, value).apply()
     }
 
-    fun updateThemePreference(value: ThemePreference) {
-        themePreference = value
+    fun setThemePreference(value: ThemePreference) {
+        currentThemePreference = value
         preferences.edit().putString(KEY_THEME, value.name).apply()
     }
 
-    fun updateWebOsHost(value: String) {
-        webOsHost = value.trim()
-        preferences.edit().putString(KEY_WEBOS_HOST, webOsHost).apply()
+    fun setWebOsHost(value: String) {
+        currentWebOsHost = value.trim()
+        preferences.edit().putString(KEY_WEBOS_HOST, currentWebOsHost).apply()
     }
 
     fun getWebOsClientKey(): String = preferences.getString(KEY_WEBOS_CLIENT_KEY, "").orEmpty()
