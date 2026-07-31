@@ -1,12 +1,19 @@
-# IRBloasster
+# IRBloasster / SmartIR
 
-Android‑App zur Steuerung von Heimkino‑Geräten über den integrierten **IR‑Blaster** des Xiaomi 15T Pro.
+Lauffähige Minimal‑App (Jetpack Compose) zum Steuern deines LG OLED55B19LA
+und Sony STR‑DB870 per integrierten IR‑Blaster (Xiaomi 15T Pro).
 
-## Aktueller Status
-* Grundgerüst angelegt (README, .gitignore, MIT‑Lizenz)
-* Nächster Schritt: Gradle‑Projektstruktur und erste IR‑Codes für
-  * LG OLED55B19LA (TV)
-  * Sony‑Heimkino (Modell folgt)
+* **LG TV** – NEC‑Protokoll 32 bit  
+* **Sony Receiver** – SIRC 15 bit  
+* Großes Dark‑Theme‑UI, Demo‑Buttons
 
----
-Lizenz: MIT
+## Quick Start (Termux)
+
+```bash
+pkg install openjdk-17 git gradle
+git clone https://github.com/SkallaHaze74-Pro/IRBloasster.git
+cd IRBloasster
+git checkout smartir
+./gradlew :app:assembleDebug
+adb install app/build/outputs/apk/debug/app-debug.apk
+```
