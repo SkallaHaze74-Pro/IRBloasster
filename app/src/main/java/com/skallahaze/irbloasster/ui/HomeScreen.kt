@@ -29,11 +29,11 @@ import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -69,10 +69,10 @@ internal enum class Scene(
     val subtitle: String,
     val symbol: String,
 ) {
-    TELEVISION("Fernsehen", "TV + Sony auf TV/SAT", "TV"),
-    CINEMA("Heimkino", "TV + Sony auf DVD/LD", "▶"),
-    MUSIC("Musik", "Sony auf CD und 2CH", "♫"),
-    ALL_OFF("Alles aus", "Beide Geräte ausschalten", "OFF"),
+    TELEVISION("Fernsehen", "TV wecken + Sony TV/SAT testen", "TV"),
+    CINEMA("Heimkino", "TV wecken + Sony DVD/LD testen", "▶"),
+    MUSIC("Musik", "Sony CD + 2CH testen", "♫"),
+    ALL_OFF("Alles aus", "TV und Sony ausschalten", "OFF"),
 }
 
 @Composable
@@ -109,7 +109,7 @@ fun SmartIrApp(
 
     fun sendSony(command: SonyCommand) {
         if (ir.transmit(command, settings.sonyMode)) {
-            lastAction = "Sony ${settings.sonyMode.title} · ${command.label}"
+            lastAction = "Sony-Testprofil ${settings.sonyMode.title} · ${command.label}"
             pulse()
         } else {
             reportFailure("Kein nutzbarer IR-Blaster gefunden")
@@ -130,6 +130,16 @@ fun SmartIrApp(
         }
     }
 
+    fun wakeTvWithFallback(): Boolean {
+        val networkWakeSent = webOs.wakeTv()
+        return networkWakeSent || ir.transmit(LG_OLED55B1.POWER_ON)
+    }
+
+    fun turnOffTvWithFallback(): Boolean {
+        val networkSent = webState.connection == WebOsConnection.CONNECTED && webOs.powerOff()
+        return networkSent || ir.transmit(LG_OLED55B1.POWER_OFF)
+    }
+
     fun runScene(scene: Scene) {
         scope.launch {
             lastAction = "Szene · ${scene.title} läuft …"
@@ -137,16 +147,22 @@ fun SmartIrApp(
 
             when (scene) {
                 Scene.TELEVISION -> {
-                    results += ir.transmit(LG_OLED55B1.POWER_ON)
-                    delay(900)
+                    results += wakeTvWithFallback()
+                    delay(1_600)
+                    if (webState.connection != WebOsConnection.CONNECTED && settings.webOsHost.isNotBlank()) {
+                        webOs.connect()
+                    }
                     results += ir.transmit(Sony_STR_DB870.POWER_ON, settings.sonyMode)
                     delay(550)
                     results += ir.transmit(Sony_STR_DB870.INPUT_TV_SAT, settings.sonyMode)
                 }
 
                 Scene.CINEMA -> {
-                    results += ir.transmit(LG_OLED55B1.POWER_ON)
-                    delay(900)
+                    results += wakeTvWithFallback()
+                    delay(1_600)
+                    if (webState.connection != WebOsConnection.CONNECTED && settings.webOsHost.isNotBlank()) {
+                        webOs.connect()
+                    }
                     results += ir.transmit(Sony_STR_DB870.POWER_ON, settings.sonyMode)
                     delay(550)
                     results += ir.transmit(Sony_STR_DB870.INPUT_DVD_LD, settings.sonyMode)
@@ -163,16 +179,16 @@ fun SmartIrApp(
                 Scene.ALL_OFF -> {
                     results += ir.transmit(Sony_STR_DB870.POWER_OFF, settings.sonyMode)
                     delay(500)
-                    results += ir.transmit(LG_OLED55B1.POWER_OFF)
+                    results += turnOffTvWithFallback()
                 }
             }
 
             if (results.all { it }) {
-                lastAction = "Szene · ${scene.title} fertig"
+                lastAction = "Szene · ${scene.title} gesendet"
                 pulse()
             } else {
                 lastAction = "Szene · ${scene.title} unvollständig"
-                reportFailure("Mindestens ein IR-Befehl konnte nicht gesendet werden")
+                reportFailure("Mindestens ein Befehl konnte nicht gesendet werden")
             }
         }
     }
@@ -207,7 +223,13 @@ fun SmartIrApp(
                     webState = webState,
                     lastAction = lastAction,
                     onScene = ::runScene,
-                    onTvPower = { sendLg(LG_OLED55B1.POWER) },
+                    onTvPower = {
+                        if (webOs.wakeTv()) {
+                            lastAction = "LG · Wake-on-LAN"
+                        } else {
+                            sendLg(LG_OLED55B1.POWER)
+                        }
+                    },
                     onSonyPower = { sendSony(Sony_STR_DB870.POWER) },
                     onTvVolumeUp = { sendTv("Lauter", webOs::volumeUp, LG_OLED55B1.VOLUME_UP) },
                     onTvVolumeDown = { sendTv("Leiser", webOs::volumeDown, LG_OLED55B1.VOLUME_DOWN) },
@@ -286,7 +308,7 @@ private fun HomeDashboard(
             ScreenHeader(
                 eyebrow = "LIVING ROOM CONTROLLER",
                 title = "SmartIR",
-                subtitle = "LG OLED55B19LA + Sony STR-DB870",
+                subtitle = "LG OLED55B19LA + Sony SIRC-Testprofil",
             )
         }
 
@@ -305,9 +327,10 @@ private fun HomeDashboard(
                     modifier = Modifier.weight(1f),
                     title = "LG webOS",
                     value = when (webState.connection) {
-                        WebOsConnection.CONNECTED -> "Verbunden"
+                        WebOsConnection.CONNECTED -> if (webState.secureTransport) "Sicher verbunden" else "Verbunden"
                         WebOsConnection.PAIRING -> "Bestätigen"
                         WebOsConnection.CONNECTING -> "Verbindet"
+                        WebOsConnection.DISCOVERING -> "Sucht"
                         WebOsConnection.ERROR -> "Fehler"
                         WebOsConnection.DISCONNECTED -> "Optional"
                     },
@@ -338,7 +361,7 @@ private fun HomeDashboard(
                     horizontalArrangement = Arrangement.spacedBy(10.dp),
                 ) {
                     RemoteKey("TV Power", "TV", onTvPower, Modifier.weight(1f), primary = true)
-                    RemoteKey("Sony Power", "AV", onSonyPower, Modifier.weight(1f), primary = true)
+                    RemoteKey("Sony Test", "AV", onSonyPower, Modifier.weight(1f), primary = true)
                 }
                 Spacer(Modifier.height(10.dp))
                 Row(
@@ -366,7 +389,7 @@ private fun HomeDashboard(
                 DeviceCard(
                     modifier = Modifier.weight(1f),
                     title = "Sony",
-                    subtitle = "Receiver-Fernbedienung",
+                    subtitle = "SIRC-Kandidaten testen",
                     symbol = "AV",
                     onClick = onOpenSony,
                 )
