@@ -1,0 +1,29 @@
+name: Android CI
+
+on:
+  push:
+    branches: [ main, ci-workflow ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v3
+
+      # Lizenzen automatisch akzeptieren
+      - name: Accept Android SDK licences
+        run: yes | sdkmanager --licenses
+
+      - name: Build (assembleDebug)
+        run: ./gradlew --no-daemon assembleDebug
