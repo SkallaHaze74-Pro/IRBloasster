@@ -1,89 +1,40 @@
-name: Living Room Controller Bootstrap CI
+name: Android CI
 
 on:
   pull_request:
     branches:
       - ci-workflow
+      - main
   workflow_dispatch:
 
 permissions:
-  contents: write
-  pull-requests: read
+  contents: read
 
 concurrency:
-  group: livingroom-bootstrap-${{ github.event.pull_request.number || github.ref }}
+  group: android-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
-  bootstrap-build:
-    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+  build:
     runs-on: ubuntu-latest
     timeout-minutes: 30
 
     steps:
-      - name: Check out proposed branch
+      - name: Check out repository
         uses: actions/checkout@v4
-        with:
-          repository: ${{ github.event.pull_request.head.repo.full_name || github.repository }}
-          ref: ${{ github.event.pull_request.head.ref || 'livingroom-controller-v0.2' }}
-          token: ${{ secrets.GITHUB_TOKEN }}
-          fetch-depth: 0
-
-      - name: Verify and unpack reviewed source snapshot
-        shell: bash
-        run: |
-          set -euo pipefail
-          test -f gradle/wrapper/gradle-wrapper.jar
-          cat \
-            bootstrap/chunks/000.part \
-            bootstrap/chunks/001.part \
-            bootstrap/chunks/002.part \
-            bootstrap/chunks/003.part \
-            bootstrap/chunks/004.part \
-            bootstrap/chunks/005.part \
-            bootstrap/chunks/0060.piece \
-            bootstrap/chunks/0061.piece \
-            bootstrap/chunks/0062.piece \
-            bootstrap/chunks/00630.piece \
-            bootstrap/chunks/006310.piece \
-            bootstrap/chunks/006311.piece \
-            bootstrap/chunks/007.part \
-            > /tmp/livingroom-source.tar.gz.b64
-          test "$(wc -c < /tmp/livingroom-source.tar.gz.b64)" -eq 49848
-          echo "025cff43e42fc840d87ba8135715eb3075ea0d949e996187497492892b484e36  /tmp/livingroom-source.tar.gz.b64" | sha256sum --check --strict
-          cp gradle/wrapper/gradle-wrapper.jar /tmp/gradle-wrapper.jar
-          base64 --decode /tmp/livingroom-source.tar.gz.b64 > /tmp/livingroom-source.tar.gz
-          echo "8944642966651c05c1276cd3cb77cace33d9caea7779a9eebf2dc5a015a4aa83  /tmp/livingroom-source.tar.gz" | sha256sum --check --strict
-          find . -mindepth 1 -maxdepth 1 ! -name .git -exec rm -rf -- {} +
-          tar -xzf /tmp/livingroom-source.tar.gz -C .
-          mkdir -p gradle/wrapper
-          cp /tmp/gradle-wrapper.jar gradle/wrapper/gradle-wrapper.jar
-          chmod +x gradlew
-
-      - name: Save complete source tree to proposed branch
-        if: github.event_name == 'pull_request'
-        shell: bash
-        env:
-          HEAD_BRANCH: ${{ github.event.pull_request.head.ref }}
-        run: |
-          set -euo pipefail
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git checkout HEAD -- .github/workflows
-          git add --all
-          if ! git diff --cached --quiet; then
-            git commit -m "Living Room Controller v0.2: webOS, IR, scenes and diagnostics"
-            git push origin "HEAD:${HEAD_BRANCH}"
-          fi
 
       - name: Set up JDK 17
         uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: "17"
+          cache: gradle
 
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
+
+      - name: Make Gradle wrapper executable
+        run: chmod +x gradlew
 
       - name: Run unit tests and build debug APK
         run: ./gradlew --no-daemon testDebugUnitTest assembleDebug
