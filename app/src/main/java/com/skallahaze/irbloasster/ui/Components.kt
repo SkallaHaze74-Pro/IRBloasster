@@ -25,6 +25,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
@@ -34,6 +35,8 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
@@ -187,11 +190,11 @@ fun RepeatRemoteButton(
 }
 
 private fun Modifier.repeatPress(action: () -> Unit): Modifier =
-    androidx.compose.ui.input.pointer.pointerInput(action) {
+    pointerInput(action) {
         awaitEachGesture {
             awaitFirstDown(requireUnconsumed = false)
             action()
-            val repeating = launch {
+            val repeating = CoroutineScope(currentCoroutineContext()).launch {
                 delay(450)
                 while (isActive) {
                     action()
