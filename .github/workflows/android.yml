@@ -45,7 +45,8 @@ jobs:
             bootstrap/chunks/0061.piece \
             bootstrap/chunks/0062.piece \
             bootstrap/chunks/00630.piece \
-            bootstrap/chunks/00631.piece \
+            bootstrap/chunks/006310.piece \
+            bootstrap/chunks/006311.piece \
             bootstrap/chunks/007.part \
             > /tmp/livingroom-source.tar.gz.b64
           test "$(wc -c < /tmp/livingroom-source.tar.gz.b64)" -eq 49848
