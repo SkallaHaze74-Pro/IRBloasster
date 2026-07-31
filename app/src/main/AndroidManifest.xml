@@ -1,18 +1,8 @@
-<?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android"
-    package="com.skallahaze.irbloasster">
-
-    <!-- IR-Blaster benötigtes Hardware-Feature -->
-    <uses-feature android:name="android.hardware.consumerir" android:required="true"/>
-
-    <application
-        android:allowBackup="true"
-        android:label="IRBloasster"
-        android:icon="@mipmap/ic_launcher"
-        android:roundIcon="@mipmap/ic_launcher_round"
-        android:supportsRtl="true"
-        android:theme="@style/Theme.Material3.DayNight.NoActionBar">
-        <activity android:name=".MainActivity">
+<manifest package="com.example.irbloasster"
+          xmlns:android="http://schemas.android.com/apk/res/android">
+    <application android:label="IRBloasster">
+        <activity android:name=".MainActivity"
+                  android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />

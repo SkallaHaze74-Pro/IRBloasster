@@ -21,9 +21,8 @@ jobs:
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v3
 
-      # Lizenzen automatisch akzeptieren
       - name: Accept Android SDK licences
-        run: yes | sdkmanager --licenses
+        run: yes | "$ANDROID_HOME"/cmdline-tools/latest/bin/sdkmanager --licenses
 
       - name: Build (assembleDebug)
         run: ./gradlew --no-daemon assembleDebug
