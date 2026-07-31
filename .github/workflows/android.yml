@@ -2,26 +2,45 @@ name: Android CI
 
 on:
   push:
-    branches: [ main, ci-workflow ]
+    branches:
+      - main
+      - living-room-controller-v1
   pull_request:
-    branches: [ main ]
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
 
 jobs:
   build:
     runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
+    timeout-minutes: 20
 
-      - name: Set up JDK 21
-        uses: actions/setup-java@v4
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v5
         with:
           distribution: temurin
-          java-version: 21
+          java-version: "17"
 
       - name: Set up Gradle
-        uses: 
-gradle/actions/setup-gradle@v3
+        uses: gradle/actions/setup-gradle@v6
 
-      - name: Build debug APK
-        run: ./gradlew --no-daemon
-assembleDebug
+      - name: Make Gradle wrapper executable
+        run: chmod +x gradlew
+
+      - name: Test and build debug APK
+        run: ./gradlew --no-daemon testDebugUnitTest assembleDebug
+
+      - name: Upload debug APK
+        uses: actions/upload-artifact@v7
+        with:
+          name: LivingRoomController-debug
+          path: app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+          retention-days: 14
