@@ -10,7 +10,7 @@ com.skallahaze.irbloasster
 
 Dadurch können spätere Builds als Update installiert werden.
 
-## Aktueller Stand: 1.1
+## Aktueller Stand: 1.1.1
 
 - eigenständig entwickelte Material-3-Oberfläche mit Hell-/Dunkelmodus
 - große sofa- und einhandtaugliche Tasten
@@ -32,7 +32,8 @@ Dadurch können spätere Builds als Update installiert werden.
 - Szenen: Fernsehen, Heimkino, Musik und Alles aus
 - Diagnose-Labor für eigene NEC-, SIRC- und SSAP-Tests
 - Unit-Tests für NEC-/SIRC-Bitreihenfolge, Pulsbreiten und Frame-Timing
-- automatischer GitHub-Actions-Test und APK-Build
+- bereinigter GitHub-Actions-Workflow ausschließlich für den Hauptstand
+- automatischer Test und APK-Build mit vollständigem Stacktrace bei Fehlern
 
 ## Wichtige Testgrenze
 
@@ -42,7 +43,7 @@ Die vollständige Prüfliste liegt unter [`docs/HARDWARE_TEST_CHECKLIST.md`](doc
 
 ## Installation über GitHub Actions
 
-Unter **Actions → SmartIR Android APK** den neuesten erfolgreichen Lauf öffnen und das Artefakt **SmartIR-v1.1-debug** laden. Nach dem Entpacken kann die enthaltene `app-debug.apk` installiert werden.
+Unter **Actions → SmartIR Android APK** den neuesten erfolgreichen Lauf auf dem Branch **main** öffnen und das Artefakt **SmartIR-v1.1.1-debug** laden. Nach dem Entpacken kann die enthaltene `app-debug.apk` installiert werden.
 
 ## Bauen in Termux
 
@@ -51,7 +52,7 @@ pkg install openjdk-17 git
 git clone https://github.com/SkallaHaze74-Pro/IRBloasster.git
 cd IRBloasster
 chmod +x gradlew
-./gradlew --no-daemon clean testDebugUnitTest assembleDebug
+./gradlew --no-daemon --stacktrace clean testDebugUnitTest assembleDebug
 ```
 
 Die APK liegt danach hier:
