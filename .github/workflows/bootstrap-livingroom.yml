@@ -1,5 +1,6 @@
 name: Bootstrap Living Room Controller
 
+# One-shot workflow: unpack the reviewed source snapshot, then remove itself.
 on:
   push:
     branches:
