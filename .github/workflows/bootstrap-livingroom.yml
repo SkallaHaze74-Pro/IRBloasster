@@ -1,0 +1,53 @@
+name: Bootstrap Living Room Controller
+
+on:
+  push:
+    branches:
+      - livingroom-controller-v0.2
+    paths:
+      - bootstrap/livingroom-source.tar.gz.b64
+      - .github/workflows/bootstrap-livingroom.yml
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  apply-source:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Check out target branch
+        uses: actions/checkout@v4
+        with:
+          ref: livingroom-controller-v0.2
+          fetch-depth: 0
+
+      - name: Verify and unpack source snapshot
+        shell: bash
+        run: |
+          set -euo pipefail
+          cp bootstrap/livingroom-source.tar.gz.b64 /tmp/livingroom-source.tar.gz.b64
+          cp gradle/wrapper/gradle-wrapper.jar /tmp/gradle-wrapper.jar
+          base64 --decode /tmp/livingroom-source.tar.gz.b64 > /tmp/livingroom-source.tar.gz
+          echo "8944642966651c05c1276cd3cb77cace33d9caea7779a9eebf2dc5a015a4aa83  /tmp/livingroom-source.tar.gz" | sha256sum --check --strict
+          find . -mindepth 1 -maxdepth 1 ! -name .git -exec rm -rf -- {} +
+          tar -xzf /tmp/livingroom-source.tar.gz -C .
+          mkdir -p gradle/wrapper
+          cp /tmp/gradle-wrapper.jar gradle/wrapper/gradle-wrapper.jar
+          chmod +x gradlew
+
+      - name: Commit complete source tree
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add --all
+          if git diff --cached --quiet; then
+            echo "No source changes to commit."
+            exit 0
+          fi
+          git commit -m "Living Room Controller v0.2: webOS, IR, scenes and diagnostics"
+          git push origin HEAD:livingroom-controller-v0.2
