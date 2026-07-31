@@ -2,7 +2,7 @@ name: SmartIR Android APK
 
 on:
   push:
-    branches: [main, ci-workflow]
+    branches: [main, smartir-v1.1-hardening]
   pull_request:
     branches: [main]
   workflow_dispatch:
@@ -17,6 +17,7 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
 
     steps:
       - name: Checkout
@@ -31,15 +32,15 @@ jobs:
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
 
-      - name: Build debug APK
+      - name: Test and build debug APK
         run: |
           chmod +x gradlew
-          ./gradlew --no-daemon clean assembleDebug
+          ./gradlew --no-daemon clean testDebugUnitTest assembleDebug
 
       - name: Upload SmartIR APK
         uses: actions/upload-artifact@v4
         with:
-          name: SmartIR-debug
+          name: SmartIR-v1.1-debug
           path: app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
           retention-days: 14
