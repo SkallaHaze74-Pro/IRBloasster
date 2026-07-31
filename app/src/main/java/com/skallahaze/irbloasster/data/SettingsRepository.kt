@@ -38,22 +38,22 @@ class SettingsRepository(context: Context) {
     var webOsHost by mutableStateOf(preferences.getString(KEY_WEBOS_HOST, "").orEmpty())
         private set
 
-    fun setSonyMode(value: SonyCommandMode) {
+    fun updateSonyMode(value: SonyCommandMode) {
         sonyMode = value
         preferences.edit().putString(KEY_SONY_MODE, value.name).apply()
     }
 
-    fun setHapticsEnabled(value: Boolean) {
+    fun updateHapticsEnabled(value: Boolean) {
         hapticsEnabled = value
         preferences.edit().putBoolean(KEY_HAPTICS, value).apply()
     }
 
-    fun setThemePreference(value: ThemePreference) {
+    fun updateThemePreference(value: ThemePreference) {
         themePreference = value
         preferences.edit().putString(KEY_THEME, value.name).apply()
     }
 
-    fun setWebOsHost(value: String) {
+    fun updateWebOsHost(value: String) {
         webOsHost = value.trim()
         preferences.edit().putString(KEY_WEBOS_HOST, webOsHost).apply()
     }
