@@ -34,6 +34,27 @@ class IrProtocolsTest {
         assertTrue(pattern.all { it > 0 })
     }
 
+    @Test
+    fun sircEncodesDataAsPulseWidthAndLsbFirst() {
+        val pattern = Sirc.encode(command = 21, address = 16, bits = 12, frames = 1)
+
+        assertEquals(2_400, pattern[0])
+        assertEquals(600, pattern[1])
+        assertEquals(1_200, pattern[2]) // command bit 0 = 1
+        assertEquals(600, pattern[3])   // fixed inter-bit space
+        assertEquals(600, pattern[4])   // command bit 1 = 0
+        assertEquals(600, pattern[5])
+        assertEquals(26, pattern.size)
+    }
+
+    @Test
+    fun sircRepeatsFramesOnFortyFiveMillisecondPeriod() {
+        val pattern = Sirc.encode(command = 0, address = 0, bits = 12, frames = 2)
+
+        assertEquals(52, pattern.size)
+        assertEquals(45_000, pattern.take(26).sum())
+    }
+
     @Test(expected = IllegalArgumentException::class)
     fun sircRejectsAddressThatDoesNotFitTwelveBits() {
         Sirc.encode(command = 1, address = 32, bits = 12)
