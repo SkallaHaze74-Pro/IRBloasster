@@ -27,6 +27,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.skallahaze.irbloasster.data.SettingsRepository
 import com.skallahaze.irbloasster.data.ThemePreference
@@ -46,9 +47,11 @@ internal fun SettingsScreen(
     onMessage: (String) -> Unit,
 ) {
     var hostInput by rememberSaveable(settings.webOsHost) { mutableStateOf(settings.webOsHost) }
+    var macInput by rememberSaveable(settings.webOsMac) { mutableStateOf(settings.webOsMac) }
     var necHex by rememberSaveable { mutableStateOf("20DF10EF") }
     var sircCommand by rememberSaveable { mutableStateOf("21") }
     var sircAddress by rememberSaveable { mutableStateOf("16") }
+    var sircBits by rememberSaveable { mutableStateOf("12") }
     var ssapUri by rememberSaveable { mutableStateOf("ssap://system/getSystemInfo") }
     var ssapPayload by rememberSaveable { mutableStateOf("") }
     var showLab by rememberSaveable { mutableStateOf(false) }
@@ -63,25 +66,91 @@ internal fun SettingsScreen(
         ScreenHeader(
             eyebrow = "SETUP & ANALYSE",
             title = "SmartIR konfigurieren",
-            subtitle = "IR, Sony-Modus und lokales LG-webOS",
+            subtitle = "Lokales webOS, IR-Testprofile und Diagnose",
         )
 
         SectionCard {
-            Text("LG TV über WLAN", style = MaterialTheme.typography.titleMedium)
+            Text("LG TV im Heimnetz", style = MaterialTheme.typography.titleMedium)
             Spacer(Modifier.height(6.dp))
-            Text(
-                webState.message,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
+            Text(webState.message, color = MaterialTheme.colorScheme.onSurfaceVariant)
             Spacer(Modifier.height(10.dp))
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+                OutlinedButton(
+                    onClick = { webOs.discoverTvs() },
+                    modifier = Modifier.weight(1f),
+                ) {
+                    Text(if (webState.connection == WebOsConnection.DISCOVERING) "Suche läuft …" else "TV suchen")
+                }
+                OutlinedButton(
+                    onClick = {
+                        settings.setWebOsMac(macInput)
+                        if (!webOs.wakeTv()) onMessage("Bitte eine gültige TV-MAC-Adresse eintragen")
+                    },
+                    modifier = Modifier.weight(1f),
+                ) { Text("TV wecken") }
+            }
+
+            if (webState.discoveredTvs.isNotEmpty()) {
+                Spacer(Modifier.height(10.dp))
+                Text("Gefundene Fernseher", style = MaterialTheme.typography.labelLarge)
+                Spacer(Modifier.height(6.dp))
+                webState.discoveredTvs.forEach { tv ->
+                    OutlinedButton(
+                        onClick = {
+                            webOs.selectDiscoveredTv(tv)
+                            hostInput = tv.host
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Column(Modifier.fillMaxWidth()) {
+                            Text(tv.name, fontWeight = FontWeight.SemiBold)
+                            Text(tv.host, style = MaterialTheme.typography.bodySmall)
+                        }
+                    }
+                    Spacer(Modifier.height(6.dp))
+                }
+            }
+
             OutlinedTextField(
                 value = hostInput,
                 onValueChange = { hostInput = it },
                 modifier = Modifier.fillMaxWidth(),
-                label = { Text("IP-Adresse, z. B. 192.168.178.45") },
+                label = { Text("TV-IP oder Hostname") },
+                supportingText = { Text("Sichere Verbindung nutzt Port 3001, Port 3000 nur als Fallback") },
                 singleLine = true,
             )
-            Spacer(Modifier.height(10.dp))
+            Spacer(Modifier.height(8.dp))
+            OutlinedTextField(
+                value = macInput,
+                onValueChange = { macInput = it.take(17) },
+                modifier = Modifier.fillMaxWidth(),
+                label = { Text("TV-MAC für Wake-on-LAN") },
+                supportingText = { Text("Beispiel: AA:BB:CC:DD:EE:FF") },
+                singleLine = true,
+            )
+            Spacer(Modifier.height(8.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Column(Modifier.weight(1f)) {
+                    Text("Automatisch wiederverbinden")
+                    Text(
+                        "Nach App-Start und kurzen Verbindungsabbrüchen",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                Switch(
+                    checked = settings.autoConnect,
+                    onCheckedChange = settings::setAutoConnect,
+                )
+            }
+            Spacer(Modifier.height(8.dp))
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(10.dp),
@@ -89,39 +158,42 @@ internal fun SettingsScreen(
                 Button(
                     onClick = {
                         settings.setWebOsHost(hostInput)
+                        settings.setWebOsMac(macInput)
                         webOs.connect(hostInput)
                     },
                     modifier = Modifier.weight(1f),
                 ) {
-                    Text(
-                        if (webState.connection == WebOsConnection.CONNECTED) {
-                            "Neu verbinden"
-                        } else {
-                            "Verbinden"
-                        },
-                    )
+                    Text(if (webState.connection == WebOsConnection.CONNECTED) "Neu verbinden" else "Verbinden")
                 }
                 OutlinedButton(
                     onClick = webOs::disconnect,
                     modifier = Modifier.weight(1f),
                 ) { Text("Trennen") }
             }
-            Spacer(Modifier.height(8.dp))
+            Spacer(Modifier.height(6.dp))
             TextButton(onClick = webOs::forgetPairing) {
-                Text("Gespeicherte TV-Kopplung löschen")
+                Text("Kopplung und Zertifikat zurücksetzen")
             }
 
             if (webState.connection == WebOsConnection.CONNECTED) {
                 Spacer(Modifier.height(8.dp))
+                InfoLine("Transport", if (webState.secureTransport) "WSS 3001 · Zertifikat angeheftet" else "WS 3000 · Legacy-Fallback")
+                InfoLine("Client-Key", if (settings.isWebOsClientKeyEncrypted()) "Android-Keystore verschlüsselt" else "lokal gespeichert")
                 InfoLine("Modell", webState.modelName ?: "wird gelesen")
                 InfoLine("App/Eingang", webState.currentApp ?: "unbekannt")
                 InfoLine("Power", webState.powerState ?: "unbekannt")
                 InfoLine("Lautstärke", webState.volume?.toString() ?: "unbekannt")
+                InfoLine("Eingänge", webState.inputs.size.toString())
+                InfoLine("Installierte Apps", webState.apps.size.toString())
+                InfoLine("Magic Remote", if (webState.pointerReady) "bereit" else "wird verbunden")
+                webState.certificateFingerprint.takeIf { it.isNotBlank() }?.let { fingerprint ->
+                    InfoLine("TV-Zertifikat", fingerprint.take(23) + "…")
+                }
             }
         }
 
         SectionCard {
-            Text("Sony Command Mode", style = MaterialTheme.typography.titleMedium)
+            Text("Sony SIRC-Testprofil", style = MaterialTheme.typography.titleMedium)
             Spacer(Modifier.height(8.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 SonyCommandMode.entries.forEach { mode ->
@@ -134,7 +206,7 @@ internal fun SettingsScreen(
             }
             Spacer(Modifier.height(6.dp))
             Text(
-                "Standard ist AV1. AV2 wählen, falls dein Receiver darauf umgestellt wurde.",
+                "Die Modellbezeichnung wurde aus einem Foto abgeleitet und ist noch nicht am Gerät bestätigt. AV1/AV2 und einzelne Tasten deshalb zuerst testen.",
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
@@ -175,15 +247,9 @@ internal fun SettingsScreen(
             Spacer(Modifier.height(8.dp))
             InfoLine("IR-Hardware", if (irAvailable) "erkannt" else "nicht erkannt")
             InfoLine("LG-Protokoll", "NEC 32 Bit · 38 kHz")
-            InfoLine(
-                "Sony-Protokoll",
-                if (settings.sonyMode == SonyCommandMode.AV1) {
-                    "SIRC 12 Bit · 40 kHz"
-                } else {
-                    "SIRC 15 Bit · 40 kHz"
-                },
-            )
+            InfoLine("Sony-Protokoll", "SIRC 12 / 15 / 20 Bit · 40 kHz")
             InfoLine("LG Netzwerk", webState.connection.name)
+            if (webState.reconnectAttempt > 0) InfoLine("Reconnect", "Versuch ${webState.reconnectAttempt}")
         }
 
         OutlinedButton(
@@ -222,23 +288,26 @@ internal fun SettingsScreen(
                 SectionCard {
                     Text("Sony SIRC-Code testen", style = MaterialTheme.typography.titleMedium)
                     Spacer(Modifier.height(8.dp))
-                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         OutlinedTextField(
                             value = sircCommand,
-                            onValueChange = { value ->
-                                sircCommand = value.filter { it.isDigit() }.take(3)
-                            },
+                            onValueChange = { sircCommand = it.filter(Char::isDigit).take(3) },
                             modifier = Modifier.weight(1f),
                             label = { Text("Command") },
                             singleLine = true,
                         )
                         OutlinedTextField(
                             value = sircAddress,
-                            onValueChange = { value ->
-                                sircAddress = value.filter { it.isDigit() }.take(3)
-                            },
+                            onValueChange = { sircAddress = it.filter(Char::isDigit).take(3) },
                             modifier = Modifier.weight(1f),
                             label = { Text("Adresse") },
+                            singleLine = true,
+                        )
+                        OutlinedTextField(
+                            value = sircBits,
+                            onValueChange = { sircBits = it.filter(Char::isDigit).take(2) },
+                            modifier = Modifier.weight(1f),
+                            label = { Text("Bits") },
                             singleLine = true,
                         )
                     }
@@ -247,10 +316,11 @@ internal fun SettingsScreen(
                         onClick = {
                             val command = sircCommand.toIntOrNull()
                             val address = sircAddress.toIntOrNull()
-                            if (command == null || address == null) {
-                                onMessage("Command und Adresse müssen Zahlen sein")
+                            val bits = sircBits.toIntOrNull()
+                            if (command == null || address == null || bits == null || bits !in setOf(12, 15, 20)) {
+                                onMessage("Command, Adresse und Bitlänge 12/15/20 prüfen")
                             } else {
-                                onRawSirc(command, address, if (address > 31) 15 else 12)
+                                onRawSirc(command, address, bits)
                             }
                         },
                         modifier = Modifier.fillMaxWidth(),

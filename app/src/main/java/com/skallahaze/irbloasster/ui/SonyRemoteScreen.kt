@@ -16,6 +16,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.skallahaze.irbloasster.ir.SonyCommand
 import com.skallahaze.irbloasster.ir.SonyCommandMode
@@ -34,10 +35,21 @@ internal fun SonyRemoteScreen(
     ) {
         item {
             ScreenHeader(
-                eyebrow = "SONY RECEIVER",
-                title = "STR-DB870",
+                eyebrow = "SONY SIRC TESTPROFIL",
+                title = "Sony Heimkino",
                 subtitle = "SIRC ${if (mode == SonyCommandMode.AV1) "12" else "15"} Bit · Command Mode ${mode.title}",
             )
+        }
+
+        item {
+            SectionCard {
+                Text("Noch am echten Gerät bestätigen", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                Spacer(Modifier.height(6.dp))
+                Text(
+                    "Die interne Profilbezeichnung STR-DB870 stammt aus der bisherigen Projektannahme. Das genaue Sony-Modell und sämtliche Befehle sind noch nicht durch einen Hardwaretest bestätigt. Teste zuerst Power, Lautstärke und Mute; verwende das Protokoll-Labor für Korrekturen.",
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
         }
 
         item {
@@ -53,6 +65,12 @@ internal fun SonyRemoteScreen(
                         )
                     }
                 }
+                Spacer(Modifier.height(6.dp))
+                Text(
+                    "AV1 ist der erste Kandidat. Falls keine Taste reagiert, AV2 testen.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
             }
         }
 
@@ -62,20 +80,20 @@ internal fun SonyRemoteScreen(
                 horizontalArrangement = Arrangement.spacedBy(10.dp),
             ) {
                 RemoteKey(
-                    "Power",
+                    "Power testen",
                     "⏻",
                     { onSony(Sony_STR_DB870.POWER) },
                     Modifier.weight(1f),
                     primary = true,
                 )
                 RemoteKey(
-                    "Stumm",
+                    "Stumm testen",
                     "MUTE",
                     { onSony(Sony_STR_DB870.MUTE) },
                     Modifier.weight(1f),
                 )
                 RemoteKey(
-                    "2CH",
+                    "2CH testen",
                     "2CH",
                     { onSony(Sony_STR_DB870.MODE_2CH) },
                     Modifier.weight(1f),
@@ -123,14 +141,14 @@ internal fun SonyRemoteScreen(
             }
         }
 
-        item { SectionTitle("Eingänge") }
+        item { SectionTitle("Eingangs-Kandidaten") }
         item {
             SectionCard {
                 CommandGrid(Sony_STR_DB870.INPUTS, onSony)
             }
         }
 
-        item { SectionTitle("Receiver-Menü") }
+        item { SectionTitle("Receiver-Menü-Kandidaten") }
         item {
             SectionCard {
                 Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
@@ -162,7 +180,7 @@ internal fun SonyRemoteScreen(
             }
         }
 
-        item { SectionTitle("Subwoofer & Tuner") }
+        item { SectionTitle("Subwoofer- und Tuner-Kandidaten") }
         item {
             SectionCard {
                 ActionGrid(
