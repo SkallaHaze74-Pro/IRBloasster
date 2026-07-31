@@ -1,14 +1,13 @@
-# --- Android / Gradle ---
-.gradle
+*.iml
+.gradle/
 /local.properties
-/.idea
-/.vscode
+/.idea/
+.DS_Store
 /build/
 /captures/
-
-# Signing keys
+.externalNativeBuild/
+.cxx/
+app/build/
 *.jks
 *.keystore
-
-# Misc
-.DS_Store
+secrets.properties
