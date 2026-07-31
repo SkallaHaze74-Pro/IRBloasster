@@ -5,14 +5,18 @@ import kotlin.math.max
 object Sirc {
     private const val START_MARK = 2_400
     private const val START_SPACE = 600
-    private const val BIT_MARK = 600
-    private const val ZERO_SPACE = 600
-    private const val ONE_SPACE = 1_200
+    private const val ZERO_MARK = 600
+    private const val ONE_MARK = 1_200
+    private const val BIT_SPACE = 600
     private const val FRAME_PERIOD = 45_000
 
     /**
-     * Sony SIRC frame. The 7 command bits are followed by the address bits,
-     * all least-significant bit first. Three frames make a reliable key press.
+     * Encodes a Sony SIRC frame. The 7 command bits are followed by 5, 8 or
+     * 13 address bits, all least-significant bit first.
+     *
+     * SIRC uses pulse-width encoding: the carrier mark represents the bit
+     * value (600 µs for zero, 1,200 µs for one) and every bit is followed by
+     * a fixed 600 µs space. Repeated frames start on a 45 ms period.
      */
     fun encode(
         command: Int,
@@ -37,13 +41,13 @@ object Sirc {
             pattern += START_SPACE
 
             repeat(bits) { bitIndex ->
-                pattern += BIT_MARK
-                pattern += if (((data shr bitIndex) and 1) == 1) ONE_SPACE else ZERO_SPACE
+                pattern += if (((data shr bitIndex) and 1) == 1) ONE_MARK else ZERO_MARK
+                pattern += BIT_SPACE
             }
 
             if (frameIndex < frames - 1) {
                 val frameDuration = pattern.subList(frameStart, pattern.size).sum()
-                pattern[pattern.lastIndex] += max(10_000, FRAME_PERIOD - frameDuration)
+                pattern[pattern.lastIndex] += max(BIT_SPACE, FRAME_PERIOD - frameDuration)
             }
         }
 
