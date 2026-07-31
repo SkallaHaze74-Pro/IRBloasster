@@ -33,9 +33,22 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          test -d bootstrap/chunks
           test -f gradle/wrapper/gradle-wrapper.jar
-          cat bootstrap/chunks/*.part > /tmp/livingroom-source.tar.gz.b64
+          cat \
+            bootstrap/chunks/000.part \
+            bootstrap/chunks/001.part \
+            bootstrap/chunks/002.part \
+            bootstrap/chunks/003.part \
+            bootstrap/chunks/004.part \
+            bootstrap/chunks/005.part \
+            bootstrap/chunks/0060.piece \
+            bootstrap/chunks/0061.piece \
+            bootstrap/chunks/0062.piece \
+            bootstrap/chunks/00630.piece \
+            bootstrap/chunks/00631.piece \
+            bootstrap/chunks/007.part \
+            > /tmp/livingroom-source.tar.gz.b64
+          test "$(wc -c < /tmp/livingroom-source.tar.gz.b64)" -eq 49848
           echo "025cff43e42fc840d87ba8135715eb3075ea0d949e996187497492892b484e36  /tmp/livingroom-source.tar.gz.b64" | sha256sum --check --strict
           cp gradle/wrapper/gradle-wrapper.jar /tmp/gradle-wrapper.jar
           base64 --decode /tmp/livingroom-source.tar.gz.b64 > /tmp/livingroom-source.tar.gz
