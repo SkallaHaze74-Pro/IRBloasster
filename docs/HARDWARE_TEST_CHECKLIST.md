@@ -2,15 +2,30 @@
 
 Diese Checkliste trennt Software-/Build-Prüfungen von den Funktionen, die nur am realen **LG OLED55B19LA** und **Sony STR-DB870 CEL** bestätigt werden können.
 
-## 1. Installation
+## 1. Installation und Datensicherung
 
-- [ ] GitHub-Actions-Artefakt `SmartIR-v1.1.4-debug` laden
-- [ ] APK installieren beziehungsweise mit `adb install -r` aktualisieren
+- [ ] GitHub-Actions-Artefakt `SmartIR-v1.1.5-debug` laden
+- [ ] vor einer möglichen Deinstallation in der alten App **Setup → Backup & Datenübertragung → Exportieren** verwenden
+- [ ] APK zunächst als Update installieren beziehungsweise mit `adb install -r` aktualisieren
 - [ ] App startet ohne Absturz
 - [ ] Paket bleibt `com.skallahaze.irbloasster`
+- [ ] vorhandene Theme-, TV-IP-, MAC- und Auto-Connect-Einstellungen bleiben beim normalen Update erhalten
+- [ ] bei einer Neuinstallation das JSON-Backup importieren
+- [ ] LG-TV nach kompletter Deinstallation bei Bedarf einmal neu koppeln
 - [ ] Hell-/Dunkelmodus funktioniert
 - [ ] Xiaomi erkennt den integrierten IR-Blaster
 - [ ] IR-Tastendruck erzeugt keinen Berechtigungsfehler
+
+### 1.1 Backup-Funktion
+
+- [ ] JSON-Backup über den Android-Dateidialog exportieren
+- [ ] Datei enthält TV-IP, TV-MAC, Theme, Haptik, Auto-Connect und Sony-Modus
+- [ ] Datei enthält keinen webOS-Client-Key
+- [ ] Backup in einer frischen Installation importieren
+- [ ] TV-IP und MAC erscheinen wieder im Setup
+- [ ] Theme und Tastenvibration werden wiederhergestellt
+- [ ] Hinweis zur erneuten LG-Kopplung erscheint, wenn vorher ein Client-Key vorhanden war
+- [ ] vorhandenes funktionierendes Pairing wird durch einen Import nicht überschrieben
 
 ## 2. LG-TV per IR
 
@@ -42,6 +57,7 @@ TV und Smartphone müssen im selben lokalen Netzwerk sein.
 - [ ] Pairing-Abfrage am TV bestätigen
 - [ ] Status wechselt auf verbunden
 - [ ] Client-Key wird Android-Keystore-verschlüsselt gespeichert
+- [ ] ältere Pairingwerte werden automatisch in `smart_ir_secure.xml` migriert
 - [ ] Zertifikat-Fingerabdruck wird angezeigt
 - [ ] Neustart der App verbindet automatisch erneut
 - [ ] Trennen funktioniert
@@ -212,6 +228,7 @@ Command / Adresse / Bits, falls Rohcode:
 IR oder webOS:
 Anzeige im Diagnosebereich:
 letzte geschwärzte SSAP-Antwort:
+Backup exportiert: ja/nein
 ```
 
 Client-Key, Zertifikate, WLAN-Passwörter, Kontodaten und die Seriennummer des Receivers niemals in einen öffentlichen Fehlerbericht kopieren.
