@@ -17,6 +17,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.skallahaze.irbloasster.ir.JBL_SUB125
 import com.skallahaze.irbloasster.ir.SonyCommand
 import com.skallahaze.irbloasster.ir.Sony_STR_DB870
 
@@ -146,6 +147,43 @@ internal fun SonyRemoteScreen(
             }
         }
 
+        item { SectionTitle("JBL SUB125 · indirekt über Sony") }
+        item {
+            SectionCard {
+                Text(
+                    "${JBL_SUB125.BRAND} ${JBL_SUB125.MODEL} · ${JBL_SUB125.SYSTEM}",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                )
+                Spacer(Modifier.height(6.dp))
+                Text(
+                    "Der aktive Subwoofer besitzt keinen eigenen IR-Empfänger. SmartIR verändert deshalb den Basskanal über den Sony STR-DB870; der mechanische Level-Regler am JBL bleibt die Grundeinstellung.",
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Spacer(Modifier.height(10.dp))
+                InfoLine("Verstärker", "${JBL_SUB125.AMPLIFIER_RMS_W} W RMS · ${JBL_SUB125.WOOFER_SIZE_INCH} Zoll Bassreflex")
+                InfoLine("Netz", "${JBL_SUB125.POWER_INPUT} · ${JBL_SUB125.MAX_POWER_CONSUMPTION_W} W")
+                InfoLine("Sicherung", JBL_SUB125.FUSE)
+                InfoLine("Auto-Standby", "nach etwa ${JBL_SUB125.AUTO_STANDBY_MINUTES} Minuten ohne Signal")
+                Spacer(Modifier.height(10.dp))
+                ActionGrid(
+                    actions = listOf(
+                        "Subwoofer +" to { onSony(Sony_STR_DB870.SUBWOOFER_UP) },
+                        "Subwoofer −" to { onSony(Sony_STR_DB870.SUBWOOFER_DOWN) },
+                        "Test Tone" to { onSony(Sony_STR_DB870.TEST_TONE) },
+                        "A.F.D." to { onSony(Sony_STR_DB870.AFD) },
+                        "2CH / OFF" to { onSony(Sony_STR_DB870.MODE_2CH) },
+                    ),
+                )
+                Spacer(Modifier.height(10.dp))
+                Text(
+                    "Empfohlene Basis: JBL Auto/On auf AUTO, Level ungefähr mittig; Feinabgleich anschließend am Sony. Ein einzelnes Klacken beim Einschalten kann vom Netz-/Auto-On-Schaltvorgang kommen. Wiederholtes Klackern, LED-Flackern, Geruch, starke Wärme oder Tonaussetzer sind nicht normal: ausschalten, Netzstecker ziehen und prüfen lassen.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.primary,
+                )
+            }
+        }
+
         item { SectionTitle("Receiver-Menü") }
         item {
             SectionCard {
@@ -192,7 +230,7 @@ internal fun SonyRemoteScreen(
                 Text("Empfohlene Testreihenfolge", style = MaterialTheme.typography.titleMedium)
                 Spacer(Modifier.height(6.dp))
                 Text(
-                    "1. Power Toggle  •  2. Lauter/Leiser  •  3. Mute  •  4. TV/SAT und DVD/LD  •  5. A.F.D. und 2CH  •  6. Menü. SmartIR verwendet bei diesem CEL-Gerät automatisch AV1.",
+                    "1. Power Toggle  •  2. Lauter/Leiser  •  3. Mute  •  4. TV/SAT und DVD/LD  •  5. A.F.D. und 2CH  •  6. JBL Test Tone/Subwoofer ±  •  7. Menü. SmartIR verwendet bei diesem CEL-Gerät automatisch AV1.",
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
