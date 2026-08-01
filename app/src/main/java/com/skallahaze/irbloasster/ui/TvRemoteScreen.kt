@@ -30,6 +30,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.skallahaze.irbloasster.ir.LG_OLED55B1
@@ -58,8 +59,8 @@ internal fun TvRemoteScreen(
     ) {
         item {
             ScreenHeader(
-                eyebrow = "LG REMOTE",
-                title = "OLED55B19LA",
+                eyebrow = "LG REMOTE · B1 · DEUQJP",
+                title = LG_OLED55B1.MODEL,
                 subtitle = if (webState.connection == WebOsConnection.CONNECTED) {
                     listOfNotNull(
                         webState.modelName,
@@ -72,6 +73,29 @@ internal fun TvRemoteScreen(
                     "webOS verbinden oder IR prüfen"
                 },
             )
+        }
+
+        item {
+            SectionCard {
+                Text(
+                    "Exaktes Geräteprofil gespeichert",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                )
+                Spacer(Modifier.height(8.dp))
+                InfoLine("Produktcode", LG_OLED55B1.PRODUCT_CODE)
+                InfoLine("Fertigung", "${LG_OLED55B1.MANUFACTURED} · ${LG_OLED55B1.ASSEMBLED_IN}")
+                InfoLine("Display", "${LG_OLED55B1.PANEL_SIZE_INCH} Zoll · ${LG_OLED55B1.RESOLUTION} · ${LG_OLED55B1.NATIVE_REFRESH_HZ} Hz")
+                InfoLine("Smart TV", LG_OLED55B1.WEB_OS_VERSION)
+                InfoLine("HDMI", "4 Ports · HDMI 3 eARC · HDMI 3/4 bis 4K/120")
+                InfoLine("Leistung", "${LG_OLED55B1.TYPICAL_POWER_W} W typisch · ${LG_OLED55B1.MAX_RATED_POWER_W} W Nennwert")
+                Spacer(Modifier.height(6.dp))
+                Text(
+                    "Die Seriennummer bleibt privat und wird nicht in der öffentlichen App oder auf GitHub gespeichert.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
         }
 
         item {
@@ -161,6 +185,43 @@ internal fun TvRemoteScreen(
         }
 
         if (webState.connection == WebOsConnection.CONNECTED) {
+            item { SectionTitle("Direkte HDMI-Eingänge") }
+            item {
+                SectionCard {
+                    Text(
+                        "Die Anschlussbeschriftung deines Geräts bestätigt HDMI 3 mit eARC/ARC und HDMI 3/4 mit 4K@120 Hz.",
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Spacer(Modifier.height(10.dp))
+                    ActionGrid(
+                        actions = LG_OLED55B1.HDMI_PORTS.map { port ->
+                            port.label to { webOs.switchInput(port.inputId) }
+                        },
+                    )
+                    Spacer(Modifier.height(10.dp))
+                    OutlinedButton(
+                        onClick = webOs::refreshStatus,
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Text("TV-Status, Apps und Eingänge neu laden")
+                    }
+                }
+            }
+
+            if (webState.inputs.isNotEmpty()) {
+                item { SectionTitle("Vom Fernseher gemeldete Eingänge") }
+                item {
+                    SectionCard {
+                        ActionGrid(
+                            actions = webState.inputs.map { input ->
+                                val suffix = if (input.connected) "" else " · nicht verbunden"
+                                "${input.label}$suffix" to { webOs.switchInput(input.id) }
+                            },
+                        )
+                    }
+                }
+            }
+
             item { SectionTitle("Magic-Remote Touchpad") }
             item {
                 SectionCard {
@@ -347,6 +408,30 @@ internal fun TvRemoteScreen(
                             "TV ausschalten" to { webOs.powerOff() },
                         ),
                     )
+                }
+            }
+
+            if (webState.apps.isNotEmpty()) {
+                item { SectionTitle("Installierte TV-Apps") }
+                item {
+                    SectionCard {
+                        val apps = webState.apps
+                            .sortedBy { it.title.lowercase() }
+                            .take(12)
+                        ActionGrid(
+                            actions = apps.map { app ->
+                                app.title to { webOs.launchApp(app.id) }
+                            },
+                        )
+                        if (webState.apps.size > apps.size) {
+                            Spacer(Modifier.height(8.dp))
+                            Text(
+                                "${webState.apps.size - apps.size} weitere Apps wurden erkannt. Die ersten 12 werden kompakt angezeigt.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                    }
                 }
             }
         }

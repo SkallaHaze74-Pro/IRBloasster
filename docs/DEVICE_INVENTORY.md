@@ -13,14 +13,30 @@ Dieses Dokument sichert die für Entwicklung, Tests und spätere Migration wicht
 
 ## LG Fernseher
 
-- Hersteller: LG
+- Hersteller: LG Electronics
 - Modell: **OLED55B19LA**
-- Plattform: webOS
+- vollständiger Produktcode: **OLED55B19LA.DEUQJP**
+- Serie: **B1**, Modelljahr 2021
+- Display: **55 Zoll**, 3840 × 2160, 120-Hz-Klasse
+- Plattform: **webOS 6.0**
+- Fertigung: **09/2021**
+- Montage: **Polen**
+- Netzversorgung: **AC 100–240 V, 50/60 Hz**
+- Nenn-/Maximalangabe am Typenschild: **343 W**
+- typische Leistungsaufnahme am Typenschild: **104 W**
 - lokale Steuerung: WebSocket / SSAP
 - sichere Verbindung: bevorzugt WSS Port 3001
 - Kompatibilitäts-Fallback: WS Port 3000
 - IR-Profil: LG NEC 32 Bit bei 38 kHz
 - Wake-on-LAN: vorgesehen, benötigt TV-MAC und passende Standby-Einstellung
+
+### LG-Anschlussprofil
+
+- HDMI 1: `HDMI_1`, bis 4K/60
+- HDMI 2: `HDMI_2`, bis 4K/60
+- HDMI 3: `HDMI_3`, eARC/ARC, HDMI 2.1, bis 4K/120
+- HDMI 4: `HDMI_4`, HDMI 2.1, bis 4K/120
+- insgesamt vier HDMI- und drei USB-Anschlüsse
 
 ## Sony Receiver
 
@@ -36,7 +52,7 @@ Dieses Dokument sichert die für Entwicklung, Tests und spätere Migration wicht
 - normaler SmartIR-Modus: AV1
 - AV2: nur Diagnose im freien Rohcode-Labor
 
-Die auf den Gerätefotos sichtbare Seriennummer wird absichtlich nicht in diesem öffentlichen Repository, in der App oder in Diagnoseausgaben gespeichert.
+Die auf den Gerätefotos sichtbaren Seriennummern werden absichtlich nicht in diesem öffentlichen Repository, in der App oder in Diagnoseausgaben gespeichert.
 
 ## Analysierte LG-ThinQ-Version
 
@@ -55,6 +71,20 @@ Die auf den Gerätefotos sichtbare Seriennummer wird absichtlich nicht in diesem
 
 Die originale LG-App, proprietäre Ressourcen, Zertifikate, Cloud-Schlüssel und Kontodaten werden nicht in SmartIR übernommen oder im Repository veröffentlicht. Gesichert werden ausschließlich eigene Implementierungen und beschreibende Interoperabilitätsnotizen.
 
+## App-Datensicherung
+
+SmartIR bietet einen versionierten JSON-Export und -Import für portable Einstellungen. Gesichert werden:
+
+- TV-IP beziehungsweise Hostname
+- TV-MAC-Adresse
+- Theme
+- Tastenvibration
+- Auto-Connect
+- Sony-Modus beziehungsweise dessen Migration
+- bekannter TV-Zertifikat-Fingerabdruck
+
+Nicht exportiert wird der geheime webOS-Client-Key. Er bleibt im Android-Keystore und erfordert nach einer vollständigen Deinstallation eine erneute Kopplung. Android Auto Backup darf nur die nicht geheime Datei `smart_ir_settings.xml` übertragen; geheime Werte liegen getrennt in `smart_ir_secure.xml`.
+
 ## Projektidentität
 
 - Repository: `SkallaHaze74-Pro/IRBloasster`
@@ -67,7 +97,7 @@ Die originale LG-App, proprietäre Ressourcen, Zertifikate, Cloud-Schlüssel und
 
 ### Öffentlich im Repository zulässig
 
-- Modelle und Area Codes
+- Modelle, Produktcodes und Area Codes
 - Protokollnamen, Frequenzen, Befehlszuordnungen und Prüfergebnisse
 - anonymisierte Build- und Fehlerberichte
 - technische Rückseitenkennungen ohne Seriennummer
