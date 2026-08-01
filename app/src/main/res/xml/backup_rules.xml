@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<full-backup-content>
+    <include
+        domain="sharedpref"
+        path="smart_ir_settings.xml" />
+    <exclude
+        domain="sharedpref"
+        path="smart_ir_secure.xml" />
+</full-backup-content>
