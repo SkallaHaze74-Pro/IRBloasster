@@ -7,6 +7,7 @@ import android.util.Base64
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import com.skallahaze.irbloasster.BuildConfig
 import com.skallahaze.irbloasster.ir.SonyCommandMode
 import com.skallahaze.irbloasster.ir.Sony_STR_DB870
 import java.security.KeyStore
@@ -22,8 +23,13 @@ enum class ThemePreference(val title: String) {
 }
 
 class SettingsRepository(context: Context) {
-    private val preferences = context.applicationContext.getSharedPreferences(
-        "smart_ir_settings",
+    private val appContext = context.applicationContext
+    private val preferences = appContext.getSharedPreferences(
+        SETTINGS_PREFERENCES,
+        Context.MODE_PRIVATE,
+    )
+    private val securePreferences = appContext.getSharedPreferences(
+        SECURE_PREFERENCES,
         Context.MODE_PRIVATE,
     )
     private val secureStore = SecureStringStore()
@@ -64,7 +70,21 @@ class SettingsRepository(context: Context) {
     val autoConnect: Boolean
         get() = currentAutoConnect
 
+    private var currentLastBackupEpochMillis by mutableStateOf(
+        preferences.getLong(KEY_LAST_BACKUP_EPOCH_MILLIS, 0L),
+    )
+    val lastBackupEpochMillis: Long
+        get() = currentLastBackupEpochMillis
+
+    private var currentLastImportEpochMillis by mutableStateOf(
+        preferences.getLong(KEY_LAST_IMPORT_EPOCH_MILLIS, 0L),
+    )
+    val lastImportEpochMillis: Long
+        get() = currentLastImportEpochMillis
+
     init {
+        migrateSecurePreferences()
+
         // Migrate old SmartIR builds that may have stored AV2. The photographed
         // STR-DB870 CEL variant has no selectable receiver COMMAND MODE.
         if (storedSonyMode != currentSonyMode) {
@@ -108,13 +128,77 @@ class SettingsRepository(context: Context) {
         preferences.edit().putBoolean(KEY_AUTO_CONNECT, value).apply()
     }
 
+    fun exportBackup(): String {
+        val now = System.currentTimeMillis()
+        val payload = SmartIrBackupCodec.encode(
+            SmartIrBackupSnapshot(
+                exportedAtEpochMillis = now,
+                appVersionName = BuildConfig.VERSION_NAME,
+                packageName = appContext.packageName,
+                themePreference = currentThemePreference.name,
+                hapticsEnabled = currentHapticsEnabled,
+                autoConnect = currentAutoConnect,
+                webOsHost = currentWebOsHost,
+                webOsMac = currentWebOsMac,
+                sonyMode = currentSonyMode.name,
+                webOsCertificateFingerprint = getWebOsCertificateFingerprint(),
+                webOsClientKeyWasPresent = hasWebOsClientKey(),
+            ),
+        )
+
+        currentLastBackupEpochMillis = now
+        preferences.edit().putLong(KEY_LAST_BACKUP_EPOCH_MILLIS, now).apply()
+        return payload
+    }
+
+    fun importBackup(payload: String): SmartIrImportResult {
+        val snapshot = SmartIrBackupCodec.decode(payload)
+
+        val theme = ThemePreference.entries.firstOrNull {
+            it.name == snapshot.themePreference
+        } ?: ThemePreference.SYSTEM
+        val sonyMode = SonyCommandMode.entries.firstOrNull {
+            it.name == snapshot.sonyMode
+        } ?: SonyCommandMode.AV1
+
+        setThemePreference(theme)
+        setHapticsEnabled(snapshot.hapticsEnabled)
+        setAutoConnect(snapshot.autoConnect)
+        setWebOsHost(snapshot.webOsHost)
+        setWebOsMac(snapshot.webOsMac)
+        setSonyMode(sonyMode)
+
+        // Never overwrite a working local pairing. On a fresh installation the
+        // known certificate may be restored, but the client key must be paired
+        // again because it is intentionally excluded from portable backups.
+        if (!hasWebOsClientKey() && snapshot.webOsCertificateFingerprint.isNotBlank()) {
+            setWebOsCertificateFingerprint(snapshot.webOsCertificateFingerprint)
+        }
+
+        val now = System.currentTimeMillis()
+        currentLastImportEpochMillis = now
+        preferences.edit().putLong(KEY_LAST_IMPORT_EPOCH_MILLIS, now).apply()
+
+        val repairingRecommended = snapshot.webOsClientKeyWasPresent && !hasWebOsClientKey()
+        val message = if (repairingRecommended) {
+            "Backup importiert. TV-IP, MAC und App-Einstellungen sind wieder da; den LG-TV bitte einmal neu koppeln."
+        } else {
+            "SmartIR-Backup erfolgreich importiert."
+        }
+
+        return SmartIrImportResult(
+            message = message,
+            tvRepairingRecommended = repairingRecommended,
+        )
+    }
+
     fun getWebOsClientKey(): String {
-        val encrypted = preferences.getString(KEY_WEBOS_CLIENT_KEY_SECURE, "").orEmpty()
+        val encrypted = securePreferences.getString(KEY_WEBOS_CLIENT_KEY_SECURE, "").orEmpty()
         if (encrypted.isNotBlank()) {
             secureStore.decrypt(encrypted)?.let { return it }
         }
 
-        val legacy = preferences.getString(KEY_WEBOS_CLIENT_KEY, "").orEmpty()
+        val legacy = securePreferences.getString(KEY_WEBOS_CLIENT_KEY, "").orEmpty()
         if (legacy.isNotBlank()) {
             setWebOsClientKey(legacy)
         }
@@ -123,7 +207,7 @@ class SettingsRepository(context: Context) {
 
     fun setWebOsClientKey(value: String) {
         if (value.isBlank()) {
-            preferences.edit()
+            securePreferences.edit()
                 .remove(KEY_WEBOS_CLIENT_KEY_SECURE)
                 .remove(KEY_WEBOS_CLIENT_KEY)
                 .apply()
@@ -132,41 +216,77 @@ class SettingsRepository(context: Context) {
 
         val encrypted = secureStore.encrypt(value)
         if (encrypted != null) {
-            preferences.edit()
+            securePreferences.edit()
                 .putString(KEY_WEBOS_CLIENT_KEY_SECURE, encrypted)
                 .remove(KEY_WEBOS_CLIENT_KEY)
                 .apply()
         } else {
             // Very old or vendor-broken keystores still keep the app usable.
-            preferences.edit().putString(KEY_WEBOS_CLIENT_KEY, value).apply()
+            securePreferences.edit().putString(KEY_WEBOS_CLIENT_KEY, value).apply()
         }
     }
 
     fun isWebOsClientKeyEncrypted(): Boolean =
-        preferences.getString(KEY_WEBOS_CLIENT_KEY_SECURE, "").orEmpty().isNotBlank()
+        securePreferences.getString(KEY_WEBOS_CLIENT_KEY_SECURE, "").orEmpty().isNotBlank()
+
+    fun hasWebOsClientKey(): Boolean =
+        securePreferences.getString(KEY_WEBOS_CLIENT_KEY_SECURE, "").orEmpty().isNotBlank() ||
+            securePreferences.getString(KEY_WEBOS_CLIENT_KEY, "").orEmpty().isNotBlank()
 
     fun getWebOsCertificateFingerprint(): String =
-        preferences.getString(KEY_WEBOS_CERTIFICATE, "").orEmpty()
+        securePreferences.getString(KEY_WEBOS_CERTIFICATE, "").orEmpty()
 
     fun setWebOsCertificateFingerprint(value: String) {
-        preferences.edit().putString(KEY_WEBOS_CERTIFICATE, value.trim()).apply()
+        securePreferences.edit().putString(KEY_WEBOS_CERTIFICATE, value.trim()).apply()
     }
 
     fun clearWebOsPairing() {
-        preferences.edit()
+        securePreferences.edit()
             .remove(KEY_WEBOS_CLIENT_KEY_SECURE)
             .remove(KEY_WEBOS_CLIENT_KEY)
             .remove(KEY_WEBOS_CERTIFICATE)
             .apply()
     }
 
+    private fun migrateSecurePreferences() {
+        val secureEditor = securePreferences.edit()
+        val generalEditor = preferences.edit()
+        var changed = false
+
+        listOf(
+            KEY_WEBOS_CLIENT_KEY_SECURE,
+            KEY_WEBOS_CLIENT_KEY,
+            KEY_WEBOS_CERTIFICATE,
+        ).forEach { key ->
+            if (preferences.contains(key)) {
+                val value = preferences.getString(key, null)
+                if (!securePreferences.contains(key) && value != null) {
+                    secureEditor.putString(key, value)
+                }
+                generalEditor.remove(key)
+                changed = true
+            }
+        }
+
+        if (changed) {
+            secureEditor.apply()
+            generalEditor.apply()
+        }
+    }
+
     private companion object {
+        const val SETTINGS_PREFERENCES = "smart_ir_settings"
+        const val SECURE_PREFERENCES = "smart_ir_secure"
+
         const val KEY_SONY_MODE = "sony_mode"
         const val KEY_HAPTICS = "haptics"
         const val KEY_THEME = "theme"
         const val KEY_WEBOS_HOST = "webos_host"
         const val KEY_WEBOS_MAC = "webos_mac"
         const val KEY_AUTO_CONNECT = "auto_connect"
+        const val KEY_LAST_BACKUP_EPOCH_MILLIS = "last_backup_epoch_millis"
+        const val KEY_LAST_IMPORT_EPOCH_MILLIS = "last_import_epoch_millis"
+
         const val KEY_WEBOS_CLIENT_KEY = "webos_client_key"
         const val KEY_WEBOS_CLIENT_KEY_SECURE = "webos_client_key_secure"
         const val KEY_WEBOS_CERTIFICATE = "webos_certificate_fingerprint"
