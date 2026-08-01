@@ -4,16 +4,10 @@
         <include
             domain="sharedpref"
             path="smart_ir_settings.xml" />
-        <exclude
-            domain="sharedpref"
-            path="smart_ir_secure.xml" />
     </cloud-backup>
     <device-transfer>
         <include
             domain="sharedpref"
             path="smart_ir_settings.xml" />
-        <exclude
-            domain="sharedpref"
-            path="smart_ir_secure.xml" />
     </device-transfer>
 </data-extraction-rules>
