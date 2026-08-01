@@ -10,7 +10,7 @@ com.skallahaze.irbloasster
 
 Dadurch können spätere Builds mit derselben Signatur als Update installiert werden.
 
-## Aktueller Stand: 1.1.4
+## Aktueller Stand: 1.1.5
 
 - Material-3-Oberfläche mit Hell-/Dunkelmodus und eigenem SmartIR-App-Icon
 - große sofa- und einhandtaugliche Tasten
@@ -31,7 +31,7 @@ Dadurch können spätere Builds mit derselben Signatur als Update installiert we
 - Rückseitenkennung **4-233-630-21 CEL**
 - für CEL bestätigte Originalfernbedienung **RM-U305A**
 - normaler Sony-Betrieb fest auf **AV1**
-- automatische Migration alter gespeicherter AV2-Einstellungen auf AV1
+- automatische Migration älterer gespeicherter AV2-Einstellungen auf AV1
 - Sony-SIRC-Profil für 12/15 Bit bei 40 kHz und drei Wiederholungsframes
 - bekannte RM-U305A-Funktionsfamilie sowie getrennte Codekandidaten und Legacy-Alternativen
 - moderne Sony-DSP-/Menücodes auf Geräteadresse 144
@@ -39,12 +39,39 @@ Dadurch können spätere Builds mit derselben Signatur als Update installiert we
 - Szenen: Fernsehen, Heimkino, Musik und Alles aus
 - Diagnose-Labor für eigene NEC-, SIRC- und SSAP-Tests
 - konkrete IR-Systemfehler statt einer pauschalen Fehlermeldung
-- Unit-Tests, Android-Lint und automatischer APK-Build
+- **portabler JSON-Export und -Import für App-Einstellungen**
+- automatische Migration älterer webOS-Pairingwerte in einen getrennten sicheren Speicher
+- Android-Cloud-/Geräteübertragung nur für nicht geheime Einstellungen
+- Unit-Tests für Backupformat, NEC, SIRC und Sony-Profil
+- Android-Lint und automatischer APK-Build
 - SHA-256-Prüfsumme neben jeder erzeugten Test-APK
+
+## Datensicherung und Update-Schutz
+
+Unter **Setup → Backup & Datenübertragung** kann SmartIR eine portable JSON-Datei exportieren und später wieder importieren. Gesichert werden unter anderem:
+
+- TV-IP beziehungsweise Hostname
+- TV-MAC-Adresse
+- Theme
+- Tastenvibration
+- Auto-Connect
+- Sony-Modus und dessen Migration
+- bekannter TV-Zertifikat-Fingerabdruck
+
+Der geheime webOS-Client-Key bleibt absichtlich im Android-Keystore und wird nicht als Klartextdatei exportiert. Nach einer vollständigen Deinstallation muss der LG-TV daher einmal neu gekoppelt werden; die übrigen Einstellungen können direkt wiederhergestellt werden.
+
+SmartIR trennt künftig:
+
+```text
+smart_ir_settings.xml
+smart_ir_secure.xml
+```
+
+Android Auto Backup und die direkte Geräteübertragung dürfen nur die nicht geheime Einstellungsdatei sichern. Ausführliche Hinweise stehen unter [`docs/DATA_BACKUP_AND_MIGRATION.md`](docs/DATA_BACKUP_AND_MIGRATION.md).
 
 ## Sony STR-DB870 CEL
 
-Die neuen Gerätefotos beseitigen die bisherige Regionsunsicherheit:
+Die Gerätefotos bestätigen:
 
 ```text
 Modell: STR-DB870
@@ -80,11 +107,11 @@ Modell, Area Code, Originalfernbedienung und der feste AV1-Betrieb sind bestäti
 
 ## Installation über GitHub Actions
 
-Unter **Actions → SmartIR Android APK** den neuesten erfolgreichen Lauf auf dem Branch **main** öffnen und das Artefakt **SmartIR-v1.1.4-debug** laden. Es enthält:
+Unter **Actions → SmartIR Android APK** den neuesten erfolgreichen Lauf auf dem Branch **main** öffnen und das Artefakt **SmartIR-v1.1.5-debug** laden. Es enthält:
 
 ```text
-SmartIR-v1.1.4-debug.apk
-SmartIR-v1.1.4-debug.apk.sha256
+SmartIR-v1.1.5-debug.apk
+SmartIR-v1.1.5-debug.apk.sha256
 ```
 
 ## Bauen in Termux
@@ -134,16 +161,20 @@ Der vom eigenen TV ausgegebene Client-Key wird lokal verschlüsselt gespeichert.
 - Bildschirmtastatur und Magic-Remote-Pointer
 - Diagnosekonsole für eigene `ssap://`-Befehle
 
-## Hardware-Test
+## Dokumentation
 
-Die vollständige Schritt-für-Schritt-Prüfliste liegt unter [`docs/HARDWARE_TEST_CHECKLIST.md`](docs/HARDWARE_TEST_CHECKLIST.md). Beim Sony zuerst Power, Volume und Mute prüfen; alle normalen Sony-Funktionen verwenden beim CEL-Profil automatisch AV1.
+- [`docs/DEVICE_INVENTORY.md`](docs/DEVICE_INVENTORY.md) – bereinigtes Geräte- und Quelleninventar
+- [`docs/DATA_BACKUP_AND_MIGRATION.md`](docs/DATA_BACKUP_AND_MIGRATION.md) – Backup, Migration und Sicherheitsgrenzen
+- [`docs/SONY_STR_DB870_CODES.md`](docs/SONY_STR_DB870_CODES.md) – Sony-SIRC-Profil
+- [`docs/HARDWARE_TEST_CHECKLIST.md`](docs/HARDWARE_TEST_CHECKLIST.md) – praktische Prüfliste
+- [`docs/LG_THINQ_ANALYSIS.md`](docs/LG_THINQ_ANALYSIS.md) – bereinigte ThinQ-Interoperabilitätsanalyse
 
 ## Signatur und Updates
 
-GitHub-Actions-Debug-APKs werden mit einer temporären Debug-Signatur gebaut. Für garantiert installierbare Updates ohne Deinstallation muss später ein dauerhaftes Release-Keystore sicher als GitHub-Secret eingerichtet werden; der Paketname allein reicht nicht aus.
+GitHub-Actions-Debug-APKs können mit unterschiedlichen Debug-Signaturen gebaut werden. Für garantiert installierbare Updates ohne Deinstallation muss später ein dauerhaftes Release-Keystore sicher als GitHub-Secret eingerichtet werden. Vor jeder notwendigen Deinstallation sollte das portable SmartIR-Backup exportiert werden.
 
 ## Analyse und Herkunft
 
-Die bereinigte technische LG-ThinQ-Analyse liegt unter [`docs/LG_THINQ_ANALYSIS.md`](docs/LG_THINQ_ANALYSIS.md). Das Repository enthält ausschließlich eigenständig geschriebenen Quellcode und beschreibende Interoperabilitätsnotizen.
+Das Repository enthält ausschließlich eigenständig geschriebenen Quellcode und beschreibende Interoperabilitätsnotizen.
 
 Es werden keine LG- oder Sony-APK-Dateien, Kontodaten, Cloud-Schlüssel, Zertifikate, proprietären Schriftdateien, Bilder, Seriennummern oder vollständigen UEI-Codeset-Datenbanken veröffentlicht.

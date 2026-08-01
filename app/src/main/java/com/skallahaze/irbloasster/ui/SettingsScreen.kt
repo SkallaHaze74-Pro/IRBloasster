@@ -212,6 +212,16 @@ internal fun SettingsScreen(
             )
         }
 
+        BackupSection(
+            settings = settings,
+            onImported = {
+                webOs.disconnect()
+                hostInput = settings.webOsHost
+                macInput = settings.webOsMac
+            },
+            onMessage = onMessage,
+        )
+
         SectionCard {
             Text("Darstellung", style = MaterialTheme.typography.titleMedium)
             Spacer(Modifier.height(8.dp))
