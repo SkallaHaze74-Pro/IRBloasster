@@ -35,6 +35,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.skallahaze.irbloasster.ir.LG_OLED55B1
 import com.skallahaze.irbloasster.ir.LgCommand
+import com.skallahaze.irbloasster.webos.WebOsAppResolver
 import com.skallahaze.irbloasster.webos.WebOsClient
 import com.skallahaze.irbloasster.webos.WebOsConnection
 import com.skallahaze.irbloasster.webos.WebOsState
@@ -405,6 +406,9 @@ internal fun TvRemoteScreen(
                             "Live TV" to { webOs.launchApp("com.webos.app.livetv") },
                             "YouTube" to { webOs.launchApp("youtube.leanback.v4") },
                             "Netflix" to { webOs.launchApp("netflix") },
+                            "Twitch" to {
+                                webOs.launchApp(WebOsAppResolver.twitchAppId(webState.apps))
+                            },
                             "TV ausschalten" to { webOs.powerOff() },
                         ),
                     )
