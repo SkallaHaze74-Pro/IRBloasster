@@ -29,11 +29,11 @@ import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -69,9 +69,9 @@ internal enum class Scene(
     val subtitle: String,
     val symbol: String,
 ) {
-    TELEVISION("Fernsehen", "TV wecken + Sony TV/SAT testen", "TV"),
-    CINEMA("Heimkino", "TV wecken + Sony DVD/LD testen", "▶"),
-    MUSIC("Musik", "Sony CD + 2CH testen", "♫"),
+    TELEVISION("Fernsehen", "TV wecken + Sony TV/SAT", "TV"),
+    CINEMA("Heimkino", "TV wecken + Sony DVD/LD", "▶"),
+    MUSIC("Musik", "Sony CD/SACD + 2CH", "♫"),
     ALL_OFF("Alles aus", "TV und Sony ausschalten", "OFF"),
 }
 
@@ -98,21 +98,23 @@ fun SmartIrApp(
         scope.launch { snackbarHostState.showSnackbar(message) }
     }
 
+    fun irFailure(fallback: String): String = ir.lastError ?: fallback
+
     fun sendLg(command: LgCommand) {
         if (ir.transmit(command)) {
             lastAction = "LG · ${command.label}"
             pulse()
         } else {
-            reportFailure("Kein nutzbarer IR-Blaster gefunden")
+            reportFailure(irFailure("LG-IR-Befehl konnte nicht gesendet werden"))
         }
     }
 
     fun sendSony(command: SonyCommand) {
         if (ir.transmit(command, settings.sonyMode)) {
-            lastAction = "Sony-Testprofil ${settings.sonyMode.title} · ${command.label}"
+            lastAction = "Sony STR-DB870 ${settings.sonyMode.title} · ${command.label}"
             pulse()
         } else {
-            reportFailure("Kein nutzbarer IR-Blaster gefunden")
+            reportFailure(irFailure("Sony-IR-Befehl konnte nicht gesendet werden"))
         }
     }
 
@@ -188,7 +190,7 @@ fun SmartIrApp(
                 pulse()
             } else {
                 lastAction = "Szene · ${scene.title} unvollständig"
-                reportFailure("Mindestens ein Befehl konnte nicht gesendet werden")
+                reportFailure(irFailure("Mindestens ein Befehl konnte nicht gesendet werden"))
             }
         }
     }
@@ -261,7 +263,7 @@ fun SmartIrApp(
                             lastAction = "Testlabor · NEC ${code.toString(16).uppercase()}"
                             pulse()
                         } else {
-                            reportFailure("NEC-Test konnte nicht gesendet werden")
+                            reportFailure(irFailure("NEC-Test konnte nicht gesendet werden"))
                         }
                     },
                     onRawSirc = { command, address, bits ->
@@ -273,10 +275,10 @@ fun SmartIrApp(
                         }.getOrDefault(false)
 
                         if (sent) {
-                            lastAction = "Testlabor · SIRC $bits Bit"
+                            lastAction = "Testlabor · SIRC $bits Bit · Cmd $command · Adresse $address"
                             pulse()
                         } else {
-                            reportFailure("SIRC-Werte ungültig oder IR nicht verfügbar")
+                            reportFailure(irFailure("SIRC-Werte ungültig oder IR nicht verfügbar"))
                         }
                     },
                     onMessage = ::reportFailure,
@@ -308,7 +310,7 @@ private fun HomeDashboard(
             ScreenHeader(
                 eyebrow = "LIVING ROOM CONTROLLER",
                 title = "SmartIR",
-                subtitle = "LG OLED55B19LA + Sony SIRC-Testprofil",
+                subtitle = "LG OLED55B19LA + Sony STR-DB870",
             )
         }
 
@@ -361,7 +363,7 @@ private fun HomeDashboard(
                     horizontalArrangement = Arrangement.spacedBy(10.dp),
                 ) {
                     RemoteKey("TV Power", "TV", onTvPower, Modifier.weight(1f), primary = true)
-                    RemoteKey("Sony Test", "AV", onSonyPower, Modifier.weight(1f), primary = true)
+                    RemoteKey("Sony Power", "AV", onSonyPower, Modifier.weight(1f), primary = true)
                 }
                 Spacer(Modifier.height(10.dp))
                 Row(
@@ -388,8 +390,8 @@ private fun HomeDashboard(
                 )
                 DeviceCard(
                     modifier = Modifier.weight(1f),
-                    title = "Sony",
-                    subtitle = "SIRC-Kandidaten testen",
+                    title = "Sony STR-DB870",
+                    subtitle = "AV1/AV2 · SIRC 40 kHz",
                     symbol = "AV",
                     onClick = onOpenSony,
                 )
