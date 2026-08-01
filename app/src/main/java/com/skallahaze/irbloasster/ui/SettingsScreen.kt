@@ -31,7 +31,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.skallahaze.irbloasster.data.SettingsRepository
 import com.skallahaze.irbloasster.data.ThemePreference
-import com.skallahaze.irbloasster.ir.SonyCommandMode
+import com.skallahaze.irbloasster.ir.Sony_STR_DB870
 import com.skallahaze.irbloasster.webos.WebOsClient
 import com.skallahaze.irbloasster.webos.WebOsConnection
 import com.skallahaze.irbloasster.webos.WebOsState
@@ -66,7 +66,7 @@ internal fun SettingsScreen(
         ScreenHeader(
             eyebrow = "SETUP & ANALYSE",
             title = "SmartIR konfigurieren",
-            subtitle = "Lokales webOS, Sony STR-DB870 und Diagnose",
+            subtitle = "Lokales webOS und Sony STR-DB870 CEL",
         )
 
         SectionCard {
@@ -193,21 +193,22 @@ internal fun SettingsScreen(
         }
 
         SectionCard {
-            Text("Sony STR-DB870", style = MaterialTheme.typography.titleMedium)
+            Text("Sony STR-DB870 CEL", style = MaterialTheme.typography.titleMedium)
             Spacer(Modifier.height(8.dp))
-            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                SonyCommandMode.entries.forEach { mode ->
-                    FilterChip(
-                        selected = settings.sonyMode == mode,
-                        onClick = { settings.setSonyMode(mode) },
-                        label = { Text(mode.title) },
-                    )
-                }
-            }
+            InfoLine("Area Code", Sony_STR_DB870.AREA_CODE)
+            InfoLine("Rückseitenkennung", Sony_STR_DB870.REAR_PANEL_MARKING)
+            InfoLine("Originalfernbedienung", Sony_STR_DB870.SUPPLIED_REMOTE)
+            InfoLine("Normalbetrieb", "AV1 fest · SIRC 12/15 Bit · 40 kHz")
+            Spacer(Modifier.height(8.dp))
+            Text(
+                "Die neue Rückseitenaufnahme beseitigt die frühere Regionsunsicherheit. Sonys Anleitung ordnet dem STR-DB870 CEL die RM-U305A zu und schließt bei dieser Variante die Receiver-COMMAND-MODE-Umschaltung aus. Deshalb gibt es im normalen Bedienbereich keinen AV1/AV2-Schalter mehr.",
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
             Spacer(Modifier.height(6.dp))
             Text(
-                "Das Typenschild bestätigt das Modell. Sony lieferte je nach Region RM-U305A oder RM-PP505. AV1 ist die Werkseinstellung; AV2 nur testen, wenn AV1 nicht reagiert oder der Receiver umgestellt wurde. Einzelne Codes bleiben bis zum echten Tastentest als Kandidaten markiert.",
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                "AV2 kann weiterhin bewusst im Rohcode-Labor mit Adresse 48 und 15 Bit untersucht werden. Die Seriennummer bleibt privat und wird nicht gespeichert.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.primary,
             )
         }
 
@@ -247,7 +248,7 @@ internal fun SettingsScreen(
             Spacer(Modifier.height(8.dp))
             InfoLine("IR-Hardware", if (irAvailable) "erkannt" else "nicht erkannt")
             InfoLine("LG-Protokoll", "NEC 32 Bit · 38 kHz")
-            InfoLine("Sony-Profil", "STR-DB870 · ${settings.sonyMode.title}")
+            InfoLine("Sony-Profil", "STR-DB870 CEL · RM-U305A · AV1")
             InfoLine("Sony-Protokoll", "SIRC 12 / 15 Bit · 40 kHz · 3 Frames")
             InfoLine("LG Netzwerk", webState.connection.name)
             if (webState.reconnectAttempt > 0) InfoLine("Reconnect", "Versuch ${webState.reconnectAttempt}")
@@ -288,6 +289,12 @@ internal fun SettingsScreen(
 
                 SectionCard {
                     Text("Sony SIRC-Code testen", style = MaterialTheme.typography.titleMedium)
+                    Spacer(Modifier.height(6.dp))
+                    Text(
+                        "Standard für dein CEL-Gerät: Power = Command 21, Adresse 16, 12 Bit. Nur zur Diagnose lässt sich AV2 mit Adresse 48 und 15 Bit testen.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
                     Spacer(Modifier.height(8.dp))
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         OutlinedTextField(
