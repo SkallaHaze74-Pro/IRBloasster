@@ -35,26 +35,36 @@ internal fun SonyRemoteScreen(
     ) {
         item {
             ScreenHeader(
-                eyebrow = "SONY SIRC TESTPROFIL",
-                title = "Sony Heimkino",
-                subtitle = "SIRC ${if (mode == SonyCommandMode.AV1) "12" else "15"} Bit · Command Mode ${mode.title}",
+                eyebrow = "SONY STR-DB870",
+                title = "Receiver-Fernbedienung",
+                subtitle = "SIRC · 40 kHz · Command Mode ${mode.title}",
             )
         }
 
         item {
             SectionCard {
-                Text("Noch am echten Gerät bestätigen", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                Text(
+                    "Gerätemodell bestätigt",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                )
                 Spacer(Modifier.height(6.dp))
                 Text(
-                    "Die interne Profilbezeichnung STR-DB870 stammt aus der bisherigen Projektannahme. Das genaue Sony-Modell und sämtliche Befehle sind noch nicht durch einen Hardwaretest bestätigt. Teste zuerst Power, Lautstärke und Mute; verwende das Protokoll-Labor für Korrekturen.",
+                    "Das Typenschild bestätigt den Sony STR-DB870. Sony führte je nach Region die Fernbedienungen RM-U305A oder RM-PP505. Die App enthält jetzt die vollständige bekannte Tastenfamilie sowie alternative ältere Sony-Codes. Die Seriennummer wird nicht gespeichert oder veröffentlicht.",
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Spacer(Modifier.height(8.dp))
+                Text(
+                    "Die Zuordnung ist quellengestützt, aber erst nach deinem echten Tastentest hardwarebestätigt.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.primary,
                 )
             }
         }
 
         item {
             SectionCard {
-                Text("Fernbedienungsmodus", style = MaterialTheme.typography.titleMedium)
+                Text("Receiver Command Mode", style = MaterialTheme.typography.titleMedium)
                 Spacer(Modifier.height(10.dp))
                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                     SonyCommandMode.entries.forEach { item ->
@@ -67,42 +77,41 @@ internal fun SonyRemoteScreen(
                 }
                 Spacer(Modifier.height(6.dp))
                 Text(
-                    "AV1 ist der erste Kandidat. Falls keine Taste reagiert, AV2 testen.",
+                    "AV1 ist die Werkseinstellung. AV2 nur wählen, wenn der Command Mode am Receiver umgestellt wurde oder AV1 gar nicht reagiert.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
         }
 
-        item {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(10.dp),
-            ) {
-                RemoteKey(
-                    "Power testen",
-                    "⏻",
-                    { onSony(Sony_STR_DB870.POWER) },
-                    Modifier.weight(1f),
-                    primary = true,
-                )
-                RemoteKey(
-                    "Stumm testen",
-                    "MUTE",
-                    { onSony(Sony_STR_DB870.MUTE) },
-                    Modifier.weight(1f),
-                )
-                RemoteKey(
-                    "2CH testen",
-                    "2CH",
-                    { onSony(Sony_STR_DB870.MODE_2CH) },
-                    Modifier.weight(1f),
-                )
-            }
-        }
-
+        item { SectionTitle("Power und Master-Lautstärke") }
         item {
             SectionCard {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                ) {
+                    RemoteKey(
+                        "Power Toggle",
+                        "⏻",
+                        { onSony(Sony_STR_DB870.POWER) },
+                        Modifier.weight(1f),
+                        primary = true,
+                    )
+                    RemoteKey(
+                        "Diskret ein",
+                        "ON",
+                        { onSony(Sony_STR_DB870.POWER_ON) },
+                        Modifier.weight(1f),
+                    )
+                    RemoteKey(
+                        "Diskret aus",
+                        "OFF",
+                        { onSony(Sony_STR_DB870.POWER_OFF) },
+                        Modifier.weight(1f),
+                    )
+                }
+                Spacer(Modifier.height(12.dp))
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(12.dp),
@@ -115,25 +124,19 @@ internal fun SonyRemoteScreen(
                         modifier = Modifier.weight(1f),
                     )
                     Column(
-                        modifier = Modifier.weight(1.4f),
+                        modifier = Modifier.weight(1.35f),
                         verticalArrangement = Arrangement.spacedBy(10.dp),
                     ) {
                         RemoteKey(
-                            "Sound Field +",
-                            "SF +",
-                            { onSony(Sony_STR_DB870.SOUND_FIELD_NEXT) },
+                            "Stumm",
+                            "MUTE",
+                            { onSony(Sony_STR_DB870.MUTE) },
                             Modifier.fillMaxWidth(),
                         )
                         RemoteKey(
-                            "Sound Field −",
-                            "SF −",
-                            { onSony(Sony_STR_DB870.SOUND_FIELD_PREVIOUS) },
-                            Modifier.fillMaxWidth(),
-                        )
-                        RemoteKey(
-                            "Effect aus",
-                            "OFF",
-                            { onSony(Sony_STR_DB870.EFFECT_OFF) },
+                            "Sleep Timer",
+                            "SLEEP",
+                            { onSony(Sony_STR_DB870.SLEEP) },
                             Modifier.fillMaxWidth(),
                         )
                     }
@@ -141,16 +144,38 @@ internal fun SonyRemoteScreen(
             }
         }
 
-        item { SectionTitle("Eingangs-Kandidaten") }
+        item { SectionTitle("Eingänge des STR-DB870") }
         item {
             SectionCard {
                 CommandGrid(Sony_STR_DB870.INPUTS, onSony)
             }
         }
 
-        item { SectionTitle("Receiver-Menü-Kandidaten") }
+        item { SectionTitle("Klangfeld und Betriebsart") }
         item {
             SectionCard {
+                CommandGrid(Sony_STR_DB870.SOUND_CONTROLS, onSony)
+                Spacer(Modifier.height(10.dp))
+                ActionGrid(
+                    actions = listOf(
+                        "Subwoofer +" to { onSony(Sony_STR_DB870.SUBWOOFER_UP) },
+                        "Subwoofer −" to { onSony(Sony_STR_DB870.SUBWOOFER_DOWN) },
+                        "Test Tone" to { onSony(Sony_STR_DB870.TEST_TONE) },
+                    ),
+                )
+            }
+        }
+
+        item { SectionTitle("Receiver-Menü") }
+        item {
+            SectionCard {
+                RemoteKey(
+                    "Hauptmenü öffnen",
+                    "MENU",
+                    { onSony(Sony_STR_DB870.MAIN_MENU) },
+                    Modifier.fillMaxWidth(),
+                )
+                Spacer(Modifier.height(12.dp))
                 Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
                     DPad(
                         onUp = { onSony(Sony_STR_DB870.MENU_UP) },
@@ -160,39 +185,35 @@ internal fun SonyRemoteScreen(
                         onOk = { onSony(Sony_STR_DB870.MENU_SELECT) },
                     )
                 }
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(10.dp),
-                ) {
-                    RemoteKey(
-                        "Enter",
-                        "ENTER",
-                        { onSony(Sony_STR_DB870.MENU_ENTER) },
-                        Modifier.weight(1f),
-                    )
-                    RemoteKey(
-                        "Test Tone",
-                        "TEST",
-                        { onSony(Sony_STR_DB870.TEST_TONE) },
-                        Modifier.weight(1f),
-                    )
-                }
             }
         }
 
-        item { SectionTitle("Subwoofer- und Tuner-Kandidaten") }
+        item { SectionTitle("Tuner") }
         item {
             SectionCard {
-                ActionGrid(
-                    actions = listOf(
-                        "Subwoofer +" to { onSony(Sony_STR_DB870.SUBWOOFER_UP) },
-                        "Subwoofer −" to { onSony(Sony_STR_DB870.SUBWOOFER_DOWN) },
-                        "Preset +" to { onSony(Sony_STR_DB870.TUNER_PRESET_UP) },
-                        "Preset −" to { onSony(Sony_STR_DB870.TUNER_PRESET_DOWN) },
-                        "Tuning +" to { onSony(Sony_STR_DB870.TUNING_UP) },
-                        "Tuning −" to { onSony(Sony_STR_DB870.TUNING_DOWN) },
-                        "FM Mode" to { onSony(Sony_STR_DB870.FM_MODE) },
-                    ),
+                CommandGrid(Sony_STR_DB870.TUNER_CONTROLS, onSony)
+            }
+        }
+
+        item { SectionTitle("Alternative Sony-Codes") }
+        item {
+            SectionCard {
+                Text(
+                    "Nur verwenden, wenn die gleichnamige Haupttaste nicht reagiert. Diese Varianten stammen aus älteren Sony-Receiver-Familien oder abweichenden Geräteadressen.",
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Spacer(Modifier.height(10.dp))
+                CommandGrid(Sony_STR_DB870.FALLBACK_CODES, onSony)
+            }
+        }
+
+        item {
+            SectionCard {
+                Text("Empfohlene Testreihenfolge", style = MaterialTheme.typography.titleMedium)
+                Spacer(Modifier.height(6.dp))
+                Text(
+                    "1. AV1 + Power Toggle  •  2. Lauter/Leiser  •  3. Mute  •  4. TV/SAT und DVD/LD  •  5. A.F.D. und 2CH  •  6. Menü. Erst wenn AV1 komplett schweigt, AV2 testen.",
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
         }
