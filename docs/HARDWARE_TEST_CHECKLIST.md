@@ -1,10 +1,10 @@
 # SmartIR – Hardware-Testcheckliste
 
-Diese Checkliste trennt Software-/Build-Prüfungen von den Funktionen, die nur am realen **LG OLED55B19LA** und **Sony STR-DB870 CEL** bestätigt werden können.
+Diese Checkliste trennt Software-/Build-Prüfungen von den Funktionen, die nur am realen **LG OLED55B19LA.DEUQJP** und **Sony STR-DB870 CEL** bestätigt werden können.
 
 ## 1. Installation und Datensicherung
 
-- [ ] GitHub-Actions-Artefakt `SmartIR-v1.1.5-debug` laden
+- [ ] GitHub-Actions-Artefakt `SmartIR-v1.1.6-debug` laden
 - [ ] vor einer möglichen Deinstallation in der alten App **Setup → Backup & Datenübertragung → Exportieren** verwenden
 - [ ] APK zunächst als Update installieren beziehungsweise mit `adb install -r` aktualisieren
 - [ ] App startet ohne Absturz
@@ -27,7 +27,7 @@ Diese Checkliste trennt Software-/Build-Prüfungen von den Funktionen, die nur a
 - [ ] Hinweis zur erneuten LG-Kopplung erscheint, wenn vorher ein Client-Key vorhanden war
 - [ ] vorhandenes funktionierendes Pairing wird durch einen Import nicht überschrieben
 
-## 2. LG-TV per IR
+## 2. LG OLED55B19LA.DEUQJP per IR
 
 Handy mit der IR-Sendediode auf den Fernseher richten.
 
@@ -63,19 +63,33 @@ TV und Smartphone müssen im selben lokalen Netzwerk sein.
 - [ ] Trennen funktioniert
 - [ ] Pairing zurücksetzen löscht Client-Key und Fingerabdruck
 
-### Live-Status und SSAP
+### 3.1 Exaktes Anschlussprofil
+
+Das Gerät ist als `OLED55B19LA.DEUQJP` gespeichert. Die Anschlussbeschriftung bestätigt HDMI 3 als eARC/ARC und HDMI 3/4 als 4K/120-Ports.
+
+- [ ] Gerätekarte zeigt Produktcode `OLED55B19LA.DEUQJP`
+- [ ] HDMI 1 schaltet auf `HDMI_1`
+- [ ] HDMI 2 schaltet auf `HDMI_2`
+- [ ] HDMI 3 eARC schaltet auf `HDMI_3`
+- [ ] HDMI 4 4K/120 schaltet auf `HDMI_4`
+- [ ] vom TV geladene Eingangsliste erscheint zusätzlich
+- [ ] angeschlossene Eingänge werden richtig als verbunden markiert
+- [ ] „TV-Status, Apps und Eingänge neu laden“ aktualisiert alle Listen
+
+### 3.2 Live-Status, Apps und SSAP
 
 - [ ] Lautstärke wird gelesen
 - [ ] Mute wird gelesen und geschaltet
 - [ ] Power-Status wird gelesen
 - [ ] aktuelle App beziehungsweise aktueller Eingang wird angezeigt
-- [ ] installierte Apps werden geladen und können gestartet werden
+- [ ] installierte Apps werden geladen
+- [ ] angezeigte App-Schnellstarts starten die richtige TV-App
 - [ ] HDMI-/AV-Eingänge werden geladen und umgeschaltet
 - [ ] Sender + / −
 - [ ] Mediensteuerung
 - [ ] Texteingabe und Enter
 
-### Magic Remote
+### 3.3 Magic Remote
 
 - [ ] Pointer-Socket meldet „bereit“
 - [ ] D-Pad-Tasten funktionieren
@@ -83,7 +97,7 @@ TV und Smartphone müssen im selben lokalen Netzwerk sein.
 - [ ] Tippen/Klick funktioniert
 - [ ] Scrollen funktioniert
 
-### Wake-on-LAN
+### 3.4 Wake-on-LAN
 
 - [ ] TV-MAC-Adresse speichern
 - [ ] „TV wecken“ im normalen Standby testen
@@ -104,11 +118,9 @@ Originalfernbedienung laut Sony: RM-U305A
 Normaler Command Mode: AV1 fest
 ```
 
-Die Seriennummer wird nicht dokumentiert. Sonys Anleitung schließt die COMMAND-MODE-Umschaltung beim STR-DB870 CEL aus. SmartIR zeigt deshalb im normalen Bedienbereich keinen AV1/AV2-Schalter mehr. Die vollständige Codeübersicht steht unter [`SONY_STR_DB870_CODES.md`](SONY_STR_DB870_CODES.md).
+Die Seriennummer wird nicht dokumentiert. Die vollständige Codeübersicht steht unter [`SONY_STR_DB870_CODES.md`](SONY_STR_DB870_CODES.md).
 
 ### 4.1 Schnelltest in AV1
-
-Smartphone direkt auf das IR-Empfangsfenster an der Vorderseite des Receivers richten.
 
 - [ ] Power Toggle
 - [ ] Power On
@@ -140,8 +152,6 @@ Falls nur DVD/LD beziehungsweise MD/TAPE nicht reagieren:
 
 ### 4.3 Klangfeld und Receiver-Betriebsarten
 
-Diese Hauptcodes verwenden die moderne Sony-Geräteadresse 144 und 15 Bit bereits in AV1.
-
 - [ ] A.F.D.
 - [ ] 2CH/OFF
 - [ ] Mode +
@@ -154,55 +164,23 @@ Diese Hauptcodes verwenden die moderne Sony-Geräteadresse 144 und 15 Bit bereit
 - [ ] Subwoofer −
 - [ ] Test Tone
 
-Falls eine einzelne Klangtaste nicht reagiert, die gleichnamige Legacy-Variante im Abschnitt „Alternative Sony-Codes“ testen.
+### 4.4 Receiver-Menü und Tuner
 
-### 4.4 Receiver-Menü
-
-- [ ] Main Menu öffnet das Receiver-Menü
-- [ ] Hoch
-- [ ] Runter
-- [ ] Links
-- [ ] Rechts
+- [ ] Main Menu
+- [ ] Hoch / Runter / Links / Rechts
 - [ ] Enter/Exec
-- [ ] längerer Tastendruck beziehungsweise Wiederholung ist ausreichend
-
-### 4.5 Tuner
-
-- [ ] Preset +
-- [ ] Preset −
-- [ ] Tuning +
-- [ ] Tuning −
+- [ ] Preset + / −
+- [ ] Tuning + / −
 - [ ] FM Mode
 - [ ] Direct Tuning
 
-### 4.6 AV2 nur im Rohcode-Labor
+### 4.5 AV2 nur im Rohcode-Labor
 
-Das fotografierte CEL-Gerät besitzt laut Sony keine normale COMMAND-MODE-Umschaltung. AV2 ist deshalb kein auswählbarer Alltagsmodus der App.
-
-Nur für einen kontrollierten Protokollvergleich:
-
-- [ ] Protokoll-Labor öffnen
 - [ ] Power AV1 testen: Command 21, Adresse 16, 12 Bit
 - [ ] optional Power AV2-Diagnose testen: Command 21, Adresse 48, 15 Bit
-- [ ] Ergebnisse ausdrücklich als Diagnose und nicht als normalen CEL-Gerätemodus dokumentieren
-
-### 4.7 Rohcode-Labor
-
-- [ ] bei einer nicht reagierenden Taste Command, Adresse und 12/15/20 Bit variieren
-- [ ] funktionierende Kombination exakt notieren
-- [ ] App-Fehlermeldung beziehungsweise letzte Aktion notieren
-- [ ] keine unbestätigten Werte als verifiziert markieren
-
-Beispiele:
-
-```text
-Power AV1: Command 21, Adresse 16, 12 Bit
-Main Menu AV1: Command 119, Adresse 144, 15 Bit
-```
+- [ ] Ergebnisse ausdrücklich als Diagnose dokumentieren
 
 ## 5. Szenen
-
-Alle Sony-Szenen verwenden beim CEL-Profil automatisch AV1.
 
 - [ ] Fernsehen: TV wecken, Sony einschalten, TV/SAT wählen
 - [ ] Heimkino: TV wecken, Sony einschalten, DVD/LD wählen
@@ -214,13 +192,11 @@ Alle Sony-Szenen verwenden beim CEL-Profil automatisch AV1.
 
 ## 6. Fehlerbericht
 
-Bei einem Problem bitte festhalten:
-
 ```text
 App-Version:
 Android-Version:
 Smartphone:
-Gerät: LG OLED55B19LA oder Sony STR-DB870 CEL
+Gerät: LG OLED55B19LA.DEUQJP oder Sony STR-DB870 CEL
 TV-IP (letztes Oktett darf geschwärzt werden):
 Verbindungsstatus:
 betroffene Taste/Funktion:
@@ -231,4 +207,4 @@ letzte geschwärzte SSAP-Antwort:
 Backup exportiert: ja/nein
 ```
 
-Client-Key, Zertifikate, WLAN-Passwörter, Kontodaten und die Seriennummer des Receivers niemals in einen öffentlichen Fehlerbericht kopieren.
+Client-Key, WLAN-Passwörter, Kontodaten und Geräte-Seriennummern niemals in einen öffentlichen Fehlerbericht kopieren.

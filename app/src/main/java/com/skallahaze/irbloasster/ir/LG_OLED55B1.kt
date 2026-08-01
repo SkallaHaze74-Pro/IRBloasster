@@ -7,8 +7,80 @@ data class LgCommand(
     val repeatFrames: Int = 0,
 )
 
+data class LgHdmiPort(
+    val number: Int,
+    val inputId: String,
+    val label: String,
+    val maxRefreshHz: Int,
+    val hdmi21: Boolean = false,
+    val eArc: Boolean = false,
+)
+
+/**
+ * Exact profile of the photographed LG television.
+ *
+ * Public source control intentionally contains no serial number. The model,
+ * product-code suffix, manufacture date and connector map are sufficient for
+ * remote-control interoperability and future maintenance.
+ */
 object LG_OLED55B1 {
+    const val MODEL = "OLED55B19LA"
+    const val PRODUCT_CODE = "OLED55B19LA.DEUQJP"
+    const val SERIES = "B1"
+    const val PANEL_SIZE_INCH = 55
+    const val RESOLUTION = "3840 × 2160"
+    const val NATIVE_REFRESH_HZ = 120
+    const val WEB_OS_VERSION = "webOS 6.0"
+
+    const val MANUFACTURED = "09/2021"
+    const val ASSEMBLED_IN = "Poland"
+    const val POWER_INPUT = "AC 100–240 V · 50/60 Hz"
+    const val MAX_RATED_POWER_W = 343
+    const val TYPICAL_POWER_W = 104
+
+    const val HDMI_PORT_COUNT = 4
+    const val HDMI_21_PORT_COUNT = 2
+    const val EARC_HDMI_PORT = 3
+    const val USB_PORT_COUNT = 3
+
+    const val SUPPORTS_VRR = true
+    const val SUPPORTS_ALLM = true
+    const val SUPPORTS_GSYNC = true
+    const val SUPPORTS_FREESYNC = true
+    const val SUPPORTS_HGIG = true
+    const val SUPPORTS_WAKE_ON_WIFI = true
+
     const val FREQUENCY = 38_000
+
+    val HDMI_PORTS = listOf(
+        LgHdmiPort(
+            number = 1,
+            inputId = "HDMI_1",
+            label = "HDMI 1 · 4K/60",
+            maxRefreshHz = 60,
+        ),
+        LgHdmiPort(
+            number = 2,
+            inputId = "HDMI_2",
+            label = "HDMI 2 · 4K/60",
+            maxRefreshHz = 60,
+        ),
+        LgHdmiPort(
+            number = 3,
+            inputId = "HDMI_3",
+            label = "HDMI 3 · eARC · 4K/120",
+            maxRefreshHz = 120,
+            hdmi21 = true,
+            eArc = true,
+        ),
+        LgHdmiPort(
+            number = 4,
+            inputId = "HDMI_4",
+            label = "HDMI 4 · 4K/120",
+            maxRefreshHz = 120,
+            hdmi21 = true,
+        ),
+    )
 
     val POWER = LgCommand("power", "Power", 0x20DF10EFL)
     val POWER_ON = LgCommand("power_on", "Einschalten", 0x20DF23DCL)
