@@ -87,6 +87,7 @@ fun SmartIrApp(
     val scope = rememberCoroutineScope()
     val haptic = LocalHapticFeedback.current
     val webState = webOs.state
+    val sonyMode = Sony_STR_DB870.NORMAL_MODE
 
     fun pulse() {
         if (settings.hapticsEnabled) {
@@ -110,8 +111,8 @@ fun SmartIrApp(
     }
 
     fun sendSony(command: SonyCommand) {
-        if (ir.transmit(command, settings.sonyMode)) {
-            lastAction = "Sony STR-DB870 ${settings.sonyMode.title} · ${command.label}"
+        if (ir.transmit(command, sonyMode)) {
+            lastAction = "Sony STR-DB870 CEL · AV1 · ${command.label}"
             pulse()
         } else {
             reportFailure(irFailure("Sony-IR-Befehl konnte nicht gesendet werden"))
@@ -154,9 +155,9 @@ fun SmartIrApp(
                     if (webState.connection != WebOsConnection.CONNECTED && settings.webOsHost.isNotBlank()) {
                         webOs.connect()
                     }
-                    results += ir.transmit(Sony_STR_DB870.POWER_ON, settings.sonyMode)
+                    results += ir.transmit(Sony_STR_DB870.POWER_ON, sonyMode)
                     delay(550)
-                    results += ir.transmit(Sony_STR_DB870.INPUT_TV_SAT, settings.sonyMode)
+                    results += ir.transmit(Sony_STR_DB870.INPUT_TV_SAT, sonyMode)
                 }
 
                 Scene.CINEMA -> {
@@ -165,21 +166,21 @@ fun SmartIrApp(
                     if (webState.connection != WebOsConnection.CONNECTED && settings.webOsHost.isNotBlank()) {
                         webOs.connect()
                     }
-                    results += ir.transmit(Sony_STR_DB870.POWER_ON, settings.sonyMode)
+                    results += ir.transmit(Sony_STR_DB870.POWER_ON, sonyMode)
                     delay(550)
-                    results += ir.transmit(Sony_STR_DB870.INPUT_DVD_LD, settings.sonyMode)
+                    results += ir.transmit(Sony_STR_DB870.INPUT_DVD_LD, sonyMode)
                 }
 
                 Scene.MUSIC -> {
-                    results += ir.transmit(Sony_STR_DB870.POWER_ON, settings.sonyMode)
+                    results += ir.transmit(Sony_STR_DB870.POWER_ON, sonyMode)
                     delay(500)
-                    results += ir.transmit(Sony_STR_DB870.INPUT_CD, settings.sonyMode)
+                    results += ir.transmit(Sony_STR_DB870.INPUT_CD, sonyMode)
                     delay(350)
-                    results += ir.transmit(Sony_STR_DB870.MODE_2CH, settings.sonyMode)
+                    results += ir.transmit(Sony_STR_DB870.MODE_2CH, sonyMode)
                 }
 
                 Scene.ALL_OFF -> {
-                    results += ir.transmit(Sony_STR_DB870.POWER_OFF, settings.sonyMode)
+                    results += ir.transmit(Sony_STR_DB870.POWER_OFF, sonyMode)
                     delay(500)
                     results += turnOffTvWithFallback()
                 }
@@ -229,7 +230,7 @@ fun SmartIrApp(
                         if (webOs.wakeTv()) {
                             lastAction = "LG · Wake-on-LAN"
                         } else {
-                            sendLg(LG_OLED55B1.POWER)
+                            sendLg(LG_OLED55B19LA.POWER)
                         }
                     },
                     onSonyPower = { sendSony(Sony_STR_DB870.POWER) },
@@ -248,8 +249,6 @@ fun SmartIrApp(
                 )
 
                 Destination.SONY -> SonyRemoteScreen(
-                    mode = settings.sonyMode,
-                    onModeChange = settings::setSonyMode,
                     onSony = ::sendSony,
                 )
 
@@ -310,7 +309,7 @@ private fun HomeDashboard(
             ScreenHeader(
                 eyebrow = "LIVING ROOM CONTROLLER",
                 title = "SmartIR",
-                subtitle = "LG OLED55B19LA + Sony STR-DB870",
+                subtitle = "LG OLED55B19LA + Sony STR-DB870 CEL",
             )
         }
 
@@ -391,7 +390,7 @@ private fun HomeDashboard(
                 DeviceCard(
                     modifier = Modifier.weight(1f),
                     title = "Sony STR-DB870",
-                    subtitle = "AV1/AV2 · SIRC 40 kHz",
+                    subtitle = "CEL · RM-U305A · AV1",
                     symbol = "AV",
                     onClick = onOpenSony,
                 )
