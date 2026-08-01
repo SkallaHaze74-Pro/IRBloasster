@@ -7,6 +7,7 @@ import android.os.Looper
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import com.skallahaze.irbloasster.BuildConfig
 import com.skallahaze.irbloasster.data.SettingsRepository
 import java.security.MessageDigest
 import java.security.SecureRandom
@@ -74,16 +75,23 @@ class WebOsClient(
     private val settings: SettingsRepository,
 ) {
     private data class PendingRequest(
+        val uri: String,
         val subscription: Boolean,
+        val optional: Boolean,
         val callback: ((JSONObject) -> Unit)?,
     )
 
+    private val appContext = context.applicationContext
     private val mainHandler = Handler(Looper.getMainLooper())
     private val ioScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
-    private val discovery = SsdpDiscovery(context)
+    private val discovery = SsdpDiscovery(appContext)
     private val requestCounter = AtomicInteger(0)
     private val connectionGeneration = AtomicInteger(0)
     private val pending = ConcurrentHashMap<String, PendingRequest>()
+    private val protocolPreferences = appContext.getSharedPreferences(
+        PROTOCOL_PREFERENCES,
+        Context.MODE_PRIVATE,
+    )
 
     private var socket: WebSocket? = null
     private var pointerSocket: WebSocket? = null
@@ -95,6 +103,7 @@ class WebOsClient(
     private var fallbackTried = false
     private var activeSecureTransport = false
     private var reconnectAttempt = 0
+    private var forcePermissionRepair = false
     @Volatile private var registered = false
 
     var state by mutableStateOf(
@@ -104,6 +113,19 @@ class WebOsClient(
         ),
     )
         private set
+
+    init {
+        val previousProfile = protocolPreferences.getInt(KEY_PERMISSION_PROFILE, 0)
+        if (previousProfile < WebOsRegistrationProfile.PROFILE_VERSION) {
+            // Existing keys were created with a manifest that omitted
+            // READ_POWER_STATE. Force exactly one clean pairing after updating.
+            forcePermissionRepair = settings.hasWebOsClientKey()
+            if (forcePermissionRepair) settings.clearWebOsPairing()
+            protocolPreferences.edit()
+                .putInt(KEY_PERMISSION_PROFILE, WebOsRegistrationProfile.PROFILE_VERSION)
+                .apply()
+        }
+    }
 
     fun connect(rawHost: String = settings.webOsHost) {
         val host = normalizeHost(rawHost)
@@ -141,10 +163,11 @@ class WebOsClient(
 
     fun forgetPairing() {
         settings.clearWebOsPairing()
+        forcePermissionRepair = true
         disconnect()
         updateState {
             it.copy(
-                message = "Kopplung und Zertifikat-Fingerabdruck gelöscht",
+                message = "Kopplung gelöscht – beim nächsten Verbinden am Fernseher neu bestätigen",
                 certificateFingerprint = "",
             )
         }
@@ -222,15 +245,27 @@ class WebOsClient(
         subscribe("ssap://audio/getVolume") { parseVolume(it) }
         subscribe("ssap://com.webos.applicationManager/getForegroundAppInfo") { payload ->
             updateState { current ->
-                current.copy(currentApp = payload.optString("appId").ifBlank { current.currentApp.orEmpty() })
+                current.copy(
+                    currentApp = payload.optString("appId")
+                        .ifBlank { current.currentApp.orEmpty() },
+                )
             }
         }
-        subscribe("ssap://com.webos.service.tvpower/power/getPowerState") { payload ->
+        subscribe(
+            uri = "ssap://com.webos.service.tvpower/power/getPowerState",
+            optional = true,
+        ) { payload ->
             updateState { current ->
-                current.copy(powerState = payload.optString("state").ifBlank { payload.optString("powerState", current.powerState.orEmpty()) })
+                current.copy(
+                    powerState = payload.optString("state")
+                        .ifBlank { payload.optString("powerState", current.powerState.orEmpty()) },
+                )
             }
         }
-        request("ssap://system/getSystemInfo") { payload -> parseGenericStatus(payload) }
+        request(
+            uri = "ssap://system/getSystemInfo",
+            optional = true,
+        ) { payload -> parseGenericStatus(payload) }
         loadApps()
         loadInputs()
         requestPointerSocket()
@@ -240,7 +275,10 @@ class WebOsClient(
     fun volumeDown(): Boolean = request("ssap://audio/volumeDown") != null
 
     fun setVolume(volume: Int): Boolean =
-        request("ssap://audio/setVolume", JSONObject().put("volume", volume.coerceIn(0, 100))) != null
+        request(
+            "ssap://audio/setVolume",
+            JSONObject().put("volume", volume.coerceIn(0, 100)),
+        ) != null
 
     fun toggleMute(): Boolean {
         val muted = state.muted ?: false
@@ -268,7 +306,14 @@ class WebOsClient(
             JSONObject().put("text", text).put("replace", false),
         ) != null
 
-    fun sendEnter(): Boolean = request("ssap://com.webos.service.ime/sendEnterKey") != null
+    fun sendEnter(): Boolean =
+        request("ssap://com.webos.service.ime/sendEnterKey") != null
+
+    fun deleteCharacters(count: Int = 1): Boolean =
+        request(
+            "ssap://com.webos.service.ime/deleteCharacters",
+            JSONObject().put("count", count.coerceAtLeast(1)),
+        ) != null
 
     fun sendCustom(uri: String, payloadJson: String = ""): Boolean {
         val cleanUri = uri.trim()
@@ -278,9 +323,6 @@ class WebOsClient(
         }
         return request(cleanUri, payload) != null
     }
-
-    fun deleteCharacters(count: Int = 1): Boolean =
-        request("ssap://com.webos.service.ime/deleteCharacters", JSONObject().put("count", count.coerceAtLeast(1))) != null
 
     fun sendButton(name: String): Boolean {
         val pointer = pointerSocket
@@ -322,7 +364,13 @@ class WebOsClient(
             .sslSocketFactory(sslContext.socketFactory, localTrustManager)
             .hostnameVerifier { _, _ -> true }
             .build()
-        openSocket(client, "wss://$host:3001/", secure = true, host = host, generation = generation)
+        openSocket(
+            client = client,
+            url = "wss://$host:3001/",
+            secure = true,
+            host = host,
+            generation = generation,
+        )
     }
 
     private fun openLegacy(host: String, generation: Int) {
@@ -335,7 +383,13 @@ class WebOsClient(
             )
         }
         val client = baseClientBuilder().build()
-        openSocket(client, "ws://$host:3000/", secure = false, host = host, generation = generation)
+        openSocket(
+            client = client,
+            url = "ws://$host:3000/",
+            secure = false,
+            host = host,
+            generation = generation,
+        )
     }
 
     private fun openSocket(
@@ -365,7 +419,11 @@ class WebOsClient(
                 }
                 webSocket.send(helloMessage().toString())
                 mainHandler.postDelayed({
-                    if (!registrationSent && socket === webSocket && generation == connectionGeneration.get()) {
+                    if (
+                        !registrationSent &&
+                        socket === webSocket &&
+                        generation == connectionGeneration.get()
+                    ) {
                         sendRegistration(webSocket)
                     }
                 }, 650L)
@@ -376,7 +434,9 @@ class WebOsClient(
             }
 
             override fun onMessage(webSocket: WebSocket, bytes: ByteString) {
-                if (generation == connectionGeneration.get()) handleMessage(bytes.utf8(), webSocket)
+                if (generation == connectionGeneration.get()) {
+                    handleMessage(bytes.utf8(), webSocket)
+                }
             }
 
             override fun onClosing(webSocket: WebSocket, code: Int, reason: String) {
@@ -387,10 +447,18 @@ class WebOsClient(
                 if (generation != connectionGeneration.get() || manualDisconnect) return
                 registered = false
                 updateState { it.copy(pointerReady = false) }
-                scheduleReconnect(host, generation, reason.ifBlank { "TV-Verbindung beendet" })
+                scheduleReconnect(
+                    host = host,
+                    generation = generation,
+                    reason = reason.ifBlank { "TV-Verbindung beendet" },
+                )
             }
 
-            override fun onFailure(webSocket: WebSocket, throwable: Throwable, response: Response?) {
+            override fun onFailure(
+                webSocket: WebSocket,
+                throwable: Throwable,
+                response: Response?,
+            ) {
                 if (generation != connectionGeneration.get() || manualDisconnect) return
                 registered = false
                 updateState { it.copy(pointerReady = false) }
@@ -406,7 +474,11 @@ class WebOsClient(
                         )
                     }
                 } else {
-                    scheduleReconnect(host, generation, throwable.message ?: "TV nicht erreichbar")
+                    scheduleReconnect(
+                        host = host,
+                        generation = generation,
+                        reason = throwable.message ?: "TV nicht erreichbar",
+                    )
                 }
             }
         })
@@ -454,11 +526,11 @@ class WebOsClient(
         .put(
             "payload",
             JSONObject()
-                .put("sdkVersion", "1.1")
+                .put("sdkVersion", BuildConfig.VERSION_NAME)
                 .put("deviceModel", Build.MODEL)
                 .put("OSVersion", Build.VERSION.SDK_INT.toString())
                 .put("resolution", "phone")
-                .put("appId", "com.skallahaze.irbloasster")
+                .put("appId", appContext.packageName)
                 .put("appName", "SmartIR")
                 .put("appRegion", Locale.getDefault().country),
         )
@@ -473,13 +545,19 @@ class WebOsClient(
         uri: String,
         payload: JSONObject? = null,
         subscribe: Boolean = false,
+        optional: Boolean = false,
         callback: ((JSONObject) -> Unit)? = null,
     ): String? {
         val webSocket = socket ?: return null
         if (!registered) return null
 
         val id = "smartir_${requestCounter.incrementAndGet()}"
-        pending[id] = PendingRequest(subscribe, callback)
+        pending[id] = PendingRequest(
+            uri = uri,
+            subscription = subscribe,
+            optional = optional,
+            callback = callback,
+        )
         val message = JSONObject()
             .put("id", id)
             .put("type", if (subscribe) "subscribe" else "request")
@@ -492,11 +570,29 @@ class WebOsClient(
         }
     }
 
-    private fun request(uri: String, callback: (JSONObject) -> Unit): String? =
-        request(uri, payload = null, subscribe = false, callback = callback)
+    private fun request(
+        uri: String,
+        optional: Boolean = false,
+        callback: (JSONObject) -> Unit,
+    ): String? = request(
+        uri = uri,
+        payload = null,
+        subscribe = false,
+        optional = optional,
+        callback = callback,
+    )
 
-    private fun subscribe(uri: String, callback: (JSONObject) -> Unit): String? =
-        request(uri, payload = null, subscribe = true, callback = callback)
+    private fun subscribe(
+        uri: String,
+        optional: Boolean = false,
+        callback: (JSONObject) -> Unit,
+    ): String? = request(
+        uri = uri,
+        payload = null,
+        subscribe = true,
+        optional = optional,
+        callback = callback,
+    )
 
     private fun handleMessage(text: String, webSocket: WebSocket) {
         val message = runCatching { JSONObject(text) }.getOrNull() ?: return
@@ -507,32 +603,96 @@ class WebOsClient(
 
         when (type) {
             "hello" -> sendRegistration(webSocket)
+
             "registered" -> {
                 registered = true
                 reconnectAttempt = 0
-                payload.optString("client-key").takeIf { it.isNotBlank() }?.let(settings::setWebOsClientKey)
-                val fingerprint = if (activeSecureTransport) trustManager?.lastFingerprint.orEmpty() else ""
-                if (fingerprint.isNotBlank()) settings.setWebOsCertificateFingerprint(fingerprint)
+                forcePermissionRepair = false
+                payload.optString("client-key")
+                    .takeIf { it.isNotBlank() }
+                    ?.let(settings::setWebOsClientKey)
+
+                val fingerprint = if (activeSecureTransport) {
+                    trustManager?.lastFingerprint.orEmpty()
+                } else {
+                    ""
+                }
+                if (fingerprint.isNotBlank()) {
+                    settings.setWebOsCertificateFingerprint(fingerprint)
+                }
+
                 updateState {
                     it.copy(
                         connection = WebOsConnection.CONNECTED,
-                        message = if (activeSecureTransport) "LG TV sicher verbunden" else "LG TV über Legacy-Port 3000 verbunden",
+                        message = if (activeSecureTransport) {
+                            "LG TV sicher verbunden"
+                        } else {
+                            "LG TV über lokalen Port 3000 verbunden"
+                        },
                         secureTransport = activeSecureTransport,
-                        certificateFingerprint = fingerprint.ifBlank { settings.getWebOsCertificateFingerprint() },
+                        certificateFingerprint = fingerprint.ifBlank {
+                            settings.getWebOsCertificateFingerprint()
+                        },
                         reconnectAttempt = 0,
                     )
                 }
                 refreshStatus()
             }
+
             "response" -> {
                 dispatchPending(id, payload)
                 parseGenericStatus(payload)
             }
-            "error" -> {
-                pending.remove(id)
-                val errorText = message.optString("error", "webOS-Befehl fehlgeschlagen")
-                updateState { it.copy(message = errorText) }
+
+            "error" -> handleErrorMessage(message, id)
+        }
+    }
+
+    private fun handleErrorMessage(message: JSONObject, id: String) {
+        val entry = pending.remove(id)
+        val errorText = message.optString("error", "webOS-Befehl fehlgeschlagen")
+
+        if (id.startsWith("register_")) {
+            settings.clearWebOsPairing()
+            forcePermissionRepair = true
+            updateState {
+                it.copy(
+                    connection = WebOsConnection.ERROR,
+                    message = "TV-Anmeldung abgelehnt: $errorText",
+                )
             }
+            return
+        }
+
+        val permissionDenied = errorText.contains("401", ignoreCase = true) ||
+            errorText.contains("insufficient permissions", ignoreCase = true)
+
+        if (permissionDenied && entry?.optional == true) {
+            // An optional status endpoint must never make a working connection
+            // look broken. Controls remain usable even if this model declines it.
+            updateState {
+                it.copy(
+                    connection = if (registered) WebOsConnection.CONNECTED else it.connection,
+                    message = if (registered) {
+                        "LG TV verbunden · einzelne Zusatzinfo nicht freigegeben"
+                    } else {
+                        errorText
+                    },
+                )
+            }
+            return
+        }
+
+        val friendlyTarget = friendlyPermissionTarget(entry?.uri)
+        updateState {
+            it.copy(
+                connection = if (registered) WebOsConnection.CONNECTED else WebOsConnection.ERROR,
+                message = if (permissionDenied) {
+                    "Berechtigung fehlt für $friendlyTarget. Kopplung einmal neu bestätigen."
+                } else {
+                    errorText
+                },
+            )
         }
     }
 
@@ -547,12 +707,18 @@ class WebOsClient(
         parseVolume(payload)
         updateState { current ->
             current.copy(
-                currentApp = payload.optString("appId").takeIf { it.isNotBlank() } ?: current.currentApp,
-                modelName = payload.optString("modelName").takeIf { it.isNotBlank() }
-                    ?: payload.optString("model_name").takeIf { it.isNotBlank() }
+                currentApp = payload.optString("appId")
+                    .takeIf { it.isNotBlank() }
+                    ?: current.currentApp,
+                modelName = payload.optString("modelName")
+                    .takeIf { it.isNotBlank() }
+                    ?: payload.optString("model_name")
+                        .takeIf { it.isNotBlank() }
                     ?: current.modelName,
-                powerState = payload.optString("state").takeIf { it.isNotBlank() }
-                    ?: payload.optString("powerState").takeIf { it.isNotBlank() }
+                powerState = payload.optString("state")
+                    .takeIf { it.isNotBlank() }
+                    ?: payload.optString("powerState")
+                        .takeIf { it.isNotBlank() }
                     ?: current.powerState,
             )
         }
@@ -582,13 +748,18 @@ class WebOsClient(
     }
 
     private fun loadApps() {
-        request("ssap://com.webos.applicationManager/listApps") { payload ->
+        request(
+            uri = "ssap://com.webos.applicationManager/listApps",
+            optional = true,
+        ) { payload ->
             val array = payload.optJSONArray("apps") ?: JSONArray()
             val apps = buildList {
                 for (index in 0 until array.length()) {
                     val item = array.optJSONObject(index) ?: continue
                     val id = item.optString("id")
-                    if (id.isNotBlank()) add(WebOsApp(id, item.optString("title", id)))
+                    if (id.isNotBlank()) {
+                        add(WebOsApp(id, item.optString("title", id)))
+                    }
                 }
             }.sortedBy { it.title.lowercase(Locale.ROOT) }
             updateState { it.copy(apps = apps) }
@@ -596,7 +767,10 @@ class WebOsClient(
     }
 
     private fun loadInputs() {
-        request("ssap://tv/getExternalInputList") { payload ->
+        request(
+            uri = "ssap://tv/getExternalInputList",
+            optional = true,
+        ) { payload ->
             val array = payload.optJSONArray("devices") ?: JSONArray()
             val inputs = buildList {
                 for (index in 0 until array.length()) {
@@ -607,7 +781,11 @@ class WebOsClient(
                         WebOsInput(
                             id = id,
                             label = item.optString("label", item.optString("name", id)),
-                            connected = if (item.has("connected")) item.optBoolean("connected") else true,
+                            connected = if (item.has("connected")) {
+                                item.optBoolean("connected")
+                            } else {
+                                true
+                            },
                         ),
                     )
                 }
@@ -617,7 +795,10 @@ class WebOsClient(
     }
 
     private fun requestPointerSocket(): Boolean =
-        request("ssap://com.webos.service.networkinput/getPointerInputSocket") { payload ->
+        request(
+            uri = "ssap://com.webos.service.networkinput/getPointerInputSocket",
+            optional = true,
+        ) { payload ->
             val socketPath = payload.optString("socketPath")
             if (socketPath.isNotBlank()) openPointerSocket(socketPath)
         } != null
@@ -631,17 +812,27 @@ class WebOsClient(
                 override fun onOpen(webSocket: WebSocket, response: Response) {
                     updateState { it.copy(pointerReady = true) }
                     pendingPointerButton?.let { button ->
-                        webSocket.send("type:button\nname:${button.uppercase(Locale.ROOT)}\n\n")
+                        webSocket.send(
+                            "type:button\nname:${button.uppercase(Locale.ROOT)}\n\n",
+                        )
                         pendingPointerButton = null
                     }
                 }
 
-                override fun onFailure(webSocket: WebSocket, throwable: Throwable, response: Response?) {
+                override fun onFailure(
+                    webSocket: WebSocket,
+                    throwable: Throwable,
+                    response: Response?,
+                ) {
                     pointerSocket = null
                     updateState {
                         it.copy(
                             pointerReady = false,
-                            message = throwable.message ?: "Magic-Remote-Verbindung fehlgeschlagen",
+                            message = if (registered) {
+                                "LG TV verbunden · Magic Remote momentan nicht verfügbar"
+                            } else {
+                                throwable.message ?: "Magic-Remote-Verbindung fehlgeschlagen"
+                            },
                         )
                     }
                 }
@@ -655,24 +846,13 @@ class WebOsClient(
     }
 
     private fun registrationMessage(): JSONObject {
-        val permissionArray = JSONArray().apply { WEBOS_PERMISSIONS.forEach(::put) }
-        val manifest = JSONObject()
-            .put("manifestVersion", 1)
-            .put("appVersion", "1.1.0")
-            .put("permissions", permissionArray)
-
-        val payload = JSONObject()
-            .put("pairingType", "PROMPT")
-            .put("manifest", manifest)
-
-        settings.getWebOsClientKey().takeIf { it.isNotBlank() }?.let {
-            payload.put("client-key", it)
-        }
-
-        return JSONObject()
-            .put("id", "register_${requestCounter.incrementAndGet()}")
-            .put("type", "register")
-            .put("payload", payload)
+        val clientKey = settings.getWebOsClientKey()
+        return WebOsRegistrationProfile.registrationMessage(
+            id = "register_${requestCounter.incrementAndGet()}",
+            appVersion = BuildConfig.VERSION_NAME,
+            clientKey = clientKey,
+            forcePairing = forcePermissionRepair,
+        )
     }
 
     private fun disconnectSockets(updateUi: Boolean) {
@@ -716,18 +896,35 @@ class WebOsClient(
     private fun isSafeHost(host: String): Boolean =
         host.isNotBlank() && host.none { it.isWhitespace() || it == '/' || it == '\\' }
 
+    private fun friendlyPermissionTarget(uri: String?): String = when (uri) {
+        "ssap://com.webos.service.tvpower/power/getPowerState" -> "Power-Status"
+        "ssap://com.webos.service.networkinput/getPointerInputSocket" -> "Magic Remote"
+        "ssap://com.webos.applicationManager/listApps" -> "App-Liste"
+        "ssap://tv/getExternalInputList" -> "Eingangsliste"
+        "ssap://audio/getVolume" -> "Lautstärkestatus"
+        null, "" -> "diesen webOS-Befehl"
+        else -> uri.removePrefix("ssap://")
+    }
+
     private fun redactSecrets(message: JSONObject): String {
         fun redact(value: Any?): Any? = when (value) {
             is JSONObject -> JSONObject().also { clean ->
                 val keys = value.keys()
                 while (keys.hasNext()) {
                     val key = keys.next()
-                    clean.put(key, if (key.equals("client-key", true)) "***" else redact(value.opt(key)))
+                    clean.put(
+                        key,
+                        if (key.equals("client-key", true)) "***" else redact(value.opt(key)),
+                    )
                 }
             }
+
             is JSONArray -> JSONArray().also { clean ->
-                for (index in 0 until value.length()) clean.put(redact(value.opt(index)))
+                for (index in 0 until value.length()) {
+                    clean.put(redact(value.opt(index)))
+                }
             }
+
             else -> value
         }
         return (redact(message) as JSONObject).toString(2)
@@ -741,17 +938,29 @@ class WebOsClient(
         @Volatile var fingerprintMismatch: Boolean = false
             private set
 
-        override fun checkClientTrusted(chain: Array<out X509Certificate>?, authType: String?) = Unit
+        override fun checkClientTrusted(
+            chain: Array<out X509Certificate>?,
+            authType: String?,
+        ) = Unit
 
-        override fun checkServerTrusted(chain: Array<out X509Certificate>?, authType: String?) {
-            val certificate = chain?.firstOrNull() ?: throw CertificateException("TV-Zertifikat fehlt")
+        override fun checkServerTrusted(
+            chain: Array<out X509Certificate>?,
+            authType: String?,
+        ) {
+            val certificate = chain?.firstOrNull()
+                ?: throw CertificateException("TV-Zertifikat fehlt")
             val fingerprint = MessageDigest.getInstance("SHA-256")
                 .digest(certificate.encoded)
                 .joinToString(":") { byte -> "%02X".format(byte) }
             lastFingerprint = fingerprint
-            if (expected.isNotBlank() && normalizeFingerprint(fingerprint) != expected) {
+            if (
+                expected.isNotBlank() &&
+                normalizeFingerprint(fingerprint) != expected
+            ) {
                 fingerprintMismatch = true
-                throw CertificateException("Gespeicherter TV-Fingerabdruck stimmt nicht überein")
+                throw CertificateException(
+                    "Gespeicherter TV-Fingerabdruck stimmt nicht überein",
+                )
             }
         }
 
@@ -760,29 +969,8 @@ class WebOsClient(
 
     private companion object {
         const val MAX_RECONNECTS = 5
-        val WEBOS_PERMISSIONS = listOf(
-            "LAUNCH",
-            "LAUNCH_WEBAPP",
-            "APP_TO_APP",
-            "CLOSE",
-            "CONTROL_AUDIO",
-            "CONTROL_DISPLAY",
-            "CONTROL_INPUT_JOYSTICK",
-            "CONTROL_INPUT_MEDIA_PLAYBACK",
-            "CONTROL_INPUT_TV",
-            "CONTROL_POWER",
-            "READ_APP_STATUS",
-            "READ_CURRENT_CHANNEL",
-            "READ_INPUT_DEVICE_LIST",
-            "READ_INSTALLED_APPS",
-            "READ_NETWORK_STATE",
-            "READ_RUNNING_APPS",
-            "READ_TV_CHANNEL_LIST",
-            "READ_TV_PROGRAM_INFO",
-            "WRITE_NOTIFICATION_TOAST",
-            "WRITE_SETTINGS",
-            "WRITE_TV_CHANNEL",
-        )
+        const val PROTOCOL_PREFERENCES = "smart_ir_protocol_state"
+        const val KEY_PERMISSION_PROFILE = "webos_permission_profile"
 
         fun normalizeFingerprint(value: String): String =
             value.replace(":", "").trim().uppercase(Locale.ROOT)
