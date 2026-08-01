@@ -230,7 +230,7 @@ fun SmartIrApp(
                         if (webOs.wakeTv()) {
                             lastAction = "LG · Wake-on-LAN"
                         } else {
-                            sendLg(LG_OLED55B19LA.POWER)
+                            sendLg(LG_OLED55B1.POWER)
                         }
                     },
                     onSonyPower = { sendSony(Sony_STR_DB870.POWER) },
