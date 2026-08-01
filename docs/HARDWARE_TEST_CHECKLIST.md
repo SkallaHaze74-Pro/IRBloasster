@@ -1,10 +1,10 @@
 # SmartIR – Hardware-Testcheckliste
 
-Diese Checkliste trennt Software-/Build-Prüfungen von den Funktionen, die nur am realen **LG OLED55B19LA** und **Sony STR-DB870** bestätigt werden können.
+Diese Checkliste trennt Software-/Build-Prüfungen von den Funktionen, die nur am realen **LG OLED55B19LA** und **Sony STR-DB870 CEL** bestätigt werden können.
 
 ## 1. Installation
 
-- [ ] GitHub-Actions-Artefakt `SmartIR-v1.1.3-debug` laden
+- [ ] GitHub-Actions-Artefakt `SmartIR-v1.1.4-debug` laden
 - [ ] APK installieren beziehungsweise mit `adb install -r` aktualisieren
 - [ ] App startet ohne Absturz
 - [ ] Paket bleibt `com.skallahaze.irbloasster`
@@ -76,17 +76,24 @@ TV und Smartphone müssen im selben lokalen Netzwerk sein.
 - [ ] automatisches Verbinden nach dem Aufwecken prüfen
 - [ ] IR-Fallback prüfen, wenn Wake-on-LAN nicht verfügbar ist
 
-## 4. Sony STR-DB870 – Modell bestätigt, Codes praktisch prüfen
+## 4. Sony STR-DB870 CEL – Geräteprofil praktisch prüfen
 
-Das Typenschild bestätigt den **STR-DB870**. Die Seriennummer wird nicht dokumentiert. Sony nennt je nach Region die Fernbedienung RM-U305A oder RM-PP505. AV1 ist die Werkseinstellung.
+Die Rückseitenfotos bestätigen:
 
-Die vollständige Codeübersicht steht unter [`SONY_STR_DB870_CODES.md`](SONY_STR_DB870_CODES.md).
+```text
+Modell: STR-DB870
+Area Code: CEL
+Rückseitenkennung: 4-233-630-21 CEL
+Originalfernbedienung laut Sony: RM-U305A
+Normaler Command Mode: AV1 fest
+```
+
+Die Seriennummer wird nicht dokumentiert. Sonys Anleitung schließt die COMMAND-MODE-Umschaltung beim STR-DB870 CEL aus. SmartIR zeigt deshalb im normalen Bedienbereich keinen AV1/AV2-Schalter mehr. Die vollständige Codeübersicht steht unter [`SONY_STR_DB870_CODES.md`](SONY_STR_DB870_CODES.md).
 
 ### 4.1 Schnelltest in AV1
 
 Smartphone direkt auf das IR-Empfangsfenster an der Vorderseite des Receivers richten.
 
-- [ ] Command Mode **AV1** auswählen
 - [ ] Power Toggle
 - [ ] Power On
 - [ ] Power Off
@@ -94,8 +101,6 @@ Smartphone direkt auf das IR-Empfangsfenster an der Vorderseite des Receivers ri
 - [ ] Lautstärke −
 - [ ] Mute
 - [ ] Sleep
-
-Wenn diese Basisgruppe vollständig reagiert, AV1 beibehalten. AV2 muss dann nicht getestet werden.
 
 ### 4.2 Eingänge
 
@@ -154,17 +159,16 @@ Falls eine einzelne Klangtaste nicht reagiert, die gleichnamige Legacy-Variante 
 - [ ] FM Mode
 - [ ] Direct Tuning
 
-### 4.6 AV2 nur bei Bedarf
+### 4.6 AV2 nur im Rohcode-Labor
 
-Nur testen, wenn die Basisgruppe in AV1 komplett ohne Reaktion bleibt oder der Receiver nachweislich auf AV2 umgestellt wurde.
+Das fotografierte CEL-Gerät besitzt laut Sony keine normale COMMAND-MODE-Umschaltung. AV2 ist deshalb kein auswählbarer Alltagsmodus der App.
 
-- [ ] Command Mode AV2 auswählen
-- [ ] Power, Lautstärke und Mute erneut testen
-- [ ] TV/SAT und DVD/LD testen
-- [ ] A.F.D. und Main Menu testen
-- [ ] funktionierenden Modus dokumentieren
+Nur für einen kontrollierten Protokollvergleich:
 
-AV2 verwendet bei diesem Profil die jeweilige AV1-Geräteadresse plus 32 und einen 15-Bit-SIRC-Frame.
+- [ ] Protokoll-Labor öffnen
+- [ ] Power AV1 testen: Command 21, Adresse 16, 12 Bit
+- [ ] optional Power AV2-Diagnose testen: Command 21, Adresse 48, 15 Bit
+- [ ] Ergebnisse ausdrücklich als Diagnose und nicht als normalen CEL-Gerätemodus dokumentieren
 
 ### 4.7 Rohcode-Labor
 
@@ -177,12 +181,12 @@ Beispiele:
 
 ```text
 Power AV1: Command 21, Adresse 16, 12 Bit
-Power AV2: Command 21, Adresse 48, 15 Bit
 Main Menu AV1: Command 119, Adresse 144, 15 Bit
-Main Menu AV2: Command 119, Adresse 176, 15 Bit
 ```
 
 ## 5. Szenen
+
+Alle Sony-Szenen verwenden beim CEL-Profil automatisch AV1.
 
 - [ ] Fernsehen: TV wecken, Sony einschalten, TV/SAT wählen
 - [ ] Heimkino: TV wecken, Sony einschalten, DVD/LD wählen
@@ -200,11 +204,10 @@ Bei einem Problem bitte festhalten:
 App-Version:
 Android-Version:
 Smartphone:
-Gerät: LG OLED55B19LA oder Sony STR-DB870
+Gerät: LG OLED55B19LA oder Sony STR-DB870 CEL
 TV-IP (letztes Oktett darf geschwärzt werden):
 Verbindungsstatus:
 betroffene Taste/Funktion:
-AV1 oder AV2:
 Command / Adresse / Bits, falls Rohcode:
 IR oder webOS:
 Anzeige im Diagnosebereich:

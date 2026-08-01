@@ -8,6 +8,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import com.skallahaze.irbloasster.ir.SonyCommandMode
+import com.skallahaze.irbloasster.ir.Sony_STR_DB870
 import java.security.KeyStore
 import javax.crypto.Cipher
 import javax.crypto.KeyGenerator
@@ -27,10 +28,14 @@ class SettingsRepository(context: Context) {
     )
     private val secureStore = SecureStringStore()
 
+    private val storedSonyMode = runCatching {
+        SonyCommandMode.valueOf(
+            preferences.getString(KEY_SONY_MODE, SonyCommandMode.AV1.name).orEmpty(),
+        )
+    }.getOrDefault(SonyCommandMode.AV1)
+
     private var currentSonyMode by mutableStateOf(
-        runCatching {
-            SonyCommandMode.valueOf(preferences.getString(KEY_SONY_MODE, SonyCommandMode.AV1.name).orEmpty())
-        }.getOrDefault(SonyCommandMode.AV1),
+        Sony_STR_DB870.effectiveMode(storedSonyMode),
     )
     val sonyMode: SonyCommandMode
         get() = currentSonyMode
@@ -59,9 +64,18 @@ class SettingsRepository(context: Context) {
     val autoConnect: Boolean
         get() = currentAutoConnect
 
+    init {
+        // Migrate old SmartIR builds that may have stored AV2. The photographed
+        // STR-DB870 CEL variant has no selectable receiver COMMAND MODE.
+        if (storedSonyMode != currentSonyMode) {
+            preferences.edit().putString(KEY_SONY_MODE, currentSonyMode.name).apply()
+        }
+    }
+
     fun setSonyMode(value: SonyCommandMode) {
-        currentSonyMode = value
-        preferences.edit().putString(KEY_SONY_MODE, value.name).apply()
+        val effective = Sony_STR_DB870.effectiveMode(value)
+        currentSonyMode = effective
+        preferences.edit().putString(KEY_SONY_MODE, effective.name).apply()
     }
 
     fun setHapticsEnabled(value: Boolean) {

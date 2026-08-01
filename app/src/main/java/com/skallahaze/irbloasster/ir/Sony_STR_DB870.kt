@@ -29,23 +29,34 @@ data class SonyCommand(
 }
 
 /**
- * Sony STR-DB870 candidate profile.
+ * Sony STR-DB870 profile for the photographed European CEL variant.
  *
- * The receiver model is confirmed from the device label. Sony lists RM-U305A
- * and RM-PP505 as the supplied remotes depending on region. AV1 is the factory
- * command mode; AV2 shifts the Sony device address by 32 and uses a 15-bit
- * SIRC frame.
+ * Confirmed from the device:
+ * - model: STR-DB870
+ * - rear-panel area-code marking: 4-233-630-21 CEL
+ * - mains: 230 V, 50/60 Hz, 230 W
  *
- * The profile combines Sony's documented button set with learned RM-PP505
- * signals and known Sony receiver SIRC mappings. It remains a hardware-test
- * profile until every button has been confirmed on the user's receiver.
+ * Sony's operating instructions identify RM-U305A as the supplied remote for
+ * STR-DB870 area code CEL. The same manual excludes the receiver COMMAND MODE
+ * setup item for this exact variant. SmartIR therefore fixes normal operation
+ * to AV1. AV2 remains available only through the raw SIRC diagnostic lab.
+ *
+ * The numerical profile combines Sony's documented RM-U305A button set with
+ * known Sony receiver SIRC mappings and learned signals from the closely
+ * related RM-PP505 generation. Every untested command remains a candidate until
+ * the physical receiver confirms it.
  */
 object Sony_STR_DB870 {
     const val FREQUENCY = 40_000
     const val MODEL = "STR-DB870"
-    const val REGIONAL_REMOTES = "RM-U305A / RM-PP505"
+    const val AREA_CODE = "CEL"
+    const val REAR_PANEL_MARKING = "4-233-630-21 CEL"
+    const val SUPPLIED_REMOTE = "RM-U305A"
+    const val OTHER_REGION_REMOTE = "RM-PP505"
+    const val COMMAND_MODE_SELECTABLE = false
+    val NORMAL_MODE = SonyCommandMode.AV1
 
-    // Core receiver controls — Sony device 16 in AV1, device 48 in AV2.
+    // Core receiver controls — Sony device 16 in AV1.
     val POWER = SonyCommand("power", "Power", 21)
     val POWER_ON = SonyCommand("power_on", "Einschalten", 46)
     val POWER_OFF = SonyCommand("power_off", "Ausschalten", 47)
@@ -54,7 +65,8 @@ object Sony_STR_DB870 {
     val MUTE = SonyCommand("mute", "Stumm", 20)
     val SLEEP = SonyCommand("sleep", "Sleep", 96)
 
-    // Input selection learned from the RM-PP505 generation.
+    // Receiver inputs. Several commands are learned candidates from the
+    // RM-PP505 generation and remain explicitly testable on the CEL receiver.
     val INPUT_PHONO = SonyCommand("phono", "PHONO", 32)
     val INPUT_TUNER = SonyCommand("tuner", "TUNER", 33)
     val INPUT_VIDEO_1 = SonyCommand("video_1", "VIDEO 1", 34)
@@ -65,13 +77,13 @@ object Sony_STR_DB870 {
         "dvd_ld",
         "DVD / LD",
         125,
-        note = "RM-PP505 learned code; command 107 is retained as an older fallback",
+        note = "RM-PP505 learned candidate; command 107 is retained as an older fallback",
     )
     val INPUT_TAPE_MD = SonyCommand(
         "tape_md",
         "MD / TAPE",
         105,
-        note = "RM-PP505 learned code; command 35 is retained as a generic fallback",
+        note = "RM-PP505 learned candidate; command 35 is retained as a generic fallback",
     )
     val INPUT_CD = SonyCommand("cd", "CD / SACD", 37)
     val INPUT_AUX = SonyCommand("aux", "AUX", 29)
@@ -87,7 +99,7 @@ object Sony_STR_DB870 {
         note = "Discrete Multi/5.1 candidate",
     )
 
-    // RM-PP505/DB870-era DSP and receiver-menu family — device 144/176.
+    // DB870-era DSP and receiver-menu family — device 144 in AV1, 15 bit.
     val AFD = SonyCommand("afd", "A.F.D.", 71, av1Address = 144)
     val MODE_2CH = SonyCommand("mode_2ch", "2CH / OFF", 65, av1Address = 144)
     val SOUND_FIELD_NEXT = SonyCommand("sound_next", "Mode +", 110, av1Address = 144)
@@ -102,7 +114,7 @@ object Sony_STR_DB870 {
     val MENU_LEFT = SonyCommand("menu_left", "Links", 122, av1Address = 144)
     val MENU_RIGHT = SonyCommand("menu_right", "Rechts", 123, av1Address = 144)
 
-    // Enter/Exec and test-tone were learned on the basic receiver address.
+    // Enter/Exec and test-tone candidates on the basic receiver address.
     val MENU_SELECT = SonyCommand("menu_select", "Enter / Exec", 12)
     val MENU_ENTER = MENU_SELECT
     val TEST_TONE = SonyCommand("test_tone", "Test Tone", 74)
@@ -111,7 +123,7 @@ object Sony_STR_DB870 {
     val SUBWOOFER_UP = SonyCommand("sub_up", "Subwoofer +", 92)
     val SUBWOOFER_DOWN = SonyCommand("sub_down", "Subwoofer −", 93)
 
-    // Tuner family — Sony tuner device 13/45.
+    // Tuner family — Sony tuner device 13 in AV1.
     val TUNER_PRESET_UP = SonyCommand("preset_up", "Preset +", 16, av1Address = 13)
     val TUNER_PRESET_DOWN = SonyCommand("preset_down", "Preset −", 17, av1Address = 13)
     val TUNING_UP = SonyCommand("tuning_up", "Tuning +", 18, av1Address = 13)
@@ -217,7 +229,17 @@ object Sony_STR_DB870 {
         TEST_TONE_MODERN,
     )
 
-    fun pattern(command: SonyCommand, mode: SonyCommandMode): IntArray =
+    fun effectiveMode(requested: SonyCommandMode): SonyCommandMode =
+        if (COMMAND_MODE_SELECTABLE) requested else NORMAL_MODE
+
+    /** Normal app control for this exact CEL receiver. */
+    fun pattern(command: SonyCommand, requestedMode: SonyCommandMode = NORMAL_MODE): IntArray {
+        val mode = effectiveMode(requestedMode)
+        return diagnosticPattern(command, mode)
+    }
+
+    /** Explicit diagnostic generator; keeps AV2 available in the raw lab. */
+    fun diagnosticPattern(command: SonyCommand, mode: SonyCommandMode): IntArray =
         Sirc.encode(
             command = command.command,
             address = command.addressFor(mode),

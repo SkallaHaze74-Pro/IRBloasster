@@ -10,7 +10,6 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -19,13 +18,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.skallahaze.irbloasster.ir.SonyCommand
-import com.skallahaze.irbloasster.ir.SonyCommandMode
 import com.skallahaze.irbloasster.ir.Sony_STR_DB870
 
 @Composable
 internal fun SonyRemoteScreen(
-    mode: SonyCommandMode,
-    onModeChange: (SonyCommandMode) -> Unit,
     onSony: (SonyCommand) -> Unit,
 ) {
     LazyColumn(
@@ -35,49 +31,33 @@ internal fun SonyRemoteScreen(
     ) {
         item {
             ScreenHeader(
-                eyebrow = "SONY STR-DB870",
+                eyebrow = "SONY STR-DB870 · CEL",
                 title = "Receiver-Fernbedienung",
-                subtitle = "SIRC · 40 kHz · Command Mode ${mode.title}",
+                subtitle = "RM-U305A · SIRC 40 kHz · AV1 fest",
             )
         }
 
         item {
             SectionCard {
                 Text(
-                    "Gerätemodell bestätigt",
+                    "Exakte Gerätevariante bestätigt",
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold,
                 )
                 Spacer(Modifier.height(6.dp))
                 Text(
-                    "Das Typenschild bestätigt den Sony STR-DB870. Sony führte je nach Region die Fernbedienungen RM-U305A oder RM-PP505. Die App enthält jetzt die vollständige bekannte Tastenfamilie sowie alternative ältere Sony-Codes. Die Seriennummer wird nicht gespeichert oder veröffentlicht.",
+                    "Die Rückseite bestätigt den Sony STR-DB870 mit Area Code CEL und der Kennzeichnung ${Sony_STR_DB870.REAR_PANEL_MARKING}. Für diese Variante nennt Sony die Fernbedienung ${Sony_STR_DB870.SUPPLIED_REMOTE}.",
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
                 Spacer(Modifier.height(8.dp))
                 Text(
-                    "Die Zuordnung ist quellengestützt, aber erst nach deinem echten Tastentest hardwarebestätigt.",
+                    "Beim CEL-Modell ist der Receiver-Command-Mode nicht umschaltbar. SmartIR sendet im normalen Betrieb deshalb immer AV1. AV2 bleibt nur im Rohcode-Labor für Diagnosezwecke verfügbar.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.primary,
                 )
-            }
-        }
-
-        item {
-            SectionCard {
-                Text("Receiver Command Mode", style = MaterialTheme.typography.titleMedium)
-                Spacer(Modifier.height(10.dp))
-                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    SonyCommandMode.entries.forEach { item ->
-                        FilterChip(
-                            selected = mode == item,
-                            onClick = { onModeChange(item) },
-                            label = { Text(item.title) },
-                        )
-                    }
-                }
                 Spacer(Modifier.height(6.dp))
                 Text(
-                    "AV1 ist die Werkseinstellung. AV2 nur wählen, wenn der Command Mode am Receiver umgestellt wurde oder AV1 gar nicht reagiert.",
+                    "Die Seriennummer wird bewusst weder in der App noch im öffentlichen Repository gespeichert.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -212,7 +192,7 @@ internal fun SonyRemoteScreen(
                 Text("Empfohlene Testreihenfolge", style = MaterialTheme.typography.titleMedium)
                 Spacer(Modifier.height(6.dp))
                 Text(
-                    "1. AV1 + Power Toggle  •  2. Lauter/Leiser  •  3. Mute  •  4. TV/SAT und DVD/LD  •  5. A.F.D. und 2CH  •  6. Menü. Erst wenn AV1 komplett schweigt, AV2 testen.",
+                    "1. Power Toggle  •  2. Lauter/Leiser  •  3. Mute  •  4. TV/SAT und DVD/LD  •  5. A.F.D. und 2CH  •  6. Menü. SmartIR verwendet bei diesem CEL-Gerät automatisch AV1.",
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
