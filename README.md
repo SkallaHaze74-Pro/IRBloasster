@@ -1,6 +1,6 @@
 # SmartIR – Living Room Controller
 
-SmartIR ist eine eigenständig entwickelte Android-Fernbedienung für den **LG OLED55B19LA** und den **Sony STR-DB870 CEL**. Sie verbindet lokale LG-webOS-Steuerung mit dem integrierten IR-Blaster des Xiaomi 15T Pro. Ein LG-Cloudkonto ist für die lokale TV-Steuerung nicht erforderlich.
+SmartIR ist eine eigenständig entwickelte Android-Fernbedienung für den **LG OLED55B19LA.DEUQJP** und den **Sony STR-DB870 CEL**. Sie verbindet lokale LG-webOS-Steuerung mit dem integrierten IR-Blaster des Xiaomi 15T Pro. Ein LG-Cloudkonto ist für die lokale TV-Steuerung nicht erforderlich.
 
 Der Paketname bleibt dauerhaft:
 
@@ -10,7 +10,7 @@ com.skallahaze.irbloasster
 
 Dadurch können spätere Builds mit derselben Signatur als Update installiert werden.
 
-## Aktueller Stand: 1.1.4
+## Aktueller Stand: 1.1.5
 
 - Material-3-Oberfläche mit Hell-/Dunkelmodus und eigenem SmartIR-App-Icon
 - große sofa- und einhandtaugliche Tasten
@@ -27,6 +27,14 @@ Dadurch können spätere Builds mit derselben Signatur als Update installiert we
 - Magic-Remote-Pointer, D-Pad, Touchpad, Klick und Scrollen
 - TV-Texteingabe und Enter
 - Android-IR-Berechtigung `TRANSMIT_IR` und Xiaomi-kompatibler Systemdienst-Fallback
+- exakt bestätigter LG-Produktcode **OLED55B19LA.DEUQJP**
+- sichtbares LG-Geräteprofil mit Fertigung 09/2021, Anschlussplan und Leistungsdaten
+- direkte webOS-Tasten für HDMI 1–4
+- HDMI 3 als eARC/ARC- und 4K/120-Port gekennzeichnet
+- HDMI 4 als 4K/120-Port gekennzeichnet
+- dynamische Liste aller vom TV gemeldeten Eingänge
+- dynamische Schnellstartliste installierter TV-Apps
+- Status-, App- und Eingangsaktualisierung direkt auf der TV-Seite
 - exakt bestätigtes Sony-Modell **STR-DB870**, Area Code **CEL**
 - Rückseitenkennung **4-233-630-21 CEL**
 - für CEL bestätigte Originalfernbedienung **RM-U305A**
@@ -42,9 +50,46 @@ Dadurch können spätere Builds mit derselben Signatur als Update installiert we
 - Unit-Tests, Android-Lint und automatischer APK-Build
 - SHA-256-Prüfsumme neben jeder erzeugten Test-APK
 
+## LG OLED55B19LA.DEUQJP
+
+Das neue Typenschildfoto bestätigt die konkrete TV-Variante:
+
+```text
+Modell: OLED55B19LA
+Produktcode: OLED55B19LA.DEUQJP
+Serie: B1
+Fertigung: 09/2021
+Montage: Polen
+Netzversorgung: AC 100–240 V, 50/60 Hz
+Nenn-/Maximalangabe: 343 W
+Typische Leistungsaufnahme: 104 W
+```
+
+Die Anschlussbeschriftung bestätigt:
+
+```text
+HDMI 3: eARC/ARC und bis 4K/120
+HDMI 4: bis 4K/120
+```
+
+LG dokumentiert für den OLED55B19LA 2 HDMI-2.1- und 2 HDMI-2.0-Ports, webOS 6.0, 120 Hz, VRR, ALLM, G-Sync, FreeSync, HGiG und Wi-Fi TV On. SmartIR verwendet diese Informationen nur für die lokale Bedienung und die verständliche Anschlussbezeichnung.
+
+### Neue LG-Funktionen in 1.1.5
+
+- Gerätekarte mit Produktcode, Fertigung, Display-, HDMI- und Leistungsdaten
+- direkte Tasten für HDMI 1, HDMI 2, HDMI 3 eARC und HDMI 4 4K/120
+- zusätzlich die echte, vom Fernseher gemeldete Eingangsliste
+- installierte Apps dynamisch laden und starten
+- TV-Status, Apps und Eingänge manuell neu laden
+- Unit-Tests für Produktcode, eARC-Port und HDMI-2.1-/120-Hz-Zuordnung
+
+Das vollständige Geräteprofil liegt unter [`docs/LG_OLED55B19LA_DEVICE_PROFILE.md`](docs/LG_OLED55B19LA_DEVICE_PROFILE.md).
+
+**Die sichtbare LG-Seriennummer wird weder in der App noch im öffentlichen Repository gespeichert.** Sie ist für IR- und webOS-Steuerung nicht erforderlich.
+
 ## Sony STR-DB870 CEL
 
-Die neuen Gerätefotos beseitigen die bisherige Regionsunsicherheit:
+Die Gerätefotos bestätigen:
 
 ```text
 Modell: STR-DB870
@@ -59,7 +104,7 @@ Sonys Bedienungsanleitung ordnet dem STR-DB870 mit Area Code CEL die RM-U305A zu
 
 AV2 bleibt ausschließlich im Protokoll-Labor verfügbar, damit eigene SIRC-Kombinationen wie Adresse 48 mit 15 Bit kontrolliert untersucht werden können. Das ist eine Diagnosefunktion und kein normaler Gerätemodus des fotografierten CEL-Receivers.
 
-Die sichtbare Seriennummer wird weder in der App noch im öffentlichen Repository gespeichert.
+Die sichtbare Sony-Seriennummer wird weder in der App noch im öffentlichen Repository gespeichert.
 
 ### Sony-Codeprofil
 
@@ -80,11 +125,11 @@ Modell, Area Code, Originalfernbedienung und der feste AV1-Betrieb sind bestäti
 
 ## Installation über GitHub Actions
 
-Unter **Actions → SmartIR Android APK** den neuesten erfolgreichen Lauf auf dem Branch **main** öffnen und das Artefakt **SmartIR-v1.1.4-debug** laden. Es enthält:
+Unter **Actions → SmartIR Android APK** den neuesten erfolgreichen Lauf auf dem Branch **main** öffnen und das Artefakt **SmartIR-v1.1.5-debug** laden. Es enthält:
 
 ```text
-SmartIR-v1.1.4-debug.apk
-SmartIR-v1.1.4-debug.apk.sha256
+SmartIR-v1.1.5-debug.apk
+SmartIR-v1.1.5-debug.apk.sha256
 ```
 
 ## Bauen in Termux
@@ -130,13 +175,14 @@ Der vom eigenen TV ausgegebene Client-Key wird lokal verschlüsselt gespeichert.
 - Sender und Mediensteuerung
 - installierte Apps laden und starten
 - externe Eingänge laden und umschalten
+- direkte HDMI-1- bis HDMI-4-Auswahl
 - aktive App und Power-Status lesen
 - Bildschirmtastatur und Magic-Remote-Pointer
 - Diagnosekonsole für eigene `ssap://`-Befehle
 
 ## Hardware-Test
 
-Die vollständige Schritt-für-Schritt-Prüfliste liegt unter [`docs/HARDWARE_TEST_CHECKLIST.md`](docs/HARDWARE_TEST_CHECKLIST.md). Beim Sony zuerst Power, Volume und Mute prüfen; alle normalen Sony-Funktionen verwenden beim CEL-Profil automatisch AV1.
+Die vollständige Schritt-für-Schritt-Prüfliste liegt unter [`docs/HARDWARE_TEST_CHECKLIST.md`](docs/HARDWARE_TEST_CHECKLIST.md). Beim LG sollten zuerst die dynamische Eingangsliste und danach die direkten HDMI-3-/HDMI-4-Tasten geprüft werden. Beim Sony zuerst Power, Volume und Mute prüfen; alle normalen Sony-Funktionen verwenden beim CEL-Profil automatisch AV1.
 
 ## Signatur und Updates
 
