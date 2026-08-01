@@ -66,7 +66,7 @@ internal fun SettingsScreen(
         ScreenHeader(
             eyebrow = "SETUP & ANALYSE",
             title = "SmartIR konfigurieren",
-            subtitle = "Lokales webOS, IR-Testprofile und Diagnose",
+            subtitle = "Lokales webOS, Sony STR-DB870 und Diagnose",
         )
 
         SectionCard {
@@ -193,7 +193,7 @@ internal fun SettingsScreen(
         }
 
         SectionCard {
-            Text("Sony SIRC-Testprofil", style = MaterialTheme.typography.titleMedium)
+            Text("Sony STR-DB870", style = MaterialTheme.typography.titleMedium)
             Spacer(Modifier.height(8.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 SonyCommandMode.entries.forEach { mode ->
@@ -206,7 +206,7 @@ internal fun SettingsScreen(
             }
             Spacer(Modifier.height(6.dp))
             Text(
-                "Die Modellbezeichnung wurde aus einem Foto abgeleitet und ist noch nicht am Gerät bestätigt. AV1/AV2 und einzelne Tasten deshalb zuerst testen.",
+                "Das Typenschild bestätigt das Modell. Sony lieferte je nach Region RM-U305A oder RM-PP505. AV1 ist die Werkseinstellung; AV2 nur testen, wenn AV1 nicht reagiert oder der Receiver umgestellt wurde. Einzelne Codes bleiben bis zum echten Tastentest als Kandidaten markiert.",
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
@@ -247,7 +247,8 @@ internal fun SettingsScreen(
             Spacer(Modifier.height(8.dp))
             InfoLine("IR-Hardware", if (irAvailable) "erkannt" else "nicht erkannt")
             InfoLine("LG-Protokoll", "NEC 32 Bit · 38 kHz")
-            InfoLine("Sony-Protokoll", "SIRC 12 / 15 / 20 Bit · 40 kHz")
+            InfoLine("Sony-Profil", "STR-DB870 · ${settings.sonyMode.title}")
+            InfoLine("Sony-Protokoll", "SIRC 12 / 15 Bit · 40 kHz · 3 Frames")
             InfoLine("LG Netzwerk", webState.connection.name)
             if (webState.reconnectAttempt > 0) InfoLine("Reconnect", "Versuch ${webState.reconnectAttempt}")
         }
