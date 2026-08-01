@@ -10,5 +10,12 @@
 *.jks
 *.keystore
 
+# Private SmartIR device and settings backups
+/private/
+/private-backup/
+SmartIR_PRIVATE_*
+SmartIR-private-device-backup-*
+SmartIR-backup-*.json
+
 # Misc
 .DS_Store
