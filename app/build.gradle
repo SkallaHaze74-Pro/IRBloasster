@@ -11,8 +11,8 @@ android {
         applicationId 'com.skallahaze.irbloasster'
         minSdk 24
         targetSdk 34
-        versionCode 6
-        versionName '1.1.4'
+        versionCode 7
+        versionName '1.1.5'
     }
 
     buildFeatures {
@@ -63,4 +63,5 @@ dependencies {
     debugImplementation 'androidx.compose.ui:ui-test-manifest'
 
     testImplementation 'junit:junit:4.13.2'
+    testImplementation 'org.json:json:20240303'
 }
