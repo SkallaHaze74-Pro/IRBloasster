@@ -3,6 +3,7 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 APP="$ROOT/webos-tv-lab"
+MEDIA="$APP/media"
 
 python - "$APP" <<'PY'
 import binascii
@@ -51,6 +52,42 @@ def write_icon(path, size):
 write_icon(root / "icon.png", 80)
 write_icon(root / "largeicon.png", 130)
 PY
+
+mkdir -p "$MEDIA"
+
+if [[ ! -s "$MEDIA/SmartIR-HLG-HDR-Test.mp4" || ! -s "$MEDIA/SmartIR-HDR10-Test.mp4" ]]; then
+  if ! command -v ffmpeg >/dev/null 2>&1; then
+    echo "ffmpeg fehlt. Einmal ausführen: pkg install ffmpeg"
+    exit 1
+  fi
+
+  if ! ffmpeg -hide_banner -encoders 2>/dev/null | grep -q 'libx265'; then
+    echo "Die installierte ffmpeg-Version enthält keinen libx265-Encoder. Termux-Pakete aktualisieren und ffmpeg neu installieren."
+    exit 1
+  fi
+
+  echo "Erzeuge lokale HLG- und HDR10-Testvideos …"
+
+  ffmpeg -y -hide_banner -loglevel error \
+    -f lavfi -i "smptehdbars=size=1920x1080:rate=24,format=yuv420p10le" \
+    -f lavfi -i "anullsrc=channel_layout=stereo:sample_rate=48000" \
+    -t 5 -map 0:v:0 -map 1:a:0 \
+    -c:v libx265 -preset ultrafast -crf 30 -pix_fmt yuv420p10le -profile:v main10 -tag:v hvc1 \
+    -color_primaries bt2020 -color_trc arib-std-b67 -colorspace bt2020nc \
+    -x265-params "log-level=error:repeat-headers=1:colorprim=9:transfer=18:colormatrix=9" \
+    -c:a aac -b:a 64k -movflags +faststart -shortest \
+    "$MEDIA/SmartIR-HLG-HDR-Test.mp4"
+
+  ffmpeg -y -hide_banner -loglevel error \
+    -f lavfi -i "smptehdbars=size=1920x1080:rate=24,format=yuv420p10le" \
+    -f lavfi -i "anullsrc=channel_layout=stereo:sample_rate=48000" \
+    -t 5 -map 0:v:0 -map 1:a:0 \
+    -c:v libx265 -preset ultrafast -crf 30 -pix_fmt yuv420p10le -profile:v main10 -tag:v hvc1 \
+    -color_primaries bt2020 -color_trc smpte2084 -colorspace bt2020nc \
+    -x265-params "log-level=error:hdr10=1:repeat-headers=1:colorprim=9:transfer=16:colormatrix=9:master-display=G(13250,34500)B(7500,3000)R(34000,16000)WP(15635,16450)L(10000000,1):max-cll=1000,400" \
+    -c:a aac -b:a 64k -movflags +faststart -shortest \
+    "$MEDIA/SmartIR-HDR10-Test.mp4"
+fi
 
 cd "$ROOT"
 rm -f com.skallahaze.smartir.tvlab_*.ipk
