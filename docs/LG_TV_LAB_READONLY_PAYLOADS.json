@@ -1,0 +1,143 @@
+{
+  "device": {
+    "model": "OLED55B19LA",
+    "productCode": "OLED55B19LA.DEUQJP",
+    "platform": "lm21u-koli",
+    "installedSoftware": "03.53.45",
+    "webOsTvVersion": "6.5.3-47"
+  },
+  "rules": {
+    "mode": "read-only-first",
+    "containsPrivateDeviceIdentifiers": false,
+    "containsFirmwareBinaries": false,
+    "containsCryptographicKeys": false
+  },
+  "capabilityScan": {
+    "uri": "ssap://config/getConfigs",
+    "payload": {
+      "configNames": [
+        "tv.model.modelname",
+        "tv.hw.SoCChipType",
+        "tv.hw.dramSize",
+        "tv.hw.emmcSize",
+        "tv.hw.eepromSize",
+        "tv.hw.displayType",
+        "tv.hw.panelResolution",
+        "tv.hw.SoCOutputFrameRate",
+        "tv.model.cellType",
+        "tv.model.moduleInchType",
+        "tv.model.motionProMode",
+        "tv.model.motionRemoconType",
+        "tv.model.soundModeType",
+        "tv.model.supportDolbyVisionHDR",
+        "tv.model.supportHDR",
+        "tv.model.supportVRR",
+        "tv.model.supportIsf",
+        "tv.model.supportWiSA",
+        "tv.model.supportOledTconOrbit",
+        "tv.model.supportLocalDimming",
+        "tv.model.supportHeadPhone",
+        "tv.model.supportAudioLineOut",
+        "tv.hw.supportOptic",
+        "tv.hw.supportSatellite",
+        "tv.hw.supportT2Tuner",
+        "tv.hw.supportTripleTuner",
+        "system.supportBluetoothFeatures",
+        "system.supportVoiceRecognition",
+        "tv.nyx.firmwareVersion",
+        "tv.nyx.platformVersion",
+        "tv.nyx.bootloaderVersion",
+        "tv.nyx.tvBroadcastSystem",
+        "tv.rmm.dvrReady",
+        "tv.conti.supportRemoteService",
+        "tv.conti.supportSignalTest",
+        "tv.conti.supportUsedTime"
+      ]
+    }
+  },
+  "settingsReads": [
+    {
+      "name": "network",
+      "uri": "ssap://settings/getSystemSettings",
+      "payload": {
+        "category": "network",
+        "keys": ["deviceName", "wolwowlOnOff", "bleAdvertisingOnOff"]
+      }
+    },
+    {
+      "name": "picture",
+      "uri": "ssap://settings/getSystemSettings",
+      "payload": {
+        "category": "picture",
+        "keys": ["brightness", "backlight", "contrast", "color", "energySaving"]
+      }
+    },
+    {
+      "name": "sound",
+      "uri": "ssap://settings/getSystemSettings",
+      "payload": {
+        "category": "sound",
+        "keys": ["avSync", "avSyncSpdif", "avSyncBypassInput", "eArcSupport", "soundOutput", "soundOutputDigital", "soundMode", "tvSetupConfiguration"]
+      }
+    },
+    {
+      "name": "cec-universal-remote",
+      "uri": "ssap://settings/getSystemSettings",
+      "payload": {
+        "category": "other",
+        "keys": ["simplinkEnable", "ueiEnable"]
+      }
+    },
+    {
+      "name": "option",
+      "uri": "ssap://settings/getSystemSettings",
+      "payload": {
+        "category": "option",
+        "keys": ["audioGuidance", "country", "zipcode", "livePlus", "firstTvSignalStatus", "localeCountryGroup", "countryBroadcastSystem"]
+      }
+    },
+    {
+      "name": "general",
+      "uri": "ssap://settings/getSystemSettings",
+      "payload": {
+        "category": "general",
+        "keys": ["alwaysOn", "tvOnScreen", "tvInstallMethod", "powerOffBySCA3SystemChanged", "SCA3SystemCountry"]
+      }
+    }
+  ],
+  "safeHiddenAppLaunches": [
+    {"id": "com.webos.app.self-diagnosis", "title": "Quick Help / Self Diagnosis"},
+    {"id": "com.webos.app.gameoptimizer", "title": "Game Optimizer"},
+    {"id": "com.webos.app.miracast", "title": "Screen Share"},
+    {"id": "com.webos.app.btspeakerapp", "title": "Bluetooth Audio Playback"},
+    {"id": "com.webos.app.btsurroundautotuning", "title": "Bluetooth Surround Auto Tuning"},
+    {"id": "com.webos.app.onetouchsoundtuning", "title": "One Touch Sound Tuning"},
+    {"id": "com.webos.app.channeledit", "title": "Channel Manager"},
+    {"id": "com.webos.app.channelsetting", "title": "Channel Tuning"},
+    {"id": "com.webos.app.scheduler", "title": "TV Scheduler"},
+    {"id": "com.webos.app.recordings", "title": "Recordings"},
+    {"id": "com.webos.app.notificationcenter", "title": "Notifications"},
+    {"id": "com.webos.app.connectionwizard", "title": "Universal Control Settings"},
+    {"id": "com.webos.app.roomconnect", "title": "Room to Room Share"},
+    {"id": "com.webos.app.appcasting", "title": "App Casting"},
+    {"id": "com.webos.app.camera", "title": "Camera"},
+    {"id": "com.webos.app.homeconnect", "title": "Home Dashboard"},
+    {"id": "com.webos.app.igallery", "title": "Art Gallery"}
+  ],
+  "otherReadOnlyProbes": [
+    {"name": "system-info", "uri": "ssap://system/getSystemInfo", "payload": {}},
+    {"name": "firmware-info", "uri": "ssap://com.webos.service.update/getCurrentSWInformation", "payload": {}},
+    {"name": "service-list", "uri": "ssap://api/getServiceList", "payload": {}},
+    {"name": "external-pq-backup-candidate", "uri": "ssap://externalpq/getExternalPqData", "payload": {}}
+  ],
+  "blockedUntilRollbackExists": [
+    "ssap://externalpq/setExternalPqData",
+    "factory reset / IN-STOP",
+    "panel or model tool options",
+    "white balance, LUT or NVRAM writes",
+    "EDID or HDMI tool-option writes",
+    "OLED protection parameter changes",
+    "country, EULA, store mode or system PIN changes",
+    "DRM, HDCP or Widevine material"
+  ]
+}
