@@ -28,8 +28,11 @@
 
         <activity
             android:name=".TvLabActivity"
+            android:excludeFromRecents="false"
             android:exported="true"
-            android:label="SmartIR TV Lab">
+            android:label="SmartIR TV Lab"
+            android:launchMode="singleTask"
+            android:taskAffinity="com.skallahaze.irbloasster.tvlab">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
