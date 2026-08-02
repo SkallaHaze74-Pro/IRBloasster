@@ -27,6 +27,16 @@
         android:usesCleartextTraffic="true">
 
         <activity
+            android:name=".TvLabActivity"
+            android:exported="true"
+            android:label="SmartIR TV Lab">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+
+        <activity
             android:name=".MainActivity"
             android:exported="true">
             <intent-filter>
