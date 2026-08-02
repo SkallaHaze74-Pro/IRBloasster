@@ -8,7 +8,26 @@ Der Paketname bleibt dauerhaft:
 com.skallahaze.irbloasster
 ```
 
-## Aktueller Stand: 1.1.9
+## Aktueller Entwicklungsstand: 1.2.0
+
+### SmartIR TV Lab
+
+Die APK enthält zusätzlich den Launcher-Einstieg **SmartIR TV Lab** mit:
+
+- read-only Hardware- und Funktionsscan über `ssap://config/getConfigs`
+- Modell-, Firmware-, SDK- und Boardinformationen
+- SoC-, RAM-, eMMC-, Display-, OLED-, HDR-, Dolby-Vision-, VRR-, ISF- und Audio-Fähigkeiten
+- ausgewählten Bild-, Ton-, Netzwerk-, CEC- und allgemeinen Einstellungswerten
+- sicherer Erkennung und Startmöglichkeit offizieller versteckter LG-Apps
+- getrennten Kalibrierprofilen für SDR dunkel, SDR hell, HDR/Dolby Vision und Gaming/VRR
+- regelbasierter Smart-Kalibrieranalyse
+- anonymisiertem TV-Bericht
+- getrenntem read-only External-PQ-Snapshot
+- klarer Sperre für Service Reset, Panel-/Tool-Optionen, White Balance, LUT, NVRAM, EDID, DRM und External-PQ-Schreibzugriffe
+
+Zusätzlich liegt unter `webos-tv-lab/` eine offline arbeitende TV-App mit PLUGE-, Near-Black-, Weiß-Clipping-, Graustufen-, Farbbalken-, Geometrie- und Vollflächen-Testbildern.
+
+Die vollständige Dokumentation steht unter [`docs/TV_LAB_AND_CALIBRATION.md`](docs/TV_LAB_AND_CALIBRATION.md).
 
 ### LG OLED55B19LA.DEUQJP
 
@@ -20,7 +39,7 @@ com.skallahaze.irbloasster
 - direkte HDMI-1- bis HDMI-4-Auswahl
 - HDMI 3 als eARC/ARC und 4K/120, HDMI 4 als 4K/120
 - installierte Apps und echte TV-Eingänge dynamisch laden
-- Schnellstarts für Live TV, YouTube, Netflix und **Twitch**
+- Schnellstarts für Live TV, YouTube, Netflix und Twitch
 - Twitch-App-ID wird bevorzugt direkt aus der TV-App-Liste übernommen
 
 ### Sony STR-DB870 CEL
@@ -53,11 +72,11 @@ Der geheime webOS-Client-Key bleibt im Android-Keystore und wird nicht in das po
 
 ## Installation über GitHub Actions
 
-Unter **Actions → SmartIR Android APK** den neuesten erfolgreichen Lauf auf dem Branch **main** öffnen und das Artefakt laden:
+Unter **Actions → SmartIR Android APK** den neuesten erfolgreichen Lauf auf dem Branch beziehungsweise Pull Request öffnen und das Artefakt laden:
 
 ```text
-SmartIR-v1.1.9-debug.apk
-SmartIR-v1.1.9-debug.apk.sha256
+SmartIR-v1.2.0-debug.apk
+SmartIR-v1.2.0-debug.apk.sha256
 ```
 
 ## Bauen in Termux
@@ -85,6 +104,18 @@ app/build/outputs/apk/debug/app-debug.apk
 5. Die Kopplungsabfrage am Fernseher bestätigen.
 6. Für Wake-on-LAN zusätzlich die MAC-Adresse speichern.
 7. Vor einer nötigen Deinstallation ein Backup exportieren.
+8. Danach den zweiten Launcher-Eintrag **SmartIR TV Lab** öffnen und **Verbinden & scannen** drücken.
+
+## webOS-Testbild-App
+
+Nach eingerichteter Developer-Mode-Verbindung:
+
+```bash
+cd ~/IRBloasster
+ares-package webos-tv-lab
+ares-install --device smartirtv com.skallahaze.smartir.tvlab_1.0.0_all.ipk
+ares-launch --device smartirtv com.skallahaze.smartir.tvlab
+```
 
 ## JBL-Klickgeräusch
 
@@ -94,6 +125,9 @@ Ein einzelnes Klacken unmittelbar beim Einschalten oder Auto-Wake kann vom inter
 
 - [`docs/DEVICE_INVENTORY.md`](docs/DEVICE_INVENTORY.md)
 - [`docs/LG_OLED55B19LA_DEVICE_PROFILE.md`](docs/LG_OLED55B19LA_DEVICE_PROFILE.md)
+- [`docs/LG_FIRMWARE_03_53_31_VS_03_53_45_FINDINGS.md`](docs/LG_FIRMWARE_03_53_31_VS_03_53_45_FINDINGS.md)
+- [`docs/LG_TV_LAB_READONLY_PAYLOADS.json`](docs/LG_TV_LAB_READONLY_PAYLOADS.json)
+- [`docs/TV_LAB_AND_CALIBRATION.md`](docs/TV_LAB_AND_CALIBRATION.md)
 - [`docs/SONY_STR_DB870_CODES.md`](docs/SONY_STR_DB870_CODES.md)
 - [`docs/JBL_SUB125_PROFILE.md`](docs/JBL_SUB125_PROFILE.md)
 - [`docs/DATA_BACKUP_AND_MIGRATION.md`](docs/DATA_BACKUP_AND_MIGRATION.md)
@@ -106,4 +140,4 @@ GitHub-Actions-Debug-APKs können unterschiedliche Debug-Signaturen besitzen. F�
 
 ## Herkunft
 
-Das Repository enthält ausschließlich eigenständig geschriebenen Quellcode und beschreibende Interoperabilitätsnotizen. Es werden keine Original-APKs, Kontodaten, Cloud-Schlüssel, Zertifikate, proprietären Grafiken, Seriennummern oder vollständigen Codeset-Datenbanken veröffentlicht.
+Das Repository enthält ausschließlich eigenständig geschriebenen Quellcode und beschreibende Interoperabilitätsnotizen. Es werden keine Original-APKs, Kontodaten, Cloud-Schlüssel, Zertifikate, proprietären Grafiken, Seriennummern oder vollständigen Codeset-Datenbanken veröffentlicht. Die vollständigen Firmwarearchive bleiben außerhalb des öffentlichen Repositories.
