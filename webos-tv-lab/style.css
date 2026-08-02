@@ -1,0 +1,224 @@
+:root {
+  color-scheme: dark;
+  font-family: Arial, Helvetica, sans-serif;
+  background: #050608;
+  color: #f6f7fb;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#app,
+.screen {
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  overflow: hidden;
+}
+
+body {
+  background: #050608;
+}
+
+.hidden {
+  display: none !important;
+}
+
+.menu-screen {
+  padding: 64px 78px 46px;
+  background:
+    radial-gradient(circle at 15% 10%, rgba(120, 74, 255, 0.28), transparent 34%),
+    radial-gradient(circle at 90% 15%, rgba(0, 218, 255, 0.18), transparent 28%),
+    linear-gradient(145deg, #07080d, #111522 70%, #080a0f);
+}
+
+.brand {
+  color: #8fe7ff;
+  letter-spacing: 0.22em;
+  font-size: 22px;
+  font-weight: 700;
+}
+
+h1 {
+  margin: 18px 0 8px;
+  font-size: 62px;
+  line-height: 1;
+}
+
+.lead {
+  width: 72%;
+  margin: 0 0 32px;
+  color: #c8cede;
+  font-size: 26px;
+  line-height: 1.35;
+}
+
+.menu-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 18px;
+}
+
+.menu-card {
+  min-height: 160px;
+  padding: 24px;
+  border: 3px solid rgba(255, 255, 255, 0.1);
+  border-radius: 24px;
+  background: rgba(255, 255, 255, 0.065);
+  box-shadow: inset 0 1px rgba(255, 255, 255, 0.08);
+  transition: transform 120ms ease, border-color 120ms ease, background 120ms ease;
+}
+
+.menu-card.selected {
+  transform: scale(1.025);
+  border-color: #72e7ff;
+  background: rgba(56, 177, 255, 0.18);
+  box-shadow: 0 0 32px rgba(77, 208, 255, 0.25);
+}
+
+.menu-card h2 {
+  margin: 0 0 10px;
+  font-size: 31px;
+}
+
+.menu-card p {
+  margin: 0;
+  color: #c6ccdc;
+  font-size: 21px;
+  line-height: 1.35;
+}
+
+footer {
+  position: absolute;
+  right: 78px;
+  bottom: 34px;
+  left: 78px;
+  display: flex;
+  justify-content: space-between;
+  color: #aeb6ca;
+  font-size: 19px;
+}
+
+.pattern-screen,
+.pattern-stage {
+  background: #000;
+}
+
+.pattern-stage {
+  width: 100%;
+  height: 100%;
+}
+
+.pattern-help {
+  position: absolute;
+  right: 40px;
+  bottom: 36px;
+  max-width: 660px;
+  padding: 18px 22px;
+  border-radius: 16px;
+  background: rgba(0, 0, 0, 0.74);
+  color: #f7f8fb;
+  font-size: 20px;
+  line-height: 1.35;
+  opacity: 0.94;
+}
+
+.pluge {
+  display: flex;
+  align-items: stretch;
+  justify-content: center;
+  gap: 2.2%;
+  padding: 7% 12%;
+  background: rgb(16, 16, 16);
+}
+
+.pluge .bar {
+  flex: 1;
+  border: 2px solid rgba(255, 255, 255, 0.12);
+}
+
+.white-clipping {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  grid-template-rows: repeat(2, 1fr);
+  gap: 8px;
+  padding: 7%;
+  background: #111;
+}
+
+.white-patch {
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  padding: 18px;
+  color: #111;
+  font-size: 26px;
+  font-weight: 700;
+}
+
+.gray-ramp {
+  display: grid;
+  grid-template-columns: repeat(11, 1fr);
+  width: 100%;
+  height: 100%;
+}
+
+.gray-step {
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  padding-bottom: 28px;
+  font-size: 24px;
+  font-weight: 700;
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.8);
+}
+
+.color-bars {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  width: 100%;
+  height: 100%;
+}
+
+.geometry {
+  background-color: #050505;
+  background-image:
+    linear-gradient(rgba(255,255,255,0.52) 2px, transparent 2px),
+    linear-gradient(90deg, rgba(255,255,255,0.52) 2px, transparent 2px),
+    linear-gradient(rgba(0,225,255,0.52) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(0,225,255,0.52) 1px, transparent 1px);
+  background-size: 160px 160px, 160px 160px, 40px 40px, 40px 40px;
+}
+
+.geometry::after {
+  content: "";
+  position: absolute;
+  inset: 5%;
+  border: 4px solid #fff;
+  border-radius: 50%;
+}
+
+.near-black {
+  display: grid;
+  grid-template-columns: repeat(8, 1fr);
+  gap: 2px;
+  padding: 8%;
+  background: #000;
+}
+
+.near-black .patch {
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  padding-bottom: 22px;
+  font-size: 22px;
+  color: #aaa;
+}
+
+.solid {
+  width: 100%;
+  height: 100%;
+}
