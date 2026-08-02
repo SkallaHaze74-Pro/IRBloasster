@@ -1,6 +1,6 @@
 {
   "id": "com.skallahaze.smartir.tvlab",
-  "version": "1.0.1",
+  "version": "1.1.0",
   "vendor": "SkallaHaze74-Pro",
   "type": "web",
   "main": "index.html",
@@ -8,7 +8,7 @@
   "icon": "icon.png",
   "largeIcon": "largeicon.png",
   "iconColor": "#111827",
-  "appDescription": "Offline test patterns and safe calibration for SmartIR",
+  "appDescription": "Offline OLED patterns plus HLG and HDR10 signal tests for SmartIR",
   "resolution": "1920x1080",
   "disableBackHistoryAPI": true,
   "transparent": false
