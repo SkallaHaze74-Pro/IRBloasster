@@ -2,7 +2,9 @@ package com.skallahaze.irbloasster
 
 import android.os.Bundle
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -14,7 +16,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.ArrowBack
-import androidx.compose.material.icons.rounded.ContentCopy
+import androidx.compose.material.icons.rounded.Download
 import androidx.compose.material.icons.rounded.OpenInNew
 import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material.icons.rounded.Science
@@ -38,9 +40,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.skallahaze.irbloasster.data.SettingsRepository
@@ -49,6 +49,9 @@ import com.skallahaze.irbloasster.webos.DeepLabConnection
 import com.skallahaze.irbloasster.webos.DeepLabState
 import com.skallahaze.irbloasster.webos.DeepLabValue
 import com.skallahaze.irbloasster.webos.DeepTvLabClient
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 class TvLabProActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -88,12 +91,40 @@ private fun TvLabProScreen(
     onClose: () -> Unit,
 ) {
     val state = client.state
-    val clipboard = LocalClipboardManager.current
-    var copied by remember { mutableStateOf(false) }
+    val context = LocalContext.current
+    var pendingReport by remember { mutableStateOf("") }
+    var exportMessage by remember { mutableStateOf("") }
     var showCapabilities by remember { mutableStateOf(false) }
     var showSettings by remember { mutableStateOf(false) }
     var showApps by remember { mutableStateOf(false) }
     var showErrors by remember { mutableStateOf(false) }
+
+    val saveReportLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.CreateDocument("application/json"),
+    ) { uri ->
+        if (uri == null) {
+            exportMessage = "Speichern abgebrochen"
+        } else {
+            val result = runCatching {
+                val output = context.contentResolver.openOutputStream(uri, "w")
+                    ?: error("Datei konnte nicht geöffnet werden")
+                output.bufferedWriter(Charsets.UTF_8).use { writer ->
+                    writer.write(pendingReport)
+                }
+            }
+            exportMessage = result.fold(
+                onSuccess = { "TV-Bericht als Datei gespeichert" },
+                onFailure = { error ->
+                    "Speichern fehlgeschlagen: ${error.message ?: "unbekannter Fehler"}"
+                },
+            )
+        }
+    }
+
+    val reportReady = !state.scanning &&
+        state.totalRequests > 0 &&
+        state.completedRequests >= state.totalRequests &&
+        state.lastScanEpochMillis > 0L
 
     Scaffold(
         topBar = {
@@ -296,24 +327,36 @@ private fun TvLabProScreen(
 
             item {
                 LabCard(
-                    title = "Bericht",
-                    subtitle = "Ohne Client-Key, Zertifikat, Seriennummer, MAC oder IP-Adresse.",
+                    title = "Bericht als Datei",
+                    subtitle = "Nach abgeschlossenem Scan als JSON-Textdatei speichern und anschließend direkt als Datei hochladen.",
                 ) {
                     Button(
+                        enabled = reportReady,
                         onClick = {
-                            clipboard.setText(AnnotatedString(client.anonymizedReport()))
-                            copied = true
+                            pendingReport = sanitizeReportForExport(client.anonymizedReport())
+                            exportMessage = ""
+                            saveReportLauncher.launch(reportFileName(state.lastScanEpochMillis))
                         },
                         modifier = Modifier.fillMaxWidth(),
                     ) {
-                        Icon(Icons.Rounded.ContentCopy, contentDescription = null)
+                        Icon(Icons.Rounded.Download, contentDescription = null)
                         Spacer(Modifier.padding(4.dp))
-                        Text("Deep-TV-Bericht kopieren")
+                        Text("Deep-TV-Bericht als Datei speichern")
                     }
-                    if (copied) {
+                    if (!reportReady) {
+                        Text(
+                            if (state.scanning) {
+                                "Der Bericht wird erst nach dem vollständigen Scan freigegeben."
+                            } else {
+                                "Zuerst einen vollständigen Deep Scan durchführen."
+                            },
+                            style = MaterialTheme.typography.bodySmall,
+                        )
+                    }
+                    if (exportMessage.isNotBlank()) {
                         AssistChip(
-                            onClick = { copied = false },
-                            label = { Text("Deep-TV-Bericht kopiert") },
+                            onClick = { exportMessage = "" },
+                            label = { Text(exportMessage) },
                         )
                     }
                 }
@@ -447,3 +490,18 @@ private fun ValueRow(label: String, value: String) {
         Text(value, fontWeight = FontWeight.Bold)
     }
 }
+
+private fun reportFileName(scanEpochMillis: Long): String {
+    val timestamp = SimpleDateFormat(
+        "yyyy-MM-dd_HH-mm-ss",
+        Locale.GERMANY,
+    ).format(Date(scanEpochMillis.coerceAtLeast(System.currentTimeMillis())))
+    return "SmartIR-TV-Bericht-$timestamp.json"
+}
+
+private fun sanitizeReportForExport(report: String): String = report
+    .replace(IPV4_ADDRESS_REGEX, "<redacted-ip>")
+
+private val IPV4_ADDRESS_REGEX = Regex(
+    "(?<![0-9.])(?:[0-9]{1,3}\\.){3}[0-9]{1,3}(?![0-9.])",
+)
