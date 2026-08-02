@@ -61,7 +61,7 @@ if [[ ! -s "$MEDIA/SmartIR-HLG-HDR-Test.mp4" || ! -s "$MEDIA/SmartIR-HDR10-Test.
     exit 1
   fi
 
-  if ! ffmpeg -hide_banner -encoders 2>/dev/null | grep -q 'libx265'; then
+  if ! ffmpeg -hide_banner -encoders 2>/dev/null | grep 'libx265' >/dev/null; then
     echo "Die installierte ffmpeg-Version enthält keinen libx265-Encoder. Termux-Pakete aktualisieren und ffmpeg neu installieren."
     exit 1
   fi
