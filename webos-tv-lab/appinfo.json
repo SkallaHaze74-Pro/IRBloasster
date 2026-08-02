@@ -1,0 +1,12 @@
+{
+  "id": "com.skallahaze.smartir.tvlab",
+  "version": "1.0.0",
+  "vendor": "SkallaHaze74-Pro",
+  "type": "web",
+  "main": "index.html",
+  "title": "SmartIR TV Lab",
+  "appDescription": "Offline test patterns and guided read-only calibration for SmartIR",
+  "resolution": "1920x1080",
+  "disableBackHistoryAPI": true,
+  "transparent": false
+}
