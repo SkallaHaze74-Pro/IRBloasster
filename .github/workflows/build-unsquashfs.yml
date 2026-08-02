@@ -1,0 +1,30 @@
+name: Build analysis unsquashfs
+
+on:
+  push:
+    branches: ["analysis/build-unsquashfs"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Install squashfs tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y squashfs-tools
+          mkdir -p artifact
+          cp /usr/bin/unsquashfs artifact/
+          ldd /usr/bin/unsquashfs > artifact/ldd.txt
+          /usr/bin/unsquashfs -version > artifact/version.txt 2>&1 || true
+          sha256sum artifact/unsquashfs > artifact/SHA256SUMS
+      - name: Upload binary
+        uses: actions/upload-artifact@v4
+        with:
+          name: unsquashfs-linux-x86_64
+          path: artifact/
+          if-no-files-found: error
+          retention-days: 7
