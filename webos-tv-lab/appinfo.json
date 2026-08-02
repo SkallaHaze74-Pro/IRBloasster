@@ -5,7 +5,10 @@
   "type": "web",
   "main": "index.html",
   "title": "SmartIR TV Lab",
-  "appDescription": "Offline test patterns and guided read-only calibration for SmartIR",
+  "icon": "icon.png",
+  "largeIcon": "largeicon.png",
+  "iconColor": "#111827",
+  "appDescription": "Offline test patterns and safe calibration for SmartIR",
   "resolution": "1920x1080",
   "disableBackHistoryAPI": true,
   "transparent": false
