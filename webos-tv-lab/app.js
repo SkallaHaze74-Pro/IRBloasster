@@ -3,6 +3,26 @@
 
   const patterns = [
     {
+      id: 'hlg-video',
+      title: 'HLG HDR Signaltest',
+      subtitle: 'Echtes HEVC-Main10-Video mit HLG-Metadaten',
+      help: 'Nach ein bis drei Sekunden sollte der LG oben „HLG HDR“ einblenden. OK pausiert oder startet das Video. Wenn keine Einblendung kommt, den Test einmal verlassen und erneut öffnen.',
+      video: 'media/SmartIR-HLG-HDR-Test.mp4',
+      render(stage) {
+        renderVideo(stage, this.video, 'HLG HDR');
+      }
+    },
+    {
+      id: 'hdr10-video',
+      title: 'HDR10 Signaltest',
+      subtitle: 'Echtes HEVC-Main10-Video mit PQ/HDR10-Metadaten',
+      help: 'Nach ein bis drei Sekunden sollte der LG „HDR“ einblenden. Das Video enthält BT.2020, ST 2084, Mastering-Metadaten sowie MaxCLL/MaxFALL. OK pausiert oder startet.',
+      video: 'media/SmartIR-HDR10-Test.mp4',
+      render(stage) {
+        renderVideo(stage, this.video, 'HDR10');
+      }
+    },
+    {
       id: 'pluge',
       title: 'Schwarzpegel · PLUGE',
       subtitle: 'Near-Black und Referenzschwarz prüfen',
@@ -112,7 +132,40 @@
 
   let selectedIndex = 0;
   let activePattern = null;
+  let activeVideo = null;
   let variantIndex = 0;
+
+  function renderVideo(target, source, signalName) {
+    target.className = 'pattern-stage video-stage';
+    const video = document.createElement('video');
+    video.className = 'signal-video';
+    video.src = source;
+    video.autoplay = true;
+    video.loop = true;
+    video.muted = true;
+    video.preload = 'auto';
+    video.setAttribute('playsinline', '');
+    video.setAttribute('webkit-playsinline', '');
+    video.addEventListener('error', () => {
+      help.textContent = `${signalName}: Das lokale Testvideo konnte nicht abgespielt werden. App neu paketieren; dabei müssen die Dateien im Ordner media enthalten sein.`;
+    });
+    target.appendChild(video);
+    activeVideo = video;
+    const playResult = video.play();
+    if (playResult && typeof playResult.catch === 'function') {
+      playResult.catch(() => {
+        help.textContent = `${signalName}: OK drücken, um das Testvideo zu starten.`;
+      });
+    }
+  }
+
+  function cleanupActiveMedia() {
+    if (!activeVideo) return;
+    activeVideo.pause();
+    activeVideo.removeAttribute('src');
+    activeVideo.load();
+    activeVideo = null;
+  }
 
   function buildMenu() {
     menuGrid.replaceChildren();
@@ -151,6 +204,7 @@
 
   function renderActive() {
     if (!activePattern) return;
+    cleanupActiveMedia();
     stage.removeAttribute('style');
     stage.replaceChildren();
     activePattern.render(stage, variantIndex);
@@ -158,6 +212,7 @@
   }
 
   function showMenu() {
+    cleanupActiveMedia();
     activePattern = null;
     stage.replaceChildren();
     patternScreen.classList.add('hidden');
@@ -178,6 +233,12 @@
     renderActive();
   }
 
+  function toggleVideo() {
+    if (!activeVideo) return;
+    if (activeVideo.paused) activeVideo.play();
+    else activeVideo.pause();
+  }
+
   document.addEventListener('keydown', event => {
     const key = event.key;
     const keyCode = event.keyCode;
@@ -185,6 +246,7 @@
     if (activePattern) {
       if (key === 'ArrowLeft') changeVariant(-1);
       else if (key === 'ArrowRight') changeVariant(1);
+      else if (key === 'Enter') toggleVideo();
       else if (key === 'Escape' || key === 'Backspace' || keyCode === 461) showMenu();
       event.preventDefault();
       return;
