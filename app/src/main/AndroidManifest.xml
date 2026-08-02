@@ -27,10 +27,10 @@
         android:usesCleartextTraffic="true">
 
         <activity
-            android:name=".TvLabActivity"
+            android:name=".TvLabProActivity"
             android:excludeFromRecents="false"
             android:exported="true"
-            android:label="SmartIR TV Lab"
+            android:label="SmartIR TV Lab Pro"
             android:launchMode="singleTask"
             android:taskAffinity="com.skallahaze.irbloasster.tvlab">
             <intent-filter>
@@ -38,6 +38,10 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <activity
+            android:name=".TvLabActivity"
+            android:exported="false" />
 
         <activity
             android:name=".MainActivity"
