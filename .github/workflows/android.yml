@@ -62,3 +62,28 @@ jobs:
           path: app/build/reports/lint-results-debug.html
           if-no-files-found: ignore
           retention-days: 30
+
+  firmware-analysis-tool:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Build official unsquashfs
+        run: |
+          set -euxo pipefail
+          sudo apt-get update
+          sudo apt-get install -y build-essential liblzo2-dev zlib1g-dev liblzma-dev liblz4-dev libzstd-dev
+          git clone --depth 1 https://github.com/plougher/squashfs-tools.git
+          make -C squashfs-tools/squashfs-tools unsquashfs XATTR_SUPPORT=1 LZO_SUPPORT=1 LZ4_SUPPORT=1 XZ_SUPPORT=1 ZSTD_SUPPORT=1
+          mkdir -p artifact
+          cp squashfs-tools/squashfs-tools/unsquashfs artifact/
+          ldd artifact/unsquashfs | tee artifact/ldd.txt
+          sha256sum artifact/unsquashfs | tee artifact/unsquashfs.sha256
+
+      - name: Upload analysis tool
+        uses: actions/upload-artifact@v7
+        with:
+          name: unsquashfs-linux-amd64
+          path: artifact/
+          if-no-files-found: error
+          retention-days: 7
