@@ -4,6 +4,7 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 APP="$ROOT/webos-tv-lab"
 MEDIA="$APP/media"
+MEDIA_MARKER="$MEDIA/.smartir-media-v3"
 
 python - "$APP" <<'PY'
 import binascii
@@ -55,39 +56,142 @@ PY
 
 mkdir -p "$MEDIA"
 
-if [[ ! -s "$MEDIA/SmartIR-HLG-HDR-Test.mp4" || ! -s "$MEDIA/SmartIR-HDR10-Test.mp4" ]]; then
-  if ! command -v ffmpeg >/dev/null 2>&1; then
-    echo "ffmpeg fehlt. Einmal ausführen: pkg install ffmpeg"
-    exit 1
-  fi
-
-  if ! ffmpeg -hide_banner -encoders 2>/dev/null | grep 'libx265' >/dev/null; then
-    echo "Die installierte ffmpeg-Version enthält keinen libx265-Encoder. Termux-Pakete aktualisieren und ffmpeg neu installieren."
-    exit 1
-  fi
-
-  echo "Erzeuge lokale HLG- und HDR10-Testvideos …"
-
-  ffmpeg -y -hide_banner -loglevel error \
-    -f lavfi -i "smptehdbars=size=1920x1080:rate=24,format=yuv420p10le" \
-    -f lavfi -i "anullsrc=channel_layout=stereo:sample_rate=48000" \
-    -t 5 -map 0:v:0 -map 1:a:0 \
-    -c:v libx265 -preset ultrafast -crf 30 -pix_fmt yuv420p10le -profile:v main10 -tag:v hvc1 \
-    -color_primaries bt2020 -color_trc arib-std-b67 -colorspace bt2020nc \
-    -x265-params "log-level=error:repeat-headers=1:colorprim=9:transfer=18:colormatrix=9" \
-    -c:a aac -b:a 64k -movflags +faststart -shortest \
-    "$MEDIA/SmartIR-HLG-HDR-Test.mp4"
-
-  ffmpeg -y -hide_banner -loglevel error \
-    -f lavfi -i "smptehdbars=size=1920x1080:rate=24,format=yuv420p10le" \
-    -f lavfi -i "anullsrc=channel_layout=stereo:sample_rate=48000" \
-    -t 5 -map 0:v:0 -map 1:a:0 \
-    -c:v libx265 -preset ultrafast -crf 30 -pix_fmt yuv420p10le -profile:v main10 -tag:v hvc1 \
-    -color_primaries bt2020 -color_trc smpte2084 -colorspace bt2020nc \
-    -x265-params "log-level=error:hdr10=1:repeat-headers=1:colorprim=9:transfer=16:colormatrix=9:master-display=G(13250,34500)B(7500,3000)R(34000,16000)WP(15635,16450)L(10000000,1):max-cll=1000,400" \
-    -c:a aac -b:a 64k -movflags +faststart -shortest \
-    "$MEDIA/SmartIR-HDR10-Test.mp4"
+if ! command -v ffmpeg >/dev/null 2>&1; then
+  echo "ffmpeg fehlt. Einmal ausführen: pkg install ffmpeg"
+  exit 1
 fi
+
+has_encoder() {
+  ffmpeg -hide_banner -encoders 2>/dev/null | grep -q "$1"
+}
+
+make_hevc() {
+  local size="$1"
+  local transfer_name="$2"
+  local transfer_code="$3"
+  local output="$4"
+  local extra_params="$5"
+
+  ffmpeg -y -hide_banner -loglevel error \
+    -f lavfi -i "testsrc2=size=${size}:rate=12,format=yuv420p10le" \
+    -t 4 -an \
+    -c:v libx265 -preset ultrafast -crf 30 \
+    -pix_fmt yuv420p10le -profile:v main10 -tag:v hvc1 \
+    -color_primaries bt2020 -color_trc "$transfer_name" -colorspace bt2020nc \
+    -x265-params "log-level=error:repeat-headers=1:colorprim=9:transfer=${transfer_code}:colormatrix=9${extra_params}" \
+    -movflags +faststart \
+    "$output"
+}
+
+make_vp9() {
+  local transfer_name="$1"
+  local output="$2"
+
+  ffmpeg -y -hide_banner -loglevel error \
+    -f lavfi -i "testsrc2=size=3840x2160:rate=12,format=yuv420p10le" \
+    -t 4 -an \
+    -c:v libvpx-vp9 -deadline realtime -cpu-used 8 -row-mt 1 \
+    -tile-columns 2 -frame-parallel 1 -b:v 7000k -maxrate 9000k -bufsize 18000k \
+    -g 24 -pix_fmt yuv420p10le -profile:v 2 \
+    -color_primaries bt2020 -color_trc "$transfer_name" -colorspace bt2020nc \
+    "$output"
+}
+
+make_h264() {
+  local size="$1"
+  local level="$2"
+  local output="$3"
+
+  ffmpeg -y -hide_banner -loglevel error \
+    -f lavfi -i "testsrc2=size=${size}:rate=24,format=yuv420p" \
+    -t 4 -an \
+    -c:v libx264 -preset ultrafast -crf 20 \
+    -pix_fmt yuv420p -profile:v high -level:v "$level" \
+    -color_primaries bt709 -color_trc bt709 -colorspace bt709 \
+    -movflags +faststart \
+    "$output"
+}
+
+if [[ ! -f "$MEDIA_MARKER" ]]; then
+  rm -f "$MEDIA"/SmartIR-*.mp4 "$MEDIA"/SmartIR-*.webm "$MEDIA"/SmartIR-*.ts
+
+  if ! has_encoder 'libx265'; then
+    echo "Die installierte ffmpeg-Version enthält keinen libx265-Encoder."
+    exit 1
+  fi
+
+  if ! has_encoder 'libx264'; then
+    echo "Die installierte ffmpeg-Version enthält keinen libx264-Encoder."
+    exit 1
+  fi
+
+  echo "Erzeuge sichtbare 4K/1080p HLG-, HDR10- und SDR-Testvideos …"
+
+  make_hevc \
+    "3840x2160" \
+    "arib-std-b67" \
+    "18" \
+    "$MEDIA/SmartIR-HLG-4K-HEVC.mp4" \
+    ""
+
+  make_hevc \
+    "1920x1080" \
+    "arib-std-b67" \
+    "18" \
+    "$MEDIA/SmartIR-HLG-1080-HEVC.mp4" \
+    ""
+
+  make_hevc \
+    "3840x2160" \
+    "smpte2084" \
+    "16" \
+    "$MEDIA/SmartIR-HDR10-4K-HEVC.mp4" \
+    ":hdr10=1:hdr10-opt=1:master-display=G(13250,34500)B(7500,3000)R(34000,16000)WP(15635,16450)L(10000000,1):max-cll=1000,400"
+
+  make_hevc \
+    "1920x1080" \
+    "smpte2084" \
+    "16" \
+    "$MEDIA/SmartIR-HDR10-1080-HEVC.mp4" \
+    ":hdr10=1:hdr10-opt=1:master-display=G(13250,34500)B(7500,3000)R(34000,16000)WP(15635,16450)L(10000000,1):max-cll=1000,400"
+
+  ffmpeg -y -hide_banner -loglevel error \
+    -i "$MEDIA/SmartIR-HLG-4K-HEVC.mp4" \
+    -c copy -bsf:v hevc_mp4toannexb -f mpegts \
+    "$MEDIA/SmartIR-HLG-4K-HEVC.ts"
+
+  ffmpeg -y -hide_banner -loglevel error \
+    -i "$MEDIA/SmartIR-HDR10-4K-HEVC.mp4" \
+    -c copy -bsf:v hevc_mp4toannexb -f mpegts \
+    "$MEDIA/SmartIR-HDR10-4K-HEVC.ts"
+
+  if has_encoder 'libvpx-vp9'; then
+    make_vp9 "arib-std-b67" "$MEDIA/SmartIR-HLG-4K-VP9.webm"
+    make_vp9 "smpte2084" "$MEDIA/SmartIR-HDR10-4K-VP9.webm"
+  else
+    echo "Hinweis: libvpx-vp9 fehlt. HEVC- und MPEG-TS-Varianten werden trotzdem gebaut."
+  fi
+
+  make_h264 "3840x2160" "5.1" "$MEDIA/SmartIR-SDR-4K-H264.mp4"
+  make_h264 "1920x1080" "4.2" "$MEDIA/SmartIR-SDR-1080-H264.mp4"
+
+  touch "$MEDIA_MARKER"
+fi
+
+echo
+echo "Erzeugte Mediendateien:"
+ls -lh "$MEDIA"/SmartIR-* 2>/dev/null || true
+
+echo
+echo "Video-Metadaten:"
+for file in "$MEDIA"/SmartIR-*; do
+  [[ -f "$file" ]] || continue
+  echo "--- $(basename "$file")"
+  ffprobe -v error \
+    -select_streams v:0 \
+    -show_entries stream=codec_name,profile,width,height,pix_fmt,color_space,color_transfer,color_primaries \
+    -of default=noprint_wrappers=1 "$file" || true
+done
 
 cd "$ROOT"
 rm -f com.skallahaze.smartir.tvlab_*.ipk
