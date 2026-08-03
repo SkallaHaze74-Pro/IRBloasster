@@ -4,6 +4,8 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 TARGET="${1:-smartirtv}"
 
+pkg install ffmpeg x264 x265 -y
+
 cd "$ROOT"
 chmod +x webos-tv-lab/package-termux.sh
 ./webos-tv-lab/package-termux.sh
