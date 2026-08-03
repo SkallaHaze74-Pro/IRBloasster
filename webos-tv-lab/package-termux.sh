@@ -4,7 +4,9 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 APP="$ROOT/webos-tv-lab"
 MEDIA="$APP/media"
-MEDIA_MARKER="$MEDIA/.smartir-media-v3"
+MEDIA_MARKER="$MEDIA/.smartir-media-v4"
+FPS=6
+DURATION=3
 
 python - "$APP" <<'PY'
 import binascii
@@ -65,7 +67,7 @@ has_encoder() {
   ffmpeg -hide_banner -encoders 2>/dev/null | grep -q "$1"
 }
 
-make_hevc() {
+make_hevc_ffmpeg() {
   local size="$1"
   local transfer_name="$2"
   local transfer_code="$3"
@@ -73,9 +75,9 @@ make_hevc() {
   local extra_params="$5"
 
   ffmpeg -y -hide_banner -loglevel error \
-    -f lavfi -i "testsrc2=size=${size}:rate=12,format=yuv420p10le" \
-    -t 4 -an \
-    -c:v libx265 -preset ultrafast -crf 30 \
+    -f lavfi -i "testsrc2=size=${size}:rate=${FPS},format=yuv420p10le" \
+    -t "$DURATION" -an \
+    -c:v libx265 -preset ultrafast -crf 28 \
     -pix_fmt yuv420p10le -profile:v main10 -tag:v hvc1 \
     -color_primaries bt2020 -color_trc "$transfer_name" -colorspace bt2020nc \
     -x265-params "log-level=error:repeat-headers=1:colorprim=9:transfer=${transfer_code}:colormatrix=9${extra_params}" \
@@ -83,28 +85,93 @@ make_hevc() {
     "$output"
 }
 
+make_hevc_cli() {
+  local size="$1"
+  local transfer_name="$2"
+  local transfer_code="$3"
+  local output="$4"
+  local hdr10="$5"
+  local raw="${output%.mp4}.hevc"
+  local params=(
+    --y4m
+    --input -
+    --output "$raw"
+    --preset ultrafast
+    --crf 28
+    --profile main10
+    --repeat-headers
+    --colorprim 9
+    --transfer "$transfer_code"
+    --colormatrix 9
+    --fps "$FPS"
+    --log-level error
+  )
+
+  if [[ "$hdr10" == "yes" ]]; then
+    params+=(
+      --hdr10
+      --hdr10-opt
+      --master-display "G(13250,34500)B(7500,3000)R(34000,16000)WP(15635,16450)L(10000000,1)"
+      --max-cll "1000,400"
+    )
+  fi
+
+  ffmpeg -y -hide_banner -loglevel error \
+    -f lavfi -i "testsrc2=size=${size}:rate=${FPS},format=yuv420p10le" \
+    -t "$DURATION" -an -f yuv4mpegpipe - \
+    | x265 "${params[@]}"
+
+  ffmpeg -y -hide_banner -loglevel error \
+    -r "$FPS" -f hevc -i "$raw" \
+    -c:v copy -tag:v hvc1 \
+    -color_primaries bt2020 -color_trc "$transfer_name" -colorspace bt2020nc \
+    -movflags +faststart \
+    "$output"
+
+  rm -f "$raw"
+}
+
+make_hevc() {
+  local size="$1"
+  local transfer_name="$2"
+  local transfer_code="$3"
+  local output="$4"
+  local extra_params="$5"
+  local hdr10="$6"
+
+  if has_encoder 'libx265'; then
+    make_hevc_ffmpeg "$size" "$transfer_name" "$transfer_code" "$output" "$extra_params"
+  elif command -v x265 >/dev/null 2>&1; then
+    make_hevc_cli "$size" "$transfer_name" "$transfer_code" "$output" "$hdr10"
+  else
+    echo "HEVC kann nicht erzeugt werden: weder ffmpeg/libx265 noch das x265-Programm ist vorhanden."
+    echo "Einmal ausführen: pkg install x265"
+    exit 1
+  fi
+}
+
 make_vp9() {
   local transfer_name="$1"
   local output="$2"
 
   ffmpeg -y -hide_banner -loglevel error \
-    -f lavfi -i "testsrc2=size=3840x2160:rate=12,format=yuv420p10le" \
-    -t 4 -an \
+    -f lavfi -i "testsrc2=size=3840x2160:rate=${FPS},format=yuv420p10le" \
+    -t "$DURATION" -an \
     -c:v libvpx-vp9 -deadline realtime -cpu-used 8 -row-mt 1 \
-    -tile-columns 2 -frame-parallel 1 -b:v 7000k -maxrate 9000k -bufsize 18000k \
-    -g 24 -pix_fmt yuv420p10le -profile:v 2 \
+    -tile-columns 2 -frame-parallel 1 -b:v 5000k -maxrate 7000k -bufsize 14000k \
+    -g 18 -pix_fmt yuv420p10le -profile:v 2 \
     -color_primaries bt2020 -color_trc "$transfer_name" -colorspace bt2020nc \
     "$output"
 }
 
-make_h264() {
+make_h264_ffmpeg() {
   local size="$1"
   local level="$2"
   local output="$3"
 
   ffmpeg -y -hide_banner -loglevel error \
-    -f lavfi -i "testsrc2=size=${size}:rate=24,format=yuv420p" \
-    -t 4 -an \
+    -f lavfi -i "testsrc2=size=${size}:rate=12,format=yuv420p" \
+    -t "$DURATION" -an \
     -c:v libx264 -preset ultrafast -crf 20 \
     -pix_fmt yuv420p -profile:v high -level:v "$level" \
     -color_primaries bt709 -color_trc bt709 -colorspace bt709 \
@@ -112,48 +179,61 @@ make_h264() {
     "$output"
 }
 
+make_h264_cli() {
+  local size="$1"
+  local level="$2"
+  local output="$3"
+  local raw="${output%.mp4}.h264"
+
+  ffmpeg -y -hide_banner -loglevel error \
+    -f lavfi -i "testsrc2=size=${size}:rate=12,format=yuv420p" \
+    -t "$DURATION" -an -f yuv4mpegpipe - \
+    | x264 --demuxer y4m --preset ultrafast --crf 20 \
+      --profile high --level "$level" \
+      --colorprim bt709 --transfer bt709 --colormatrix bt709 \
+      --output "$raw" -
+
+  ffmpeg -y -hide_banner -loglevel error \
+    -r 12 -f h264 -i "$raw" \
+    -c:v copy -movflags +faststart \
+    "$output"
+
+  rm -f "$raw"
+}
+
+make_h264() {
+  local size="$1"
+  local level="$2"
+  local output="$3"
+
+  if has_encoder 'libx264'; then
+    make_h264_ffmpeg "$size" "$level" "$output"
+  elif command -v x264 >/dev/null 2>&1; then
+    make_h264_cli "$size" "$level" "$output"
+  else
+    echo "H.264 kann nicht erzeugt werden: weder ffmpeg/libx264 noch das x264-Programm ist vorhanden."
+    echo "Einmal ausführen: pkg install x264"
+    exit 1
+  fi
+}
+
 if [[ ! -f "$MEDIA_MARKER" ]]; then
-  rm -f "$MEDIA"/SmartIR-*.mp4 "$MEDIA"/SmartIR-*.webm "$MEDIA"/SmartIR-*.ts
-
-  if ! has_encoder 'libx265'; then
-    echo "Die installierte ffmpeg-Version enthält keinen libx265-Encoder."
-    exit 1
-  fi
-
-  if ! has_encoder 'libx264'; then
-    echo "Die installierte ffmpeg-Version enthält keinen libx264-Encoder."
-    exit 1
-  fi
+  rm -f "$MEDIA"/SmartIR-*.mp4 "$MEDIA"/SmartIR-*.webm "$MEDIA"/SmartIR-*.ts "$MEDIA"/.smartir-media-*
 
   echo "Erzeuge sichtbare 4K/1080p HLG-, HDR10- und SDR-Testvideos …"
 
-  make_hevc \
-    "3840x2160" \
-    "arib-std-b67" \
-    "18" \
-    "$MEDIA/SmartIR-HLG-4K-HEVC.mp4" \
-    ""
-
-  make_hevc \
-    "1920x1080" \
-    "arib-std-b67" \
-    "18" \
-    "$MEDIA/SmartIR-HLG-1080-HEVC.mp4" \
-    ""
-
-  make_hevc \
-    "3840x2160" \
-    "smpte2084" \
-    "16" \
+  make_hevc "3840x2160" "arib-std-b67" "18" \
+    "$MEDIA/SmartIR-HLG-4K-HEVC.mp4" "" "no"
+  make_hevc "1920x1080" "arib-std-b67" "18" \
+    "$MEDIA/SmartIR-HLG-1080-HEVC.mp4" "" "no"
+  make_hevc "3840x2160" "smpte2084" "16" \
     "$MEDIA/SmartIR-HDR10-4K-HEVC.mp4" \
-    ":hdr10=1:hdr10-opt=1:master-display=G(13250,34500)B(7500,3000)R(34000,16000)WP(15635,16450)L(10000000,1):max-cll=1000,400"
-
-  make_hevc \
-    "1920x1080" \
-    "smpte2084" \
-    "16" \
+    ":hdr10=1:hdr10-opt=1:master-display=G(13250,34500)B(7500,3000)R(34000,16000)WP(15635,16450)L(10000000,1):max-cll=1000,400" \
+    "yes"
+  make_hevc "1920x1080" "smpte2084" "16" \
     "$MEDIA/SmartIR-HDR10-1080-HEVC.mp4" \
-    ":hdr10=1:hdr10-opt=1:master-display=G(13250,34500)B(7500,3000)R(34000,16000)WP(15635,16450)L(10000000,1):max-cll=1000,400"
+    ":hdr10=1:hdr10-opt=1:master-display=G(13250,34500)B(7500,3000)R(34000,16000)WP(15635,16450)L(10000000,1):max-cll=1000,400" \
+    "yes"
 
   ffmpeg -y -hide_banner -loglevel error \
     -i "$MEDIA/SmartIR-HLG-4K-HEVC.mp4" \
