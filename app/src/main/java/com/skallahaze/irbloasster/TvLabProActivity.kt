@@ -25,6 +25,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
@@ -49,6 +50,8 @@ import com.skallahaze.irbloasster.webos.DeepLabConnection
 import com.skallahaze.irbloasster.webos.DeepLabState
 import com.skallahaze.irbloasster.webos.DeepLabValue
 import com.skallahaze.irbloasster.webos.DeepTvLabClient
+import com.skallahaze.irbloasster.webos.TvOptimizationAdvisor
+import com.skallahaze.irbloasster.webos.TvSignalMode
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -94,10 +97,14 @@ private fun TvLabProScreen(
     val context = LocalContext.current
     var pendingReport by remember { mutableStateOf("") }
     var exportMessage by remember { mutableStateOf("") }
+    var signalMode by remember { mutableStateOf(TvSignalMode.UNKNOWN) }
     var showCapabilities by remember { mutableStateOf(false) }
     var showSettings by remember { mutableStateOf(false) }
     var showApps by remember { mutableStateOf(false) }
     var showErrors by remember { mutableStateOf(false) }
+
+    val optimizationAdvice = TvOptimizationAdvisor.advice(signalMode, state)
+    val inferredSignalFamily = TvOptimizationAdvisor.inferredSignalFamily(state)
 
     val saveReportLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.CreateDocument("application/json"),
@@ -113,7 +120,7 @@ private fun TvLabProScreen(
                 }
             }
             exportMessage = result.fold(
-                onSuccess = { "TV-Bericht als Datei gespeichert" },
+                onSuccess = { "TV-Bericht mit Signalmodus gespeichert" },
                 onFailure = { error ->
                     "Speichern fehlgeschlagen: ${error.message ?: "unbekannter Fehler"}"
                 },
@@ -133,7 +140,7 @@ private fun TvLabProScreen(
                     Column {
                         Text("SmartIR TV Lab Pro")
                         Text(
-                            "Deep read-only Scanner",
+                            "Signal-Scan & Optimierungsassistent",
                             style = MaterialTheme.typography.labelMedium,
                         )
                     }
@@ -166,6 +173,26 @@ private fun TvLabProScreen(
                 )
             }
 
+            item {
+                LabCard(
+                    title = "Signalmodus bestätigen",
+                    subtitle = "Der LG meldet HLG als „HLG HDR“ und HDR10 als „HDR“. Diese Auswahl wird eindeutig im JSON-Bericht gespeichert.",
+                ) {
+                    SignalModeSelector(
+                        selected = signalMode,
+                        onSelected = { signalMode = it },
+                    )
+                    ValueRow("Ausgewählt", signalMode.displayName)
+                    ValueRow("Automatische Familie", inferredSignalFamily)
+                    if (signalMode == TvSignalMode.UNKNOWN) {
+                        Text(
+                            "Für einen eindeutig vergleichbaren Bericht vor dem Speichern den am TV bestätigten Modus auswählen.",
+                            style = MaterialTheme.typography.bodySmall,
+                        )
+                    }
+                }
+            }
+
             if (state.scanning) {
                 item {
                     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -189,11 +216,28 @@ private fun TvLabProScreen(
                     title = "Gefundener Umfang",
                     subtitle = "Eine fehlerhafte Taste oder Kategorie blockiert den Rest nicht mehr.",
                 ) {
+                    ValueRow("Signalmodus", signalMode.displayName)
                     ValueRow("Hardware/Funktionen", state.capabilities.size.toString())
                     ValueRow("Einstellungswerte", state.settings.values.sumOf { it.size }.toString())
                     ValueRow("Live-/Systemstatus", state.liveStatus.size.toString())
                     ValueRow("Installierte Apps", state.installedApps.size.toString())
                     ValueRow("PQ-Lesetreffer", state.pqSnapshots.size.toString())
+                }
+            }
+
+            item {
+                LabCard(
+                    title = "Sichere Optimierung",
+                    subtitle = "Regelbasierte Empfehlungen aus Signalmodus und tatsächlich gelesenen Werten. Es wird nichts automatisch geschrieben.",
+                ) {
+                    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                        optimizationAdvice.forEach { item ->
+                            Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                                Text(item.title, fontWeight = FontWeight.Bold)
+                                Text(item.detail, style = MaterialTheme.typography.bodyMedium)
+                            }
+                        }
+                    }
                 }
             }
 
@@ -328,20 +372,31 @@ private fun TvLabProScreen(
             item {
                 LabCard(
                     title = "Bericht als Datei",
-                    subtitle = "Nach abgeschlossenem Scan als JSON-Textdatei speichern und anschließend direkt als Datei hochladen.",
+                    subtitle = "Signalmodus, Scanwerte und Optimierungshinweise werden gemeinsam als JSON gespeichert.",
                 ) {
                     Button(
                         enabled = reportReady,
                         onClick = {
-                            pendingReport = sanitizeReportForExport(client.anonymizedReport())
+                            pendingReport = sanitizeReportForExport(
+                                TvOptimizationAdvisor.enrichReport(
+                                    report = client.anonymizedReport(),
+                                    signalMode = signalMode,
+                                    state = state,
+                                ),
+                            )
                             exportMessage = ""
-                            saveReportLauncher.launch(reportFileName(state.lastScanEpochMillis))
+                            saveReportLauncher.launch(
+                                reportFileName(
+                                    scanEpochMillis = state.lastScanEpochMillis,
+                                    signalMode = signalMode,
+                                ),
+                            )
                         },
                         modifier = Modifier.fillMaxWidth(),
                     ) {
                         Icon(Icons.Rounded.Download, contentDescription = null)
                         Spacer(Modifier.padding(4.dp))
-                        Text("Deep-TV-Bericht als Datei speichern")
+                        Text("Bericht mit Signalmodus speichern")
                     }
                     if (!reportReady) {
                         Text(
@@ -401,6 +456,38 @@ private fun TvLabProScreen(
                         )
                     }
                 }
+            }
+        }
+    }
+}
+
+@Composable
+private fun SignalModeSelector(
+    selected: TvSignalMode,
+    onSelected: (TvSignalMode) -> Unit,
+) {
+    val rows = listOf(
+        listOf(TvSignalMode.HLG_HDR, TvSignalMode.HDR10),
+        listOf(TvSignalMode.DOLBY_VISION, TvSignalMode.GAME_HDR),
+        listOf(TvSignalMode.SDR_DARK, TvSignalMode.SDR_BRIGHT),
+        listOf(TvSignalMode.UNKNOWN),
+    )
+
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        rows.forEach { rowModes ->
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                rowModes.forEach { mode ->
+                    FilterChip(
+                        selected = selected == mode,
+                        onClick = { onSelected(mode) },
+                        label = { Text(mode.displayName) },
+                        modifier = Modifier.weight(1f),
+                    )
+                }
+                if (rowModes.size == 1) Spacer(Modifier.weight(1f))
             }
         }
     }
@@ -491,12 +578,15 @@ private fun ValueRow(label: String, value: String) {
     }
 }
 
-private fun reportFileName(scanEpochMillis: Long): String {
+private fun reportFileName(
+    scanEpochMillis: Long,
+    signalMode: TvSignalMode,
+): String {
     val timestamp = SimpleDateFormat(
         "yyyy-MM-dd_HH-mm-ss",
         Locale.GERMANY,
     ).format(Date(scanEpochMillis.coerceAtLeast(System.currentTimeMillis())))
-    return "SmartIR-TV-Bericht-$timestamp.json"
+    return "SmartIR-TV-Bericht-${signalMode.reportValue}-$timestamp.json"
 }
 
 private fun sanitizeReportForExport(report: String): String = report
