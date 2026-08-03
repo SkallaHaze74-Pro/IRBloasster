@@ -4,7 +4,7 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 APP="$ROOT/webos-tv-lab"
 MEDIA="$APP/media"
-MEDIA_MARKER="$MEDIA/.smartir-media-v4"
+MEDIA_MARKER="$MEDIA/.smartir-media-v5"
 FPS=6
 DURATION=3
 
@@ -118,7 +118,7 @@ make_hevc_cli() {
 
   ffmpeg -y -hide_banner -loglevel error \
     -f lavfi -i "testsrc2=size=${size}:rate=${FPS},format=yuv420p10le" \
-    -t "$DURATION" -an -f yuv4mpegpipe - \
+    -t "$DURATION" -an -strict -1 -f yuv4mpegpipe - \
     | x265 "${params[@]}"
 
   ffmpeg -y -hide_banner -loglevel error \
@@ -145,7 +145,7 @@ make_hevc() {
     make_hevc_cli "$size" "$transfer_name" "$transfer_code" "$output" "$hdr10"
   else
     echo "HEVC kann nicht erzeugt werden: weder ffmpeg/libx265 noch das x265-Programm ist vorhanden."
-    echo "Einmal ausführen: pkg install x265"
+    echo "Einmal ausführen: pkg install libx265"
     exit 1
   fi
 }
@@ -212,7 +212,7 @@ make_h264() {
     make_h264_cli "$size" "$level" "$output"
   else
     echo "H.264 kann nicht erzeugt werden: weder ffmpeg/libx264 noch das x264-Programm ist vorhanden."
-    echo "Einmal ausführen: pkg install x264"
+    echo "Einmal ausführen: pkg install libx264"
     exit 1
   fi
 }
