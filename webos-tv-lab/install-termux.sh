@@ -10,9 +10,9 @@ cd "$ROOT"
 chmod +x webos-tv-lab/package-termux.sh
 ./webos-tv-lab/package-termux.sh
 
-IPK="$(find "$ROOT" -maxdepth 1 -name 'com.skallahaze.smartir.tvlab_1.2.0_all.ipk' -print -quit)"
+IPK="$(find "$ROOT" -maxdepth 1 -name 'com.skallahaze.smartir.tvlab_1.2.1_all.ipk' -print -quit)"
 if [[ -z "$IPK" ]]; then
-  echo "FEHLER: com.skallahaze.smartir.tvlab_1.2.0_all.ipk wurde nicht erzeugt."
+  echo "FEHLER: com.skallahaze.smartir.tvlab_1.2.1_all.ipk wurde nicht erzeugt."
   exit 1
 fi
 
