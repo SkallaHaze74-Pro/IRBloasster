@@ -1,6 +1,6 @@
 # SoundCloud TV Pro for LG webOS
 
-Private remote-first launcher for LG webOS TV. Version 1.3.0 adds a non-destructive experiment that hands a known-good audio file to the built-in LG media player to test whether playback continues after switching to HDMI or Live TV.
+Private remote-first launcher for LG webOS TV. Version 1.4.0 replaces the failed media-player handoff experiment with a Bluetooth Sound Share test using the TV's built-in system apps.
 
 ## Features
 
@@ -11,18 +11,32 @@ Private remote-first launcher for LG webOS TV. Version 1.3.0 adds a non-destruct
 - 1920×1080 OLED-friendly interface
 - no SoundCloud password, cookie or access token inside the package
 - no additional SmartIR tracking or advertising
+- smaller package because the 45-second WAV experiment was removed
 
-## LG background test
+## Bluetooth Sound Share test
 
-The `LG Hintergrundtest` tile contains three safe tests:
+The previous result on the LG OLED55B19LA was clear:
 
-1. Play the bundled 45-second PCM WAV inside SoundCloud TV Pro.
-2. Hand the same installed WAV to `com.webos.app.mediadiscovery` with `mediaType: MUSIC`.
-3. Try an HTTPS Ogg/Vorbis source if the local package path is rejected.
+- the bundled test audio played inside SoundCloud TV Pro
+- `com.webos.app.mediadiscovery` did not open a visible player
+- audio stopped as soon as the TV switched away from the web app
 
-After the LG player starts, press the Input button and switch to HDMI or Live TV. The experiment succeeds only if the music continues after that source switch. The app does not change service-menu values, NVRAM, panel settings or firmware.
+Version 1.4.0 therefore uses the TV's installed system apps instead:
 
-The system-player launch payload is an undocumented compatibility path on consumer webOS. A successful launch callback only means that the launch request was accepted; the real result is whether audio continues after the source change.
+- `com.webos.app.btspeakerapp` for Bluetooth Sound Share
+- `com.webos.app.homeconnect` as the Home Dashboard fallback
+
+Test procedure:
+
+1. Open tile `9 · Bluetooth Sound Share`.
+2. Try `Sound Share direkt öffnen`.
+3. On the Xiaomi phone, enable Bluetooth and select the LG TV.
+4. Start SoundCloud on the phone.
+5. Switch the TV to HDMI or Live TV.
+6. The experiment succeeds only if the phone's SoundCloud audio continues through the TV speakers.
+7. If direct launch fails, open Home Dashboard and select Sound Share in the Mobile section.
+
+No service-menu values, NVRAM, panel settings, firmware or root state are changed.
 
 ## Install from Termux
 
