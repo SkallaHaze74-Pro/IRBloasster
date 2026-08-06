@@ -1,13 +1,16 @@
-# SoundCloud TV for LG webOS
+# SoundCloud TV Pro for LG webOS
 
-Private launcher for LG webOS TV. Version 1.1.0 opens SoundCloud in the built-in LG browser instead of keeping the login flow inside the packaged app.
+Private remote-first launcher for LG webOS TV. Version 1.2.0 uses the built-in LG browser for SoundCloud playback and account login, avoiding the black login screen seen inside packaged `file://` web apps.
 
-## Why the LG browser is used
+## Features
 
-- SoundCloud login can open additional authentication pages or popups.
-- The packaged web app previously showed a black screen during login on webOS 6.x.
-- The built-in LG browser keeps the SoundCloud browser session and cookies, so the user normally remains signed in across launches.
-- No SoundCloud password, cookie or token is stored in the IPK package.
+- persistent LG browser session instead of storing credentials in the IPK
+- large 4×2 TV dashboard for Weiterhören, Bibliothek, Likes, Playlists, Stream, Entdecken, Suche and Anmeldung
+- remembers the last opened SoundCloud destination locally
+- Magic Remote, arrow keys, OK and numeric shortcuts 1–8
+- 1920×1080 OLED-friendly interface
+- no SoundCloud password, cookie or access token inside the package
+- no additional SmartIR tracking or advertising
 
 ## Install from Termux
 
@@ -23,12 +26,12 @@ chmod +x webos-soundcloud/install-termux.sh
 
 ## First login
 
-1. Launch SoundCloud TV.
-2. Choose `Einmal anmelden / Konto wechseln` if the library does not open as signed in.
+1. Launch SoundCloud TV Pro.
+2. Choose `Anmelden` once.
 3. Complete the login in the LG browser.
 4. Leave SoundCloud signed in and close the browser normally.
-5. Future launches open `Meine Bibliothek` in the same browser session.
+5. Future launches reuse the LG browser session and can open any dashboard destination directly.
 
-The session can end if the user signs out, clears LG browser data, reinstalls or resets the TV, or SoundCloud expires the session.
+The session can end after explicit logout, clearing LG browser data, reinstall/reset, or SoundCloud-side expiry.
 
-This is a private sideloaded launcher and not an official SoundCloud or LG Content Store app.
+This is a private sideloaded launcher and not an official SoundCloud or LG Content Store app. It does not alter SoundCloud advertisements, subscriptions or access controls.
