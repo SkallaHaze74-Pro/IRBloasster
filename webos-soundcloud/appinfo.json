@@ -1,6 +1,6 @@
 {
   "id": "com.skallahaze.soundcloudtv",
-  "version": "1.3.0",
+  "version": "1.4.0",
   "vendor": "SkallaHaze74-Pro",
   "type": "web",
   "main": "index.html",
@@ -8,7 +8,7 @@
   "icon": "icon.png",
   "largeIcon": "largeicon.png",
   "iconColor": "#ff5500",
-  "appDescription": "Remote-first SoundCloud launcher with LG system-player background test",
+  "appDescription": "Remote-first SoundCloud launcher with LG Bluetooth Sound Share test",
   "resolution": "1920x1080",
   "disableBackHistoryAPI": true,
   "transparent": false
