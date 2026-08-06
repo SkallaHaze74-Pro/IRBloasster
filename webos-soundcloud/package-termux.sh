@@ -6,9 +6,11 @@ APP="$ROOT/webos-soundcloud"
 
 python - "$APP" <<'PY'
 import binascii
+import math
 import pathlib
 import struct
 import sys
+import wave
 import zlib
 
 root = pathlib.Path(sys.argv[1])
@@ -39,7 +41,7 @@ def write_icon(path, size):
             radius = size * 0.46
             inside = dx * dx + dy * dy <= radius * radius
 
-            wave = False
+            wave_bar = False
             for index, height_ratio in enumerate(heights):
                 bx1 = start_x + index * (bar_width + gap)
                 bx2 = bx1 + bar_width
@@ -47,12 +49,12 @@ def write_icon(path, size):
                 by1 = size // 2 - h // 2
                 by2 = by1 + h
                 if bx1 <= x <= bx2 and by1 <= y <= by2:
-                    wave = True
+                    wave_bar = True
                     break
 
             if not inside:
                 row.extend((0, 0, 0, 255))
-            elif wave:
+            elif wave_bar:
                 row.extend((255, 255, 255, 255))
             else:
                 row.extend((r, g, b, 255))
@@ -65,8 +67,38 @@ def write_icon(path, size):
     png += chunk(b"IEND", b"")
     path.write_bytes(png)
 
+def write_background_test(path):
+    sample_rate = 16000
+    duration = 45
+    note_length = 1.5
+    notes = [261.63, 329.63, 392.00, 523.25, 392.00, 329.63]
+    frames = bytearray()
+
+    for index in range(sample_rate * duration):
+        time = index / sample_rate
+        frequency = notes[int(time / note_length) % len(notes)]
+        local = (time % note_length) / note_length
+        envelope = max(0.0, min(1.0, local / 0.12, (1.0 - local) / 0.18))
+        global_fade = max(0.0, min(1.0, time / 0.8, (duration - time) / 1.5))
+        sample = (
+            0.48 * math.sin(2 * math.pi * frequency * time)
+            + 0.22 * math.sin(2 * math.pi * frequency * 0.5 * time)
+            + 0.12 * math.sin(2 * math.pi * frequency * 1.5 * time)
+        )
+        sample *= 0.83 + 0.17 * math.sin(2 * math.pi * 0.22 * time)
+        value = int(max(-1.0, min(1.0, sample * 0.24 * envelope * global_fade)) * 32767)
+        frames.extend(struct.pack('<h', value))
+
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with wave.open(str(path), 'wb') as audio:
+        audio.setnchannels(1)
+        audio.setsampwidth(2)
+        audio.setframerate(sample_rate)
+        audio.writeframes(frames)
+
 write_icon(root / "icon.png", 80)
 write_icon(root / "largeicon.png", 130)
+write_background_test(root / "media" / "lg-background-test.wav")
 PY
 
 cd "$ROOT"
