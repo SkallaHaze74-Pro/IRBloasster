@@ -3,29 +3,82 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>SoundCloud TV</title>
+  <title>SoundCloud TV Pro</title>
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
   <main class="screen">
-    <section class="card">
-      <div class="wave" aria-hidden="true">
-        <span></span><span></span><span></span><span></span><span></span>
-        <span></span><span></span><span></span><span></span>
+    <header class="hero">
+      <div class="brand-row">
+        <div class="wave" aria-hidden="true">
+          <span></span><span></span><span></span><span></span><span></span>
+          <span></span><span></span><span></span><span></span>
+        </div>
+        <div>
+          <p class="eyebrow">SMARTIR · PRIVATE TV APP</p>
+          <h1>SoundCloud TV Pro</h1>
+          <p id="status" class="status">Bereit · Anmeldung bleibt im LG-Browser gespeichert</p>
+        </div>
       </div>
-      <h1>SoundCloud TV</h1>
-      <p id="status">SoundCloud wird im LG-Browser geöffnet …</p>
+      <div class="session-pill">Browser-Login · keine Zugangsdaten in der IPK</div>
+    </header>
 
-      <div class="actions">
-        <button id="library" type="button" autofocus>Meine Bibliothek öffnen</button>
-        <button id="login" class="secondary" type="button">Einmal anmelden / Konto wechseln</button>
-      </div>
+    <section id="menu" class="menu-grid" aria-label="SoundCloud Bereiche">
+      <button class="tile tile-featured" data-key="resume" type="button">
+        <span class="tile-number">1</span>
+        <span class="tile-title">Weiterhören</span>
+        <span id="resume-subtitle" class="tile-subtitle">Zuletzt geöffneten Bereich starten</span>
+      </button>
 
-      <p class="hint">
-        Die Anmeldung läuft im eingebauten LG-Browser. Dadurch bleiben die SoundCloud-Cookies erhalten,
-        bis du dich abmeldest, die Browserdaten löschst oder SoundCloud die Sitzung beendet.
-      </p>
+      <button class="tile" data-key="library" type="button">
+        <span class="tile-number">2</span>
+        <span class="tile-title">Bibliothek</span>
+        <span class="tile-subtitle">Gespeicherte Musik und Übersicht</span>
+      </button>
+
+      <button class="tile" data-key="likes" type="button">
+        <span class="tile-number">3</span>
+        <span class="tile-title">Likes</span>
+        <span class="tile-subtitle">Deine favorisierten Tracks</span>
+      </button>
+
+      <button class="tile" data-key="playlists" type="button">
+        <span class="tile-number">4</span>
+        <span class="tile-title">Playlists</span>
+        <span class="tile-subtitle">Sets und eigene Sammlungen</span>
+      </button>
+
+      <button class="tile" data-key="stream" type="button">
+        <span class="tile-number">5</span>
+        <span class="tile-title">Stream</span>
+        <span class="tile-subtitle">Neue Musik von gefolgten Accounts</span>
+      </button>
+
+      <button class="tile" data-key="discover" type="button">
+        <span class="tile-number">6</span>
+        <span class="tile-title">Entdecken</span>
+        <span class="tile-subtitle">Charts, Genres und Empfehlungen</span>
+      </button>
+
+      <button class="tile" data-key="search" type="button">
+        <span class="tile-number">7</span>
+        <span class="tile-title">Suche</span>
+        <span class="tile-subtitle">Tracks, Künstler und Playlists finden</span>
+      </button>
+
+      <button class="tile tile-secondary" data-key="login" type="button">
+        <span class="tile-number">8</span>
+        <span class="tile-title">Anmelden</span>
+        <span class="tile-subtitle">Einmal anmelden oder Konto wechseln</span>
+      </button>
     </section>
+
+    <footer>
+      <span>◀ ▶ ▲ ▼ Auswahl</span>
+      <span>OK öffnen</span>
+      <span>1–8 Schnellwahl</span>
+      <span>Zurück App schließen</span>
+    </footer>
   </main>
   <script src="app.js"></script>
 </body>
