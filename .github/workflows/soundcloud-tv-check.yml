@@ -1,0 +1,60 @@
+name: SoundCloud TV Pro Check
+
+on:
+  push:
+    branches: [feature/soundcloud-webos-1.0]
+    paths:
+      - 'webos-soundcloud/**'
+      - '.github/workflows/soundcloud-tv-check.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'webos-soundcloud/**'
+      - '.github/workflows/soundcloud-tv-check.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Check JavaScript and shell syntax
+        run: |
+          node --check webos-soundcloud/app.js
+          bash -n webos-soundcloud/package-termux.sh
+          bash -n webos-soundcloud/install-termux.sh
+
+      - name: Generate deterministic media assets
+        run: |
+          mkdir -p "$RUNNER_TEMP/fakebin"
+          printf '#!/bin/sh\nexit 0\n' > "$RUNNER_TEMP/fakebin/ares-package"
+          chmod +x "$RUNNER_TEMP/fakebin/ares-package"
+          PATH="$RUNNER_TEMP/fakebin:$PATH" bash webos-soundcloud/package-termux.sh
+
+      - name: Verify generated WAV
+        run: |
+          python - <<'PY'
+          import hashlib
+          import pathlib
+          import wave
+
+          path = pathlib.Path('webos-soundcloud/media/lg-background-test.wav')
+          assert path.is_file() and path.stat().st_size > 1_000_000
+
+          with wave.open(str(path), 'rb') as audio:
+              assert audio.getnchannels() == 1
+              assert audio.getsampwidth() == 2
+              assert audio.getframerate() == 16000
+              duration = audio.getnframes() / audio.getframerate()
+              assert 44.9 <= duration <= 45.1
+
+          print('size=', path.stat().st_size)
+          print('sha256=', hashlib.sha256(path.read_bytes()).hexdigest())
+          PY
