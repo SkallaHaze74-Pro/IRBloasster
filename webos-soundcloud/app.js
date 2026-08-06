@@ -1,20 +1,61 @@
 (() => {
   'use strict';
 
-  const urls = {
-    library: 'https://soundcloud.com/you/library',
-    login: 'https://soundcloud.com/login'
+  const destinations = {
+    library: {
+      label: 'Bibliothek',
+      url: 'https://soundcloud.com/you/library'
+    },
+    likes: {
+      label: 'Likes',
+      url: 'https://soundcloud.com/you/likes'
+    },
+    playlists: {
+      label: 'Playlists',
+      url: 'https://soundcloud.com/you/sets'
+    },
+    stream: {
+      label: 'Stream',
+      url: 'https://soundcloud.com/stream'
+    },
+    discover: {
+      label: 'Entdecken',
+      url: 'https://soundcloud.com/discover'
+    },
+    search: {
+      label: 'Suche',
+      url: 'https://soundcloud.com/search'
+    },
+    login: {
+      label: 'Anmeldung',
+      url: 'https://soundcloud.com/login'
+    }
   };
 
+  const columnCount = 4;
   const status = document.getElementById('status');
-  const libraryButton = document.getElementById('library');
-  const loginButton = document.getElementById('login');
-  const buttons = [libraryButton, loginButton];
+  const resumeSubtitle = document.getElementById('resume-subtitle');
+  const buttons = Array.from(document.querySelectorAll('.tile'));
 
   let selectedIndex = 0;
   let launching = false;
   let bridge = null;
-  let autoLaunchTimer = null;
+
+  function storedLastKey() {
+    const value = localStorage.getItem('soundcloud.lastDestination');
+    return destinations[value] && value !== 'login' ? value : 'library';
+  }
+
+  function updateResumeCard() {
+    const lastKey = storedLastKey();
+    const destination = destinations[lastKey];
+    resumeSubtitle.textContent = `${destination.label} erneut öffnen`;
+  }
+
+  function resolveButtonKey(button) {
+    const key = button.dataset.key;
+    return key === 'resume' ? storedLastKey() : key;
+  }
 
   function setButtonsDisabled(disabled) {
     buttons.forEach(button => {
@@ -23,21 +64,26 @@
   }
 
   function fallbackToHostedPage(url) {
-    status.textContent = 'LG-Browser konnte nicht gestartet werden – direkter Webmodus wird versucht …';
+    status.textContent = 'LG-Browser konnte nicht gestartet werden · direkter Webmodus wird versucht …';
     window.location.replace(url);
   }
 
-  function launchBrowser(url, label) {
-    if (launching) return;
+  function launchBrowser(key) {
+    const destination = destinations[key];
+    if (!destination || launching) return;
 
     launching = true;
-    clearTimeout(autoLaunchTimer);
     setButtonsDisabled(true);
-    status.textContent = `${label} wird im LG-Browser geöffnet …`;
+    status.textContent = `${destination.label} wird im LG-Browser geöffnet …`;
+
+    if (key !== 'login') {
+      localStorage.setItem('soundcloud.lastDestination', key);
+      updateResumeCard();
+    }
 
     try {
       if (typeof PalmServiceBridge !== 'function') {
-        fallbackToHostedPage(url);
+        fallbackToHostedPage(destination.url);
         return;
       }
 
@@ -55,7 +101,7 @@
         }
 
         if (response && response.returnValue === false) {
-          fallbackToHostedPage(url);
+          fallbackToHostedPage(destination.url);
         }
       };
 
@@ -64,18 +110,18 @@
         JSON.stringify({
           id: 'com.webos.app.browser',
           params: {
-            target: url
+            target: destination.url
           }
         })
       );
 
       setTimeout(() => {
         if (!callbackReceived && !document.hidden) {
-          fallbackToHostedPage(url);
+          fallbackToHostedPage(destination.url);
         }
       }, 4000);
     } catch (_) {
-      fallbackToHostedPage(url);
+      fallbackToHostedPage(destination.url);
     }
   }
 
@@ -84,19 +130,45 @@
     buttons[selectedIndex].focus();
   }
 
+  function moveHorizontal(delta) {
+    const rowStart = Math.floor(selectedIndex / columnCount) * columnCount;
+    const rowLength = Math.min(columnCount, buttons.length - rowStart);
+    const position = selectedIndex - rowStart;
+    focusButton(rowStart + (position + delta + rowLength) % rowLength);
+  }
+
+  function moveVertical(delta) {
+    const target = selectedIndex + delta * columnCount;
+    if (target >= 0 && target < buttons.length) {
+      focusButton(target);
+      return;
+    }
+
+    const column = selectedIndex % columnCount;
+    if (delta > 0) {
+      focusButton(Math.min(column, buttons.length - 1));
+    } else {
+      const lastRowStart = Math.floor((buttons.length - 1) / columnCount) * columnCount;
+      focusButton(Math.min(lastRowStart + column, buttons.length - 1));
+    }
+  }
+
   function resetLauncher() {
     launching = false;
     setButtonsDisabled(false);
-    status.textContent = 'SoundCloud wird im LG-Browser geöffnet …';
-    focusButton(0);
+    status.textContent = 'Bereit · Anmeldung bleibt im LG-Browser gespeichert';
+    updateResumeCard();
+    focusButton(selectedIndex);
   }
 
-  libraryButton.addEventListener('click', () => {
-    launchBrowser(urls.library, 'Deine SoundCloud-Bibliothek');
-  });
+  buttons.forEach((button, index) => {
+    button.addEventListener('click', () => {
+      launchBrowser(resolveButtonKey(button));
+    });
 
-  loginButton.addEventListener('click', () => {
-    launchBrowser(urls.login, 'Die SoundCloud-Anmeldung');
+    button.addEventListener('focus', () => {
+      selectedIndex = index;
+    });
   });
 
   document.addEventListener('visibilitychange', () => {
@@ -106,26 +178,43 @@
   });
 
   document.addEventListener('keydown', event => {
-    const keyCode = event.keyCode;
     const key = event.key;
+    const keyCode = event.keyCode;
 
-    if (key === 'ArrowUp' || key === 'ArrowLeft' || keyCode === 38 || keyCode === 37) {
-      clearTimeout(autoLaunchTimer);
-      focusButton(selectedIndex - 1);
+    if (key === 'ArrowLeft' || keyCode === 37) {
+      moveHorizontal(-1);
       event.preventDefault();
       return;
     }
 
-    if (key === 'ArrowDown' || key === 'ArrowRight' || keyCode === 40 || keyCode === 39) {
-      clearTimeout(autoLaunchTimer);
-      focusButton(selectedIndex + 1);
+    if (key === 'ArrowRight' || keyCode === 39) {
+      moveHorizontal(1);
+      event.preventDefault();
+      return;
+    }
+
+    if (key === 'ArrowUp' || keyCode === 38) {
+      moveVertical(-1);
+      event.preventDefault();
+      return;
+    }
+
+    if (key === 'ArrowDown' || keyCode === 40) {
+      moveVertical(1);
       event.preventDefault();
       return;
     }
 
     if (key === 'Enter' || keyCode === 13) {
-      clearTimeout(autoLaunchTimer);
       buttons[selectedIndex].click();
+      event.preventDefault();
+      return;
+    }
+
+    const numeric = Number(key);
+    if (Number.isInteger(numeric) && numeric >= 1 && numeric <= buttons.length) {
+      focusButton(numeric - 1);
+      buttons[numeric - 1].click();
       event.preventDefault();
       return;
     }
@@ -136,16 +225,6 @@
     }
   });
 
-  buttons.forEach((button, index) => {
-    button.addEventListener('focus', () => {
-      selectedIndex = index;
-      clearTimeout(autoLaunchTimer);
-    });
-  });
-
+  updateResumeCard();
   focusButton(0);
-
-  autoLaunchTimer = setTimeout(() => {
-    launchBrowser(urls.library, 'Deine SoundCloud-Bibliothek');
-  }, 1800);
 })();
