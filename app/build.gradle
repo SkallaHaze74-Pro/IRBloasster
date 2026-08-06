@@ -33,9 +33,25 @@ android {
         jvmTarget = '17'
     }
 
+    buildTypes {
+        debug {
+            minifyEnabled false
+        }
+
+        compact {
+            initWith debug
+            debuggable false
+            minifyEnabled true
+            shrinkResources true
+            signingConfig signingConfigs.debug
+            matchingFallbacks = ['debug']
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+        }
+    }
+
     packaging {
         resources {
-            excludes += '/META-INF/{AL2.0,LGPL2.1}'
+            excludes += '/META-INF/{AL2.0,LGPL2.1,DEPENDENCIES,LICENSE*,NOTICE*}'
         }
     }
 }
