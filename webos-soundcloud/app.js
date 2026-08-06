@@ -84,12 +84,25 @@
     buttons[selectedIndex].focus();
   }
 
+  function resetLauncher() {
+    launching = false;
+    setButtonsDisabled(false);
+    status.textContent = 'SoundCloud wird im LG-Browser geöffnet …';
+    focusButton(0);
+  }
+
   libraryButton.addEventListener('click', () => {
     launchBrowser(urls.library, 'Deine SoundCloud-Bibliothek');
   });
 
   loginButton.addEventListener('click', () => {
     launchBrowser(urls.login, 'Die SoundCloud-Anmeldung');
+  });
+
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden) {
+      setTimeout(resetLauncher, 250);
+    }
   });
 
   document.addEventListener('keydown', event => {
