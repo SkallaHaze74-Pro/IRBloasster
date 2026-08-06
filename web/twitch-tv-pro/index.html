@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#09040f">
+  <title>Twitch TV Pro</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <main id="app">
+    <section id="setup" class="setup-panel">
+      <div class="logo">TV</div>
+      <p class="eyebrow">SMARTIR · TWITCH SOURCE PLAYER</p>
+      <h1>Twitch TV Pro</h1>
+      <p class="lead">Offizieller Twitch-Player mit automatischer Auswahl der höchsten verfügbaren Streamqualität.</p>
+
+      <label for="channel">Twitch-Kanalname</label>
+      <div class="channel-row">
+        <input id="channel" type="text" inputmode="text" autocomplete="off" spellcheck="false" placeholder="z. B. kanalname">
+        <button id="start" type="button">In bester Qualität starten</button>
+      </div>
+
+      <div class="quick-actions">
+        <button id="resume" class="secondary" type="button">Letzten Kanal starten</button>
+        <button id="twitch-site" class="secondary" type="button">Twitch Login & Gefolgt</button>
+      </div>
+
+      <p class="hint">Der Player nutzt ausschließlich den offiziellen Twitch-Embed. Werbung, Abos und Zugriffskontrollen bleiben unverändert.</p>
+    </section>
+
+    <section id="player-screen" class="player-screen hidden">
+      <div class="player-frame">
+        <div id="twitch-player"></div>
+      </div>
+      <aside class="control-bar">
+        <div>
+          <strong id="channel-label">–</strong>
+          <span id="status">Player wird geladen …</span>
+        </div>
+        <div class="quality-box">
+          <span>Qualität</span>
+          <strong id="quality">Auto</strong>
+        </div>
+        <div class="keys">
+          <span>OK Pause/Play</span>
+          <span>◀ ▶ Qualität</span>
+          <span>Zurück Kanalwahl</span>
+        </div>
+      </aside>
+    </section>
+  </main>
+
+  <script src="https://player.twitch.tv/js/embed/v1.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
