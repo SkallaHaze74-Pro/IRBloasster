@@ -72,10 +72,10 @@
         <span class="tile-subtitle">Einmal anmelden oder Konto wechseln</span>
       </button>
 
-      <button class="tile tile-experiment" data-key="background" type="button">
+      <button class="tile tile-experiment" data-key="soundshare" type="button">
         <span class="tile-number">9</span>
-        <span class="tile-title">LG Hintergrundtest</span>
-        <span class="tile-subtitle">Musik an den LG-Systemplayer übergeben</span>
+        <span class="tile-title">Bluetooth Sound Share</span>
+        <span class="tile-subtitle">SoundCloud vom Handy über den TV wiedergeben</span>
       </button>
     </section>
 
@@ -87,29 +87,27 @@
     </footer>
   </main>
 
-  <section id="background-lab" class="modal hidden" aria-label="LG Hintergrundtest">
+  <section id="soundshare-lab" class="modal hidden" aria-label="Bluetooth Sound Share">
     <div class="modal-card">
-      <p class="modal-eyebrow">EXPERIMENT · NICHT-DESTRUKTIV</p>
-      <h2>LG-Systemplayer-Hintergrundtest</h2>
-      <p id="background-status" class="modal-status">
-        Zuerst den Testton in der App prüfen. Danach an den LG-Musikplayer übergeben und auf HDMI oder Live-TV wechseln.
+      <p class="modal-eyebrow">NÄCHSTER SYSTEMTEST · OHNE ROOT</p>
+      <h2>SoundCloud per Bluetooth Sound Share</h2>
+      <p id="soundshare-status" class="modal-status">
+        Der vorige Web-App- und LG-Player-Test ist auf diesem Fernseher fehlgeschlagen. Jetzt testen wir den eingebauten Bluetooth-Empfänger des TV.
       </p>
 
       <div class="modal-actions">
-        <button id="test-in-app" type="button">1 · Testton in der App</button>
-        <button id="handoff-local" type="button">2 · LG Player mit lokaler WAV</button>
-        <button id="handoff-https" type="button">3 · LG Player mit HTTPS-Fallback</button>
-        <button id="close-background-lab" class="secondary" type="button">Zurück zum Dashboard</button>
+        <button id="open-soundshare" type="button">1 · Sound Share direkt öffnen</button>
+        <button id="open-homeconnect" type="button">2 · Home Dashboard öffnen</button>
+        <button id="close-soundshare-lab" class="secondary" type="button">Zurück zum Dashboard</button>
       </div>
 
       <div class="test-steps">
-        <strong>Erfolgskriterium</strong>
-        <span>Musik startet im LG-Player → Eingangstaste drücken → HDMI/Live-TV wählen → prüfen, ob der Ton weiterläuft.</span>
+        <strong>Testablauf</strong>
+        <span>Sound Share öffnen → am Xiaomi Bluetooth einschalten und LG TV auswählen → SoundCloud auf dem Handy starten → am TV auf HDMI oder Live-TV wechseln. Erfolg nur, wenn die Handy-Musik weiter über den TV läuft.</span>
       </div>
     </div>
   </section>
 
-  <audio id="background-test-audio" preload="auto" src="media/lg-background-test.wav"></audio>
   <script src="app.js"></script>
 </body>
 </html>
