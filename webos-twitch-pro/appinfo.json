@@ -1,0 +1,15 @@
+{
+  "id": "com.skallahaze.twitchtvpro",
+  "version": "1.0.0",
+  "vendor": "SkallaHaze74-Pro",
+  "type": "web",
+  "main": "index.html",
+  "title": "Twitch TV Pro",
+  "icon": "icon.png",
+  "largeIcon": "largeicon.png",
+  "iconColor": "#9146ff",
+  "appDescription": "Private high-quality Twitch launcher for LG webOS",
+  "resolution": "1920x1080",
+  "disableBackHistoryAPI": true,
+  "transparent": false
+}
