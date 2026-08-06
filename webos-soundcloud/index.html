@@ -71,15 +71,45 @@
         <span class="tile-title">Anmelden</span>
         <span class="tile-subtitle">Einmal anmelden oder Konto wechseln</span>
       </button>
+
+      <button class="tile tile-experiment" data-key="background" type="button">
+        <span class="tile-number">9</span>
+        <span class="tile-title">LG Hintergrundtest</span>
+        <span class="tile-subtitle">Musik an den LG-Systemplayer übergeben</span>
+      </button>
     </section>
 
     <footer>
       <span>◀ ▶ ▲ ▼ Auswahl</span>
       <span>OK öffnen</span>
-      <span>1–8 Schnellwahl</span>
+      <span>1–9 Schnellwahl</span>
       <span>Zurück App schließen</span>
     </footer>
   </main>
+
+  <section id="background-lab" class="modal hidden" aria-label="LG Hintergrundtest">
+    <div class="modal-card">
+      <p class="modal-eyebrow">EXPERIMENT · NICHT-DESTRUKTIV</p>
+      <h2>LG-Systemplayer-Hintergrundtest</h2>
+      <p id="background-status" class="modal-status">
+        Zuerst den Testton in der App prüfen. Danach an den LG-Musikplayer übergeben und auf HDMI oder Live-TV wechseln.
+      </p>
+
+      <div class="modal-actions">
+        <button id="test-in-app" type="button">1 · Testton in der App</button>
+        <button id="handoff-local" type="button">2 · LG Player mit lokaler WAV</button>
+        <button id="handoff-https" type="button">3 · LG Player mit HTTPS-Fallback</button>
+        <button id="close-background-lab" class="secondary" type="button">Zurück zum Dashboard</button>
+      </div>
+
+      <div class="test-steps">
+        <strong>Erfolgskriterium</strong>
+        <span>Musik startet im LG-Player → Eingangstaste drücken → HDMI/Live-TV wählen → prüfen, ob der Ton weiterläuft.</span>
+      </div>
+    </div>
+  </section>
+
+  <audio id="background-test-audio" preload="auto" src="media/lg-background-test.wav"></audio>
   <script src="app.js"></script>
 </body>
 </html>
