@@ -8,9 +8,9 @@ cd "$ROOT"
 chmod +x webos-soundcloud/package-termux.sh
 ./webos-soundcloud/package-termux.sh
 
-IPK="$(find "$ROOT" -maxdepth 1 -name 'com.skallahaze.soundcloudtv_1.2.0_all.ipk' -print -quit)"
+IPK="$(find "$ROOT" -maxdepth 1 -name 'com.skallahaze.soundcloudtv_1.3.0_all.ipk' -print -quit)"
 if [[ -z "$IPK" ]]; then
-  echo "FEHLER: SoundCloud TV Pro 1.2.0 IPK wurde nicht erzeugt."
+  echo "FEHLER: SoundCloud TV Pro 1.3.0 IPK wurde nicht erzeugt."
   exit 1
 fi
 
