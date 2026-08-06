@@ -4,7 +4,7 @@ on:
   push:
     branches: [main]
   pull_request:
-    branches: [main]
+    branches: [main, feature/smartir-1.2-tv-lab]
   workflow_dispatch:
 
 permissions:
@@ -34,23 +34,36 @@ jobs:
         with:
           cache-provider: basic
 
-      - name: Test, lint and build debug APK
+      - name: Test, lint and build debug plus compact APK
         run: |
           chmod +x gradlew
-          ./gradlew --no-daemon --stacktrace clean testDebugUnitTest lintDebug assembleDebug
+          ./gradlew --no-daemon --stacktrace clean testDebugUnitTest lintDebug assembleDebug assembleCompact
 
-      - name: Prepare named APK and checksum
+      - name: Prepare named APKs and checksums
         run: |
           cp app/build/outputs/apk/debug/app-debug.apk SmartIR-v1.2.5-debug.apk
+          cp app/build/outputs/apk/compact/app-compact.apk SmartIR-v1.2.5-compact.apk
           sha256sum SmartIR-v1.2.5-debug.apk > SmartIR-v1.2.5-debug.apk.sha256
+          sha256sum SmartIR-v1.2.5-compact.apk > SmartIR-v1.2.5-compact.apk.sha256
+          ls -lh SmartIR-v1.2.5-*.apk
 
-      - name: Upload SmartIR APK
+      - name: Upload SmartIR debug APK
         uses: actions/upload-artifact@v7
         with:
           name: SmartIR-v1.2.5-debug
           path: |
             SmartIR-v1.2.5-debug.apk
             SmartIR-v1.2.5-debug.apk.sha256
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Upload SmartIR compact APK
+        uses: actions/upload-artifact@v7
+        with:
+          name: SmartIR-v1.2.5-compact
+          path: |
+            SmartIR-v1.2.5-compact.apk
+            SmartIR-v1.2.5-compact.apk.sha256
           if-no-files-found: error
           retention-days: 30
 
