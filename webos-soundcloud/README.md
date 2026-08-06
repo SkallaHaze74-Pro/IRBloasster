@@ -1,16 +1,28 @@
 # SoundCloud TV Pro for LG webOS
 
-Private remote-first launcher for LG webOS TV. Version 1.2.0 uses the built-in LG browser for SoundCloud playback and account login, avoiding the black login screen seen inside packaged `file://` web apps.
+Private remote-first launcher for LG webOS TV. Version 1.3.0 adds a non-destructive experiment that hands a known-good audio file to the built-in LG media player to test whether playback continues after switching to HDMI or Live TV.
 
 ## Features
 
 - persistent LG browser session instead of storing credentials in the IPK
-- large 4×2 TV dashboard for Weiterhören, Bibliothek, Likes, Playlists, Stream, Entdecken, Suche and Anmeldung
+- large TV dashboard for Weiterhören, Bibliothek, Likes, Playlists, Stream, Entdecken, Suche and Anmeldung
 - remembers the last opened SoundCloud destination locally
-- Magic Remote, arrow keys, OK and numeric shortcuts 1–8
+- Magic Remote, arrow keys, OK and numeric shortcuts 1–9
 - 1920×1080 OLED-friendly interface
 - no SoundCloud password, cookie or access token inside the package
 - no additional SmartIR tracking or advertising
+
+## LG background test
+
+The `LG Hintergrundtest` tile contains three safe tests:
+
+1. Play the bundled 45-second PCM WAV inside SoundCloud TV Pro.
+2. Hand the same installed WAV to `com.webos.app.mediadiscovery` with `mediaType: MUSIC`.
+3. Try an HTTPS Ogg/Vorbis source if the local package path is rejected.
+
+After the LG player starts, press the Input button and switch to HDMI or Live TV. The experiment succeeds only if the music continues after that source switch. The app does not change service-menu values, NVRAM, panel settings or firmware.
+
+The system-player launch payload is an undocumented compatibility path on consumer webOS. A successful launch callback only means that the launch request was accepted; the real result is whether audio continues after the source change.
 
 ## Install from Termux
 
