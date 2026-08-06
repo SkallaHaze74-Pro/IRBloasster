@@ -24,43 +24,56 @@ body {
 }
 
 .card {
-  width: 760px;
-  padding: 64px 72px;
+  width: 820px;
+  padding: 54px 66px;
   border: 2px solid rgba(255, 255, 255, 0.13);
   border-radius: 36px;
-  background: rgba(10, 10, 10, 0.82);
+  background: rgba(10, 10, 10, 0.84);
   box-shadow: 0 30px 90px rgba(0, 0, 0, 0.55);
   text-align: center;
 }
 
 h1 {
-  margin: 26px 0 14px;
-  font-size: 68px;
+  margin: 22px 0 12px;
+  font-size: 66px;
   letter-spacing: -2px;
 }
 
 p {
   margin: 0;
-  font-size: 27px;
+  font-size: 26px;
   line-height: 1.45;
   color: #e5e5e5;
 }
 
+.actions {
+  margin-top: 30px;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 16px;
+}
+
 button {
-  margin-top: 34px;
-  min-width: 380px;
-  padding: 22px 34px;
-  border: 0;
+  width: 100%;
+  padding: 21px 30px;
+  border: 2px solid transparent;
   border-radius: 18px;
   background: linear-gradient(90deg, #ff8800, #ff3300);
   color: #fff;
-  font-size: 30px;
+  font-size: 29px;
   font-weight: 700;
   box-shadow: 0 10px 30px rgba(255, 85, 0, 0.35);
 }
 
+button.secondary {
+  background: #242424;
+  border-color: rgba(255, 255, 255, 0.18);
+  box-shadow: none;
+}
+
 button:focus {
-  outline: 6px solid rgba(255, 255, 255, 0.9);
+  outline: 6px solid rgba(255, 255, 255, 0.95);
   outline-offset: 5px;
 }
 
@@ -69,13 +82,13 @@ button:disabled {
 }
 
 .hint {
-  margin-top: 30px;
-  font-size: 21px;
+  margin-top: 26px;
+  font-size: 20px;
   color: #a9a9a9;
 }
 
 .wave {
-  height: 124px;
+  height: 112px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -90,11 +103,11 @@ button:disabled {
 }
 
 .wave span:nth-child(1),
-.wave span:nth-child(9) { height: 34px; }
+.wave span:nth-child(9) { height: 32px; }
 .wave span:nth-child(2),
-.wave span:nth-child(8) { height: 58px; }
+.wave span:nth-child(8) { height: 54px; }
 .wave span:nth-child(3),
-.wave span:nth-child(7) { height: 82px; }
+.wave span:nth-child(7) { height: 76px; }
 .wave span:nth-child(4),
-.wave span:nth-child(6) { height: 106px; }
-.wave span:nth-child(5) { height: 124px; }
+.wave span:nth-child(6) { height: 98px; }
+.wave span:nth-child(5) { height: 112px; }
