@@ -32,25 +32,31 @@
     }
   };
 
-  const localTestSource = 'file:///media/developer/apps/usr/palm/applications/com.skallahaze.soundcloudtv/media/lg-background-test.wav';
-  const httpsTestSource = 'https://media.w3.org/2010/07/bunny/04-Death_Becomes_Fur.oga';
-  const columnCount = 3;
+  const systemApps = {
+    soundShare: {
+      id: 'com.webos.app.btspeakerapp',
+      label: 'Bluetooth Sound Share'
+    },
+    homeConnect: {
+      id: 'com.webos.app.homeconnect',
+      label: 'Home Dashboard'
+    }
+  };
 
+  const columnCount = 3;
   const status = document.getElementById('status');
   const resumeSubtitle = document.getElementById('resume-subtitle');
   const menuButtons = Array.from(document.querySelectorAll('.tile'));
-  const backgroundLab = document.getElementById('background-lab');
-  const backgroundStatus = document.getElementById('background-status');
-  const testAudio = document.getElementById('background-test-audio');
-  const backgroundButtons = [
-    document.getElementById('test-in-app'),
-    document.getElementById('handoff-local'),
-    document.getElementById('handoff-https'),
-    document.getElementById('close-background-lab')
+  const soundShareLab = document.getElementById('soundshare-lab');
+  const soundShareStatus = document.getElementById('soundshare-status');
+  const soundShareButtons = [
+    document.getElementById('open-soundshare'),
+    document.getElementById('open-homeconnect'),
+    document.getElementById('close-soundshare-lab')
   ];
 
   let selectedIndex = 0;
-  let backgroundIndex = 0;
+  let soundShareIndex = 0;
   let modalOpen = false;
   let launching = false;
   let bridge = null;
@@ -68,6 +74,12 @@
 
   function setMenuDisabled(disabled) {
     menuButtons.forEach(button => {
+      button.disabled = disabled;
+    });
+  }
+
+  function setSoundShareDisabled(disabled) {
+    soundShareButtons.forEach(button => {
       button.disabled = disabled;
     });
   }
@@ -134,62 +146,27 @@
     }
   }
 
-  function buildMediaPayload(source, kind) {
-    const isHttps = kind === 'https';
-    return {
-      id: 'com.webos.app.mediadiscovery',
-      params: {
-        payload: [{
-          fullPath: source,
-          artist: 'SmartIR',
-          subtitle: '',
-          dlnaInfo: {
-            flagVal: 4096,
-            cleartextSize: '-1',
-            contentLength: '-1',
-            opVal: 1,
-            protocolInfo: isHttps
-              ? 'http-get:*:audio/ogg:DLNA.ORG_OP=01;DLNA.ORG_CI=0;DLNA.ORG_FLAGS=01500000000000000000000000000000'
-              : 'file-get:*:audio/wav:*',
-            duration: isHttps ? 0 : 45
-          },
-          mediaType: 'MUSIC',
-          thumbnail: '',
-          deviceType: 'DMR',
-          album: 'SmartIR Tests',
-          fileName: isHttps
-            ? 'SmartIR HTTPS Hintergrundtest'
-            : 'SmartIR lokaler Hintergrundtest',
-          lastPlayPosition: 0
-        }]
-      }
-    };
-  }
-
-  function launchLgMusicPlayer(source, kind) {
-    if (launching) return;
+  function launchSystemApp(systemApp) {
+    if (!systemApp || launching) return;
 
     launching = true;
-    backgroundButtons.forEach(button => {
-      button.disabled = true;
-    });
-
-    const sourceLabel = kind === 'https' ? 'HTTPS-Fallback' : 'lokale WAV';
-    backgroundStatus.textContent = `LG-Musikplayer wird mit ${sourceLabel} gestartet …`;
-    status.textContent = `LG Hintergrundtest · ${sourceLabel}`;
+    setSoundShareDisabled(true);
+    status.textContent = `${systemApp.label} wird geöffnet …`;
+    soundShareStatus.textContent = `${systemApp.label} wird gestartet …`;
 
     try {
       if (typeof PalmServiceBridge !== 'function') {
         launching = false;
-        backgroundButtons.forEach(button => {
-          button.disabled = false;
-        });
-        backgroundStatus.textContent = 'PalmServiceBridge fehlt. Der Systemplayer kann aus dieser Umgebung nicht gestartet werden.';
+        setSoundShareDisabled(false);
+        soundShareStatus.textContent = 'PalmServiceBridge fehlt. Öffne das Home Dashboard manuell über langes Drücken der Eingangstaste.';
         return;
       }
 
       bridge = new PalmServiceBridge();
+      let callbackReceived = false;
+
       bridge.onservicecallback = responseText => {
+        callbackReceived = true;
         let response = null;
 
         try {
@@ -200,65 +177,47 @@
 
         if (response && response.returnValue === false) {
           launching = false;
-          backgroundButtons.forEach(button => {
-            button.disabled = false;
-          });
-          backgroundStatus.textContent = `LG-Player hat den Start abgelehnt: ${response.errorText || 'unbekannter Fehler'}`;
+          setSoundShareDisabled(false);
+          soundShareStatus.textContent = `${systemApp.label} wurde abgelehnt: ${response.errorText || 'unbekannter Fehler'}. Nutze alternativ das Home Dashboard.`;
           return;
         }
 
-        backgroundStatus.textContent = 'Startbefehl angenommen. Sobald Musik läuft: Eingangstaste drücken, HDMI oder Live-TV wählen und prüfen, ob der Ton weiterläuft.';
+        soundShareStatus.textContent = `${systemApp.label} wurde gestartet. Verbinde jetzt dein Xiaomi per Bluetooth mit dem LG TV und starte SoundCloud auf dem Handy.`;
       };
 
       bridge.call(
         'luna://com.webos.applicationManager/launch',
-        JSON.stringify(buildMediaPayload(source, kind))
+        JSON.stringify({
+          id: systemApp.id,
+          params: {}
+        })
       );
 
       setTimeout(() => {
-        if (!document.hidden && launching) {
+        if (!callbackReceived && !document.hidden) {
           launching = false;
-          backgroundButtons.forEach(button => {
-            button.disabled = false;
-          });
-          backgroundStatus.textContent = 'Kein sichtbarer Wechsel zum LG-Player. Probiere die andere Quelle oder sende mir ein Foto der Meldung.';
+          setSoundShareDisabled(false);
+          soundShareStatus.textContent = `Kein sichtbarer Wechsel zu ${systemApp.label}. Öffne das Home Dashboard mit langem Drücken der Eingangstaste und wähle dort Sound Share im Bereich Mobil.`;
         }
-      }, 5500);
+      }, 4500);
     } catch (error) {
       launching = false;
-      backgroundButtons.forEach(button => {
-        button.disabled = false;
-      });
-      backgroundStatus.textContent = `LG-Player konnte nicht gestartet werden: ${error && error.message ? error.message : 'unbekannter Fehler'}`;
+      setSoundShareDisabled(false);
+      soundShareStatus.textContent = `${systemApp.label} konnte nicht gestartet werden: ${error && error.message ? error.message : 'unbekannter Fehler'}`;
     }
   }
 
-  function playAppTest() {
-    testAudio.pause();
-    testAudio.currentTime = 0;
-
-    const playResult = testAudio.play();
-    backgroundStatus.textContent = 'Der 45-Sekunden-Testton läuft jetzt in SoundCloud TV Pro. Wenn du ihn hörst, ist die Datei in Ordnung.';
-
-    if (playResult && typeof playResult.catch === 'function') {
-      playResult.catch(() => {
-        backgroundStatus.textContent = 'Der Testton konnte in der App nicht gestartet werden. Drücke erneut OK oder prüfe die TV-Lautstärke.';
-      });
-    }
-  }
-
-  function openBackgroundLab() {
+  function openSoundShareLab() {
     modalOpen = true;
-    backgroundLab.classList.remove('hidden');
-    backgroundStatus.textContent = 'Zuerst den Testton in der App prüfen. Danach an den LG-Musikplayer übergeben und auf HDMI oder Live-TV wechseln.';
-    backgroundIndex = 0;
-    backgroundButtons[backgroundIndex].focus();
+    soundShareLab.classList.remove('hidden');
+    soundShareStatus.textContent = 'Der vorige Systemplayer-Test ist fehlgeschlagen. Jetzt testen wir den eingebauten Bluetooth-Empfänger des LG TV.';
+    soundShareIndex = 0;
+    soundShareButtons[soundShareIndex].focus();
   }
 
-  function closeBackgroundLab() {
-    testAudio.pause();
+  function closeSoundShareLab() {
     modalOpen = false;
-    backgroundLab.classList.add('hidden');
+    soundShareLab.classList.add('hidden');
     menuButtons[selectedIndex].focus();
   }
 
@@ -267,9 +226,9 @@
     menuButtons[selectedIndex].focus();
   }
 
-  function focusBackground(index) {
-    backgroundIndex = (index + backgroundButtons.length) % backgroundButtons.length;
-    backgroundButtons[backgroundIndex].focus();
+  function focusSoundShare(index) {
+    soundShareIndex = (index + soundShareButtons.length) % soundShareButtons.length;
+    soundShareButtons[soundShareIndex].focus();
   }
 
   function moveHorizontal(delta) {
@@ -298,15 +257,13 @@
   function resetLauncher() {
     launching = false;
     setMenuDisabled(false);
-    backgroundButtons.forEach(button => {
-      button.disabled = false;
-    });
+    setSoundShareDisabled(false);
     status.textContent = 'Bereit · Anmeldung bleibt im LG-Browser gespeichert';
     updateResumeCard();
 
     if (modalOpen) {
-      backgroundStatus.textContent = 'Zurück vom LG-Player. Ist die Musik beim Wechsel zu HDMI oder Live-TV weitergelaufen?';
-      backgroundButtons[backgroundIndex].focus();
+      soundShareStatus.textContent = 'Zurück von Sound Share. Starte SoundCloud auf dem Handy und teste anschließend den Wechsel auf HDMI oder Live-TV.';
+      soundShareButtons[soundShareIndex].focus();
     } else {
       menuButtons[selectedIndex].focus();
     }
@@ -316,8 +273,8 @@
     button.addEventListener('click', () => {
       const key = button.dataset.key;
 
-      if (key === 'background') {
-        openBackgroundLab();
+      if (key === 'soundshare') {
+        openSoundShareLab();
         return;
       }
 
@@ -329,20 +286,15 @@
     });
   });
 
-  backgroundButtons.forEach((button, index) => {
+  soundShareButtons.forEach((button, index) => {
     button.addEventListener('focus', () => {
-      backgroundIndex = index;
+      soundShareIndex = index;
     });
   });
 
-  backgroundButtons[0].addEventListener('click', playAppTest);
-  backgroundButtons[1].addEventListener('click', () => launchLgMusicPlayer(localTestSource, 'local'));
-  backgroundButtons[2].addEventListener('click', () => launchLgMusicPlayer(httpsTestSource, 'https'));
-  backgroundButtons[3].addEventListener('click', closeBackgroundLab);
-
-  testAudio.addEventListener('ended', () => {
-    backgroundStatus.textContent = 'App-Test beendet. Jetzt kannst du die lokale WAV an den LG-Musikplayer übergeben.';
-  });
+  soundShareButtons[0].addEventListener('click', () => launchSystemApp(systemApps.soundShare));
+  soundShareButtons[1].addEventListener('click', () => launchSystemApp(systemApps.homeConnect));
+  soundShareButtons[2].addEventListener('click', closeSoundShareLab);
 
   document.addEventListener('visibilitychange', () => {
     if (!document.hidden) {
@@ -356,16 +308,16 @@
 
     if (modalOpen) {
       if (key === 'ArrowUp' || key === 'ArrowLeft' || keyCode === 38 || keyCode === 37) {
-        focusBackground(backgroundIndex - 1);
+        focusSoundShare(soundShareIndex - 1);
         event.preventDefault();
       } else if (key === 'ArrowDown' || key === 'ArrowRight' || keyCode === 40 || keyCode === 39) {
-        focusBackground(backgroundIndex + 1);
+        focusSoundShare(soundShareIndex + 1);
         event.preventDefault();
       } else if (key === 'Enter' || keyCode === 13) {
-        backgroundButtons[backgroundIndex].click();
+        soundShareButtons[soundShareIndex].click();
         event.preventDefault();
       } else if (key === 'Escape' || key === 'Backspace' || keyCode === 461 || keyCode === 8) {
-        closeBackgroundLab();
+        closeSoundShareLab();
         event.preventDefault();
       }
       return;
