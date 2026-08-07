@@ -1,6 +1,13 @@
 package com.skallahaze.irbloasster
 
+import android.Manifest
+import android.app.Activity
+import android.content.Context
+import android.content.Intent
+import android.content.pm.PackageManager
+import android.media.projection.MediaProjectionManager
 import android.net.Uri
+import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -51,13 +58,18 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.core.content.ContextCompat
 import com.skallahaze.irbloasster.data.SettingsRepository
 import com.skallahaze.irbloasster.ui.theme.IRTheme
+import com.skallahaze.irbloasster.webos.LiveAudioCaptureService
+import com.skallahaze.irbloasster.webos.LiveAudioRuntime
 import com.skallahaze.irbloasster.webos.PhoneAudioHttpServer
 import com.skallahaze.irbloasster.webos.WebOsClient
 import com.skallahaze.irbloasster.webos.WebOsConnection
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import org.json.JSONObject
 
@@ -115,15 +127,23 @@ private fun AudioMixScreen(
     phoneServer: PhoneAudioHttpServer,
     onClose: () -> Unit,
 ) {
+    val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val webState = webOs.state
+    val projectionManager = remember {
+        context.getSystemService(Context.MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
+    }
+
     var streamUrl by rememberSaveable { mutableStateOf("") }
     var directUrl by rememberSaveable { mutableStateOf("") }
-    var sourceName by rememberSaveable { mutableStateOf("Noch keine Musikquelle gewählt") }
-    var status by rememberSaveable { mutableStateOf("Bereit für Web-Audio Mix Test") }
+    var sourceName by rememberSaveable { mutableStateOf("Noch keine Datei gewählt") }
+    var status by rememberSaveable { mutableStateOf("Bereit für SmartIR Live Audio") }
     var tvVolume by remember { mutableFloatStateOf((webState.volume ?: 50).toFloat()) }
     var musicVolume by rememberSaveable { mutableFloatStateOf(30f) }
     var bridgeRunning by rememberSaveable { mutableStateOf(false) }
+    var liveUrl by rememberSaveable { mutableStateOf(LiveAudioRuntime.streamUrl) }
+    var liveRunning by rememberSaveable { mutableStateOf(LiveAudioRuntime.running) }
+    var liveMessage by rememberSaveable { mutableStateOf(LiveAudioRuntime.message) }
 
     val bridgeInstalled = webState.apps.any { it.id == AUDIO_BRIDGE_APP_ID }
 
@@ -137,6 +157,42 @@ private fun AudioMixScreen(
         }
     }
 
+    LaunchedEffect(Unit) {
+        while (true) {
+            liveUrl = LiveAudioRuntime.streamUrl
+            liveRunning = LiveAudioRuntime.running
+            liveMessage = LiveAudioRuntime.message
+            delay(400L)
+        }
+    }
+
+    val captureLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.StartActivityForResult(),
+    ) { result ->
+        val data = result.data
+        if (result.resultCode == Activity.RESULT_OK && data != null) {
+            val serviceIntent = Intent(context, LiveAudioCaptureService::class.java).apply {
+                action = LiveAudioCaptureService.ACTION_START
+                putExtra(LiveAudioCaptureService.EXTRA_RESULT_CODE, result.resultCode)
+                putExtra(LiveAudioCaptureService.EXTRA_RESULT_DATA, data)
+            }
+            ContextCompat.startForegroundService(context, serviceIntent)
+            status = "Live-Audio-Capture startet …"
+        } else {
+            status = "Live-Audio-Freigabe abgebrochen"
+        }
+    }
+
+    val audioPermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission(),
+    ) { granted ->
+        if (granted) {
+            captureLauncher.launch(projectionManager.createScreenCaptureIntent())
+        } else {
+            status = "Audioaufnahme-Berechtigung wurde nicht erlaubt"
+        }
+    }
+
     val picker = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.OpenDocument(),
     ) { uri: Uri? ->
@@ -147,7 +203,7 @@ private fun AudioMixScreen(
                 .onSuccess { url ->
                     streamUrl = url
                     sourceName = phoneServer.currentName().ifBlank { "Lokale Audiodatei" }
-                    status = "Lokaler Stream bereit: $url"
+                    status = "Datei-Stream bereit: $url"
                 }
                 .onFailure { error ->
                     status = error.message ?: "Audiodatei konnte nicht vorbereitet werden"
@@ -155,9 +211,9 @@ private fun AudioMixScreen(
         }
     }
 
-    fun selectedStreamUrl(): String = directUrl.trim().ifBlank { streamUrl.trim() }
+    fun selectedFileUrl(): String = directUrl.trim().ifBlank { streamUrl.trim() }
 
-    fun sendBridge(action: String, includeStream: Boolean = false): Boolean {
+    fun sendBridge(action: String, explicitStreamUrl: String? = null): Boolean {
         if (webState.connection != WebOsConnection.CONNECTED) {
             status = "Zuerst mit dem LG TV verbinden"
             return false
@@ -167,14 +223,7 @@ private fun AudioMixScreen(
             .put("action", action)
             .put("volume", musicVolume.toInt().coerceIn(0, 100))
 
-        if (includeStream) {
-            val url = selectedStreamUrl()
-            if (!url.startsWith("http://") && !url.startsWith("https://")) {
-                status = "Bitte Audiodatei wählen oder eine direkte http(s)-Audio-URL eintragen"
-                return false
-            }
-            params.put("streamUrl", url)
-        }
+        explicitStreamUrl?.takeIf { it.isNotBlank() }?.let { params.put("streamUrl", it) }
 
         val payload = JSONObject()
             .put("id", AUDIO_BRIDGE_APP_ID)
@@ -188,14 +237,56 @@ private fun AudioMixScreen(
         return sent
     }
 
-    fun startBridge() {
+    fun startFileBridge() {
         if (!bridgeInstalled) {
             status = "SmartIR Audio Bridge ist auf dem TV noch nicht installiert"
             return
         }
-        if (sendBridge(action = "start", includeStream = true)) {
+        val url = selectedFileUrl()
+        if (!url.startsWith("http://") && !url.startsWith("https://")) {
+            status = "Bitte Audiodatei wählen oder direkte http(s)-Audio-URL eintragen"
+            return
+        }
+        if (sendBridge(action = "start", explicitStreamUrl = url)) {
             bridgeRunning = true
-            status = "Web-Audio Test gestartet. Erst prüfen, ob Musik in der Bridge hörbar ist; dann auf TV/HDMI wechseln."
+            status = "Datei/Web-Audio-Test gestartet"
+        }
+    }
+
+    fun startLiveCapture() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) {
+            status = "Live-Audio benötigt Android 10 oder neuer"
+            return
+        }
+        if (ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) {
+            captureLauncher.launch(projectionManager.createScreenCaptureIntent())
+        } else {
+            audioPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+        }
+    }
+
+    fun stopLiveCapture() {
+        context.startService(
+            Intent(context, LiveAudioCaptureService::class.java).apply {
+                action = LiveAudioCaptureService.ACTION_STOP
+            },
+        )
+        status = "Live-Capture wird gestoppt"
+    }
+
+    fun startLiveBridge() {
+        if (!bridgeInstalled) {
+            status = "SmartIR Audio Bridge ist auf dem TV noch nicht installiert"
+            return
+        }
+        val url = liveUrl
+        if (!liveRunning || !url.startsWith("ws://")) {
+            status = "Erst Live-Capture starten und auf LIVE warten"
+            return
+        }
+        if (sendBridge(action = "live", explicitStreamUrl = url)) {
+            bridgeRunning = true
+            status = "LIVE-Mix gestartet · jetzt Musik-App starten/weiterlaufen lassen"
         }
     }
 
@@ -212,7 +303,7 @@ private fun AudioMixScreen(
                 title = {
                     Column {
                         Text("SmartIR Audio Mix")
-                        Text("Web-Audio Persistenz-Test", style = MaterialTheme.typography.labelMedium)
+                        Text("Live-Audio + Web-Audio", style = MaterialTheme.typography.labelMedium)
                     }
                 },
                 navigationIcon = {
@@ -238,7 +329,7 @@ private fun AudioMixScreen(
             item {
                 MixCard(
                     title = "Verbindung",
-                    subtitle = "Die Android-App steuert den TV per normalem webOS-SSAP. Root ist für diesen Test nicht nötig.",
+                    subtitle = "TV-Steuerung über normales webOS-SSAP; Root ist für den Live-Test nicht nötig.",
                 ) {
                     Text(
                         "${webState.connection} · ${webState.host.ifBlank { settings.webOsHost }}",
@@ -266,8 +357,40 @@ private fun AudioMixScreen(
 
             item {
                 MixCard(
-                    title = "🎵 Musikquelle",
-                    subtitle = "Für den Test eine MP3/AAC/M4A-Datei wählen oder eine direkte Audio-URL eintragen.",
+                    title = "🔴 Live-Audio vom Handy",
+                    subtitle = "Kein MP3-Download: SmartIR nimmt erlaubtes Medien-Audio des Handys live auf und streamt PCM nur im WLAN direkt zum TV.",
+                ) {
+                    Text(
+                        if (liveRunning) "LIVE" else "AUS",
+                        fontWeight = FontWeight.Bold,
+                    )
+                    Text(liveMessage, style = MaterialTheme.typography.bodySmall)
+                    if (liveUrl.isNotBlank()) {
+                        Text(liveUrl, style = MaterialTheme.typography.labelSmall)
+                    }
+                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        Button(onClick = ::startLiveCapture) { Text("Live-Capture starten") }
+                        OutlinedButton(onClick = ::stopLiveCapture) { Text("Capture Stop") }
+                    }
+                    Button(
+                        onClick = ::startLiveBridge,
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Icon(Icons.Rounded.PowerSettingsNew, contentDescription = null)
+                        Spacer(Modifier.padding(horizontal = 4.dp))
+                        Text("LIVE Mix starten")
+                    }
+                    Text(
+                        "Android zeigt einmal die Systemfreigabe für Audio-/Bildschirmaufnahme. Es wird kein Video gespeichert. Manche Streaming-/DRM-Apps können interne Audioaufnahme blockieren.",
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                }
+            }
+
+            item {
+                MixCard(
+                    title = "🎵 Datei/URL Fallback",
+                    subtitle = "Nur noch als Test/Fallback. Für normalen Betrieb ist Live-Audio gedacht.",
                 ) {
                     OutlinedButton(
                         onClick = { picker.launch(arrayOf("audio/*")) },
@@ -275,12 +398,9 @@ private fun AudioMixScreen(
                     ) {
                         Icon(Icons.Rounded.UploadFile, contentDescription = null)
                         Spacer(Modifier.padding(horizontal = 4.dp))
-                        Text("Audiodatei vom Handy wählen")
+                        Text("Audiodatei wählen")
                     }
                     Text(sourceName, style = MaterialTheme.typography.bodySmall)
-                    if (streamUrl.isNotBlank()) {
-                        Text(streamUrl, style = MaterialTheme.typography.labelSmall)
-                    }
                     OutlinedTextField(
                         value = directUrl,
                         onValueChange = { directUrl = it },
@@ -289,13 +409,14 @@ private fun AudioMixScreen(
                         leadingIcon = { Icon(Icons.Rounded.Link, contentDescription = null) },
                         singleLine = true,
                     )
+                    OutlinedButton(onClick = ::startFileBridge) { Text("Fallback starten") }
                 }
             }
 
             item {
                 MixCard(
                     title = "📺 LG Master / TV",
-                    subtitle = "Aktuell der normale LG-Masterpegel. Er wirkt im Root-free Modus auf den TV-Ausgang und damit grundsätzlich auch auf gemischtes Audio. Ein echter ADEC1-only Regler braucht noch UMI-Zugriff/Root.",
+                    subtitle = "Aktuell LG-Masterpegel. Ein echter ADEC1-only Regler braucht weiterhin UMI-Zugriff/Root.",
                 ) {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
@@ -320,7 +441,7 @@ private fun AudioMixScreen(
             item {
                 MixCard(
                     title = "🎵 Hintergrundmusik",
-                    subtitle = "Nur der Web-Audio-Gain dieser Musikquelle. Dieser Regler darf den TV-Ton nicht mehr verändern.",
+                    subtitle = "Nur der Web-Audio-Gain des Live-/Musikkanals. Dieser Regler darf den TV-Ton nicht verändern.",
                 ) {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
@@ -345,20 +466,13 @@ private fun AudioMixScreen(
             item {
                 MixCard(
                     title = "BT/WLAN Mix",
-                    subtitle = "Bridge aktiviert mixDigitalSoundOutput(true) und testet Web Audio zuerst. Web Audio hat einen eigenen Gain und soll beim Wechsel auf TV/HDMI weiterlaufen.",
+                    subtitle = "Bluetooth bleibt unser späterer A2DP/AMIXER4-Backend. Ohne Root testen wir denselben Bedienweg jetzt live über WLAN + Web Audio.",
                 ) {
-                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                        Button(onClick = ::startBridge) {
-                            Icon(Icons.Rounded.PowerSettingsNew, contentDescription = null)
-                            Spacer(Modifier.padding(horizontal = 4.dp))
-                            Text("Mix starten")
-                        }
-                        OutlinedButton(onClick = ::stopBridge) { Text("Stop") }
-                    }
+                    OutlinedButton(onClick = ::stopBridge) { Text("TV Bridge Stop") }
                     Spacer(Modifier.height(4.dp))
                     Text(status, style = MaterialTheme.typography.bodyMedium)
                     Text(
-                        "Test: 1) Mix starten. 2) In der Bridge muss Musik hörbar sein. 3) Erst dann auf TV/HDMI wechseln. 4) Prüfen, ob die Musik weiterläuft. Hintergrundmusik-Regler darf den TV-Pegel nicht verändern.",
+                        "Live-Test: Capture starten → Systemfreigabe bestätigen → auf LIVE warten → LIVE Mix starten → Musik-App abspielen → am TV auf TV/HDMI wechseln.",
                         style = MaterialTheme.typography.bodySmall,
                     )
                 }
