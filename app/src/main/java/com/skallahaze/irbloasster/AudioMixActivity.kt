@@ -8,6 +8,7 @@ import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -57,7 +58,6 @@ import com.skallahaze.irbloasster.ui.theme.IRTheme
 import com.skallahaze.irbloasster.webos.PhoneAudioHttpServer
 import com.skallahaze.irbloasster.webos.WebOsClient
 import com.skallahaze.irbloasster.webos.WebOsConnection
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import org.json.JSONObject
 
@@ -371,7 +371,7 @@ private fun AudioMixScreen(
 private fun MixCard(
     title: String,
     subtitle: String,
-    content: @Composable Column.() -> Unit,
+    content: @Composable ColumnScope.() -> Unit,
 ) {
     Card(
         modifier = Modifier.fillMaxWidth(),
