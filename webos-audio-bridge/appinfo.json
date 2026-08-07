@@ -1,9 +1,9 @@
 {
   "id": "com.skallahaze.smartir.audiobridge",
-  "version": "0.4.1",
+  "version": "0.4.2",
   "vendor": "SmartIR",
   "type": "web",
-  "main": "index.html",
+  "main": "index-v042.html",
   "title": "SmartIR Audio Bridge",
   "icon": "icon.png",
   "largeIcon": "icon.png",
