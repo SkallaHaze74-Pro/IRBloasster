@@ -23,8 +23,8 @@ android {
         applicationId 'com.skallahaze.irbloasster'
         minSdk 24
         targetSdk 34
-        versionCode 21
-        versionName '1.4.1'
+        versionCode 22
+        versionName '1.4.2'
     }
 
     signingConfigs {
@@ -34,6 +34,10 @@ android {
                 storePassword smartIrSigningProps.getProperty('storePassword')
                 keyAlias smartIrSigningProps.getProperty('keyAlias')
                 keyPassword smartIrSigningProps.getProperty('keyPassword')
+                enableV1Signing true
+                enableV2Signing true
+                enableV3Signing true
+                enableV4Signing false
             }
         }
     }
@@ -43,6 +47,13 @@ android {
             if (smartIrSigningReady) {
                 signingConfig signingConfigs.smartirStable
             }
+        }
+        release {
+            if (smartIrSigningReady) {
+                signingConfig signingConfigs.smartirStable
+            }
+            minifyEnabled false
+            shrinkResources false
         }
     }
 
