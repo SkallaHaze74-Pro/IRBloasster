@@ -24,34 +24,38 @@
   let liveLastPacketAt = 0;
   let liveLastSignalAt = 0;
   let liveLastStatusAt = 0;
-  let liveResyncs = 0;
+  let liveUnderruns = 0;
   let liveDrops = 0;
+  let livePendingFrames = 0;
   let eqFrequencyData = null;
-  const liveSources = new Set();
 
-  const EQ_BARS = 30;
-  const EQ_INTERVAL_MS = 40;
+  const liveSources = new Set();
+  const livePendingChunks = [];
+
+  const EQ_BARS = 28;
+  const EQ_INTERVAL_MS = 50;
   const SAMPLE_RATE = 48000;
-  const LIVE_PREBUFFER_SECONDS = 0.055;
-  const LIVE_MIN_AHEAD_SECONDS = 0.018;
-  const LIVE_SOFT_MAX_AHEAD_SECONDS = 0.12;
-  const LIVE_HARD_MAX_AHEAD_SECONDS = 0.17;
+  const LIVE_PACKETS_PER_BUFFER = 3;
+  const LIVE_TARGET_AHEAD_SECONDS = 0.12;
+  const LIVE_MIN_AHEAD_SECONDS = 0.035;
+  const LIVE_MAX_AHEAD_SECONDS = 0.24;
   const eqBars = [];
   const eqLevels = new Float32Array(EQ_BARS);
+  const eqBandValues = new Float32Array(EQ_BARS);
 
   function createEqualizer() {
     if (!visualizer) return;
     visualizer.textContent = '';
-    for (let i = 0; i < EQ_BARS; i += 1) {
+    for (let index = 0; index < EQ_BARS; index += 1) {
       const bar = document.createElement('span');
       bar.className = 'eq-bar';
-      const hue = Math.round((i / Math.max(1, EQ_BARS - 1)) * 320 + 300) % 360;
+      const hue = Math.round((index / Math.max(1, EQ_BARS - 1)) * 320 + 300) % 360;
       bar.style.setProperty('--bar-color', `hsl(${hue}, 96%, 58%)`);
       bar.style.setProperty('--bar-mid', `hsl(${(hue + 22) % 360}, 100%, 68%)`);
       bar.style.height = '118px';
-      bar.style.transform = 'scaleY(.06)';
+      bar.style.transform = 'scaleY(.055)';
       bar.style.transformOrigin = 'bottom center';
-      bar.style.transition = 'transform 38ms linear, opacity 70ms linear';
+      bar.style.transition = 'transform 46ms linear, opacity 90ms linear';
       bar.style.willChange = 'transform, opacity';
       visualizer.appendChild(bar);
       eqBars.push(bar);
@@ -59,17 +63,31 @@
   }
 
   function setStatus(text, detail) {
-    statusEl.textContent = text || '';
-    detailEl.textContent = detail || '';
+    if (statusEl) statusEl.textContent = text || '';
+    if (detailEl) detailEl.textContent = detail || '';
   }
 
   function setMode(mode) {
     playbackMode = mode;
     if (!modeLabel) return;
-    if (mode === 'live') modeLabel.textContent = 'LIVE LL';
+    if (mode === 'live') modeLabel.textContent = 'LIVE STABLE';
     else if (mode === 'webaudio') modeLabel.textContent = 'STREAM';
     else if (mode === 'htmlaudio') modeLabel.textContent = 'MEDIA';
     else modeLabel.textContent = 'READY';
+  }
+
+  function activateApp() {
+    try {
+      if (window.webOSSystem && typeof window.webOSSystem.activate === 'function') {
+        window.webOSSystem.activate();
+        return;
+      }
+    } catch (_) {}
+    try {
+      if (window.PalmSystem && typeof window.PalmSystem.activate === 'function') {
+        window.PalmSystem.activate();
+      }
+    } catch (_) {}
   }
 
   function bridgeCall(uri, payload) {
@@ -85,8 +103,11 @@
         settled = true;
         try {
           const response = raw ? JSON.parse(raw) : {};
-          if (response.returnValue === false) reject(new Error(response.errorText || response.errorCode || 'Luna-Aufruf abgelehnt'));
-          else resolve(response);
+          if (response.returnValue === false) {
+            reject(new Error(response.errorText || response.errorCode || 'Luna-Aufruf abgelehnt'));
+          } else {
+            resolve(response);
+          }
         } catch (_) {
           resolve({ raw });
         }
@@ -113,26 +134,38 @@
   function setMusicVolume(volume) {
     activeVolume = Math.max(0, Math.min(100, Number(volume) || 0));
     const percent = `${activeVolume}%`;
-    meterFill.style.width = percent;
+    if (meterFill) meterFill.style.width = percent;
     if (sliderThumb) sliderThumb.style.left = percent;
     if (volumeValue) volumeValue.textContent = percent;
-    if (gainNode && audioContext) gainNode.gain.setValueAtTime(activeVolume / 100, audioContext.currentTime);
-    player.volume = activeVolume / 100;
+    if (gainNode && audioContext) {
+      try { gainNode.gain.setValueAtTime(activeVolume / 100, audioContext.currentTime); } catch (_) {}
+    }
+    if (player) player.volume = activeVolume / 100;
+  }
+
+  function createAudioContext() {
+    const AudioCtx = window.AudioContext || window.webkitAudioContext;
+    if (!AudioCtx) throw new Error('Web Audio API fehlt');
+    try {
+      return new AudioCtx({ latencyHint: 'interactive', sampleRate: SAMPLE_RATE });
+    } catch (_) {
+      return new AudioCtx();
+    }
   }
 
   function connectOutputGraph(context, gain) {
     const analyser = context.createAnalyser();
     analyser.fftSize = 512;
-    analyser.smoothingTimeConstant = 0.42;
-    analyser.minDecibels = -92;
-    analyser.maxDecibels = -12;
+    analyser.smoothingTimeConstant = 0.24;
+    analyser.minDecibels = -84;
+    analyser.maxDecibels = -3;
 
     const compressor = context.createDynamicsCompressor();
     compressor.threshold.value = -3;
     compressor.knee.value = 5;
     compressor.ratio.value = 4;
-    compressor.attack.value = 0.003;
-    compressor.release.value = 0.16;
+    compressor.attack.value = 0.004;
+    compressor.release.value = 0.18;
 
     gain.connect(analyser);
     analyser.connect(compressor);
@@ -145,12 +178,12 @@
   function setEqLevel(index, target, opacityBase) {
     const previous = eqLevels[index] || 0;
     const next = target > previous
-      ? previous * 0.28 + target * 0.72
-      : previous * 0.76 + target * 0.24;
+      ? previous * 0.18 + target * 0.82
+      : previous * 0.68 + target * 0.32;
     eqLevels[index] = next;
     const scale = Math.max(0.055, Math.min(1, 0.055 + next * 0.945));
     eqBars[index].style.transform = `scaleY(${scale.toFixed(3)})`;
-    eqBars[index].style.opacity = `${Math.max(opacityBase, 0.34 + next * 0.66).toFixed(2)}`;
+    eqBars[index].style.opacity = `${Math.max(opacityBase, 0.32 + next * 0.68).toFixed(2)}`;
   }
 
   function renderEqualizer() {
@@ -162,22 +195,14 @@
       }
       analyserNode.getByteFrequencyData(eqFrequencyData);
 
-      let overallPeak = 0;
-      const maxObservedBin = Math.min(eqFrequencyData.length - 1, 112);
-      for (let i = 1; i <= maxObservedBin; i += 1) overallPeak = Math.max(overallPeak, eqFrequencyData[i] || 0);
-      const silent = overallPeak < 3;
       const minBin = 1;
-      const maxBin = Math.max(minBin + 1, maxObservedBin);
-      const ratio = maxBin / minBin;
+      const maxBin = Math.min(eqFrequencyData.length - 1, 170);
+      const ratio = Math.max(2, maxBin / minBin);
+      let framePeak = 0;
 
-      for (let i = 0; i < eqBars.length; i += 1) {
-        if (silent) {
-          setEqLevel(i, 0.015 + (i % 3) * 0.006, 0.34);
-          continue;
-        }
-
-        const start = Math.max(minBin, Math.floor(minBin * Math.pow(ratio, i / eqBars.length)));
-        const end = Math.min(maxBin, Math.max(start, Math.floor(minBin * Math.pow(ratio, (i + 1) / eqBars.length))));
+      for (let index = 0; index < EQ_BARS; index += 1) {
+        const start = Math.max(minBin, Math.floor(minBin * Math.pow(ratio, index / EQ_BARS)));
+        const end = Math.min(maxBin, Math.max(start, Math.floor(minBin * Math.pow(ratio, (index + 1) / EQ_BARS))));
         let peak = 0;
         let sum = 0;
         let count = 0;
@@ -188,31 +213,46 @@
           count += 1;
         }
         const average = count ? sum / count : peak;
-        const mixed = peak * 0.72 + average * 0.28;
-        const normalized = Math.max(0, Math.min(1, mixed / 255));
-        const shaped = Math.pow(normalized, 0.62);
-        setEqLevel(i, shaped, 0.44);
+        const mixed = peak * 0.62 + average * 0.38;
+        eqBandValues[index] = mixed;
+        framePeak = Math.max(framePeak, mixed);
+      }
+
+      if (framePeak < 4) {
+        for (let index = 0; index < EQ_BARS; index += 1) {
+          setEqLevel(index, 0.012 + (index % 3) * 0.005, 0.32);
+        }
+        return;
+      }
+
+      const amplitude = Math.max(0.12, Math.min(1, (framePeak - 4) / 205));
+      for (let index = 0; index < EQ_BARS; index += 1) {
+        const relative = Math.max(0, Math.min(1, eqBandValues[index] / framePeak));
+        const shaped = amplitude * Math.pow(relative, 0.72);
+        setEqLevel(index, shaped, 0.42);
       }
       return;
     }
 
-    const time = Date.now() / 420;
-    for (let i = 0; i < eqBars.length; i += 1) {
-      const wave = (Math.sin(time + i * 0.61) + Math.sin(time * 0.69 + i * 0.29) + 2) / 4;
-      const target = playbackMode === 'idle' ? 0.03 + wave * 0.08 : 0.07 + wave * 0.17;
-      setEqLevel(i, target, playbackMode === 'idle' ? 0.34 : 0.52);
+    const time = Date.now() / 440;
+    for (let index = 0; index < EQ_BARS; index += 1) {
+      const wave = (Math.sin(time + index * 0.61) + Math.sin(time * 0.67 + index * 0.29) + 2) / 4;
+      const target = playbackMode === 'idle' ? 0.025 + wave * 0.055 : 0.05 + wave * 0.13;
+      setEqLevel(index, target, playbackMode === 'idle' ? 0.32 : 0.48);
     }
   }
 
-  function stopFutureLiveSources(now) {
+  function clearPendingLiveAudio() {
+    livePendingChunks.length = 0;
+    livePendingFrames = 0;
+  }
+
+  function stopLiveSources() {
     liveSources.forEach((source) => {
-      const startAt = Number(source.__smartIrStartAt || 0);
-      if (startAt > now + 0.008) {
-        try { source.stop(0); } catch (_) {}
-        try { source.disconnect(); } catch (_) {}
-        liveSources.delete(source);
-      }
+      try { source.stop(0); } catch (_) {}
+      try { source.disconnect(); } catch (_) {}
     });
+    liveSources.clear();
   }
 
   async function stopPlayers() {
@@ -222,17 +262,13 @@
 
     try { liveSocket && liveSocket.close(); } catch (_) {}
     liveSocket = null;
-
-    liveSources.forEach((source) => {
-      try { source.stop(0); } catch (_) {}
-      try { source.disconnect(); } catch (_) {}
-    });
-    liveSources.clear();
+    stopLiveSources();
+    clearPendingLiveAudio();
     liveNextTime = 0;
     liveLastPacketAt = 0;
     liveLastSignalAt = 0;
     liveLastStatusAt = 0;
-    liveResyncs = 0;
+    liveUnderruns = 0;
     liveDrops = 0;
 
     try { gainNode && gainNode.disconnect(); } catch (_) {}
@@ -265,11 +301,9 @@
   }
 
   async function startWebAudio(streamUrl) {
-    const AudioCtx = window.AudioContext || window.webkitAudioContext;
-    if (!AudioCtx) throw new Error('Web Audio API fehlt');
     setStatus('Lade Musik …', streamUrl);
     const encoded = await fetchAudioBuffer(streamUrl);
-    const context = new AudioCtx();
+    const context = createAudioContext();
     const decoded = await new Promise((resolve, reject) => {
       let completed = false;
       const ok = (buffer) => { if (!completed) { completed = true; resolve(buffer); } };
@@ -287,7 +321,9 @@
     const source = context.createBufferSource();
     source.buffer = decoded;
     source.connect(gain);
-    source.onended = () => { if (bufferSource === source) setStatus('Musik beendet', 'Stream vollständig abgespielt'); };
+    source.onended = () => {
+      if (bufferSource === source) setStatus('Musik beendet', 'Stream vollständig abgespielt');
+    };
     audioContext = context;
     gainNode = gain;
     bufferSource = source;
@@ -324,19 +360,24 @@
     return { frames, left, right, peak };
   }
 
-  function updateLiveStatus(pcm, context, wallNow) {
+  function updateLiveStatus(peak) {
+    if (!audioContext) return;
+    const wallNow = Date.now();
     liveLastPacketAt = wallNow;
-    if (pcm.peak > 0.002) liveLastSignalAt = wallNow;
+    if (peak > 0.002) liveLastSignalAt = wallNow;
     if (wallNow - liveLastStatusAt < 500) return;
 
     liveLastStatusAt = wallNow;
-    const bufferMs = Math.max(0, Math.round((liveNextTime - context.currentTime) * 1000));
-    const signalPercent = Math.min(100, Math.round(pcm.peak * 100));
+    const scheduledSeconds = Math.max(0, liveNextTime - audioContext.currentTime);
+    const pendingSeconds = livePendingFrames / SAMPLE_RATE;
+    const bufferMs = Math.round((scheduledSeconds + pendingSeconds) * 1000);
+    const signalPercent = Math.min(100, Math.round(peak * 100));
     const hasRecentSignal = wallNow - liveLastSignalAt < 1600;
+
     if (hasRecentSignal) {
       setStatus(
-        'LIVE · LOW LATENCY PCM',
-        `${activeVolume}% · Signal ${signalPercent}% · Puffer ${bufferMs} ms · Resync ${liveResyncs} · Drop ${liveDrops}`,
+        'LIVE · STABLE PCM',
+        `${activeVolume}% · Signal ${signalPercent}% · Puffer ${bufferMs} ms · Underrun ${liveUnderruns} · Drop ${liveDrops}`,
       );
     } else {
       setStatus(
@@ -346,62 +387,82 @@
     }
   }
 
-  function scheduleLivePcm(arrayBuffer) {
+  function schedulePendingGroup() {
     if (!audioContext || !gainNode || playbackMode !== 'live') return;
-    const pcm = decodePcm16Stereo(arrayBuffer);
-    if (!pcm.frames) return;
+    if (livePendingChunks.length < LIVE_PACKETS_PER_BUFFER) return;
+
+    const chunks = livePendingChunks.splice(0, LIVE_PACKETS_PER_BUFFER);
+    let totalFrames = 0;
+    let peak = 0;
+    chunks.forEach((chunk) => {
+      totalFrames += chunk.frames;
+      peak = Math.max(peak, chunk.peak);
+    });
+    livePendingFrames = Math.max(0, livePendingFrames - totalFrames);
+    if (!totalFrames) return;
 
     const context = audioContext;
     const now = context.currentTime;
-    const wallNow = Date.now();
-
-    if (liveNextTime <= 0) liveNextTime = now + LIVE_PREBUFFER_SECONDS;
+    if (liveNextTime <= 0) liveNextTime = now + LIVE_TARGET_AHEAD_SECONDS;
     let ahead = liveNextTime - now;
 
     if (ahead < LIVE_MIN_AHEAD_SECONDS) {
-      liveResyncs += 1;
-      liveNextTime = now + LIVE_PREBUFFER_SECONDS;
+      liveUnderruns += 1;
+      liveNextTime = now + LIVE_TARGET_AHEAD_SECONDS;
       ahead = liveNextTime - now;
-    } else if (ahead > LIVE_HARD_MAX_AHEAD_SECONDS) {
-      liveResyncs += 1;
-      stopFutureLiveSources(now);
-      liveNextTime = now + LIVE_PREBUFFER_SECONDS;
-      ahead = liveNextTime - now;
-    } else if (ahead > LIVE_SOFT_MAX_AHEAD_SECONDS) {
+    }
+
+    if (ahead > LIVE_MAX_AHEAD_SECONDS) {
       liveDrops += 1;
-      updateLiveStatus(pcm, context, wallNow);
+      updateLiveStatus(peak);
       return;
     }
 
-    const audioBuffer = context.createBuffer(2, pcm.frames, SAMPLE_RATE);
-    audioBuffer.getChannelData(0).set(pcm.left);
-    audioBuffer.getChannelData(1).set(pcm.right);
+    const audioBuffer = context.createBuffer(2, totalFrames, SAMPLE_RATE);
+    const left = audioBuffer.getChannelData(0);
+    const right = audioBuffer.getChannelData(1);
+    let cursor = 0;
+    chunks.forEach((chunk) => {
+      left.set(chunk.left, cursor);
+      right.set(chunk.right, cursor);
+      cursor += chunk.frames;
+    });
 
     const source = context.createBufferSource();
     source.buffer = audioBuffer;
     source.connect(gainNode);
-    source.__smartIrStartAt = liveNextTime;
     source.onended = () => {
       liveSources.delete(source);
       try { source.disconnect(); } catch (_) {}
     };
     liveSources.add(source);
     source.start(liveNextTime);
-    liveNextTime += pcm.frames / SAMPLE_RATE;
+    liveNextTime += totalFrames / SAMPLE_RATE;
+    updateLiveStatus(peak);
+  }
 
-    updateLiveStatus(pcm, context, wallNow);
+  function queueLivePcm(arrayBuffer) {
+    if (!audioContext || !gainNode || playbackMode !== 'live') return;
+    const pcm = decodePcm16Stereo(arrayBuffer);
+    if (!pcm.frames) return;
+    liveLastPacketAt = Date.now();
+    if (pcm.peak > 0.002) liveLastSignalAt = liveLastPacketAt;
+    livePendingChunks.push(pcm);
+    livePendingFrames += pcm.frames;
+
+    while (livePendingChunks.length >= LIVE_PACKETS_PER_BUFFER) {
+      schedulePendingGroup();
+    }
   }
 
   async function startLiveAudio(streamUrl) {
-    const AudioCtx = window.AudioContext || window.webkitAudioContext;
-    if (!AudioCtx) throw new Error('Web Audio API fehlt');
     if (!/^ws:\/\//i.test(streamUrl)) throw new Error('Ungültige Live-URL');
 
     await stopPlayers();
     activeUrl = streamUrl;
     await setMix(true);
 
-    const context = new AudioCtx();
+    const context = createAudioContext();
     const gain = context.createGain();
     gain.gain.value = activeVolume / 100;
     connectOutputGraph(context, gain);
@@ -414,12 +475,12 @@
     const socket = new WebSocket(streamUrl);
     socket.binaryType = 'arraybuffer';
     socket.onopen = () => {
-      liveNextTime = context.currentTime + LIVE_PREBUFFER_SECONDS;
-      setStatus('LIVE · Low-Latency verbunden', `${activeVolume}% · PCM 48 kHz Stereo · 55 ms Startpuffer`);
+      liveNextTime = 0;
+      setStatus('LIVE · stabil verbunden', `${activeVolume}% · PCM 48 kHz Stereo · 3×20 ms Bündel · 120 ms Zielpuffer`);
     };
     socket.onmessage = (event) => {
       if (!(event.data instanceof ArrayBuffer)) return;
-      scheduleLivePcm(event.data);
+      queueLivePcm(event.data);
     };
     socket.onerror = () => setStatus('LIVE-Verbindung fehlerhaft', streamUrl);
     socket.onclose = () => {
@@ -440,10 +501,14 @@
     try {
       await startWebAudio(activeUrl);
     } catch (webAudioError) {
-      try { await startHtmlAudio(activeUrl); }
-      catch (htmlError) {
+      try {
+        await startHtmlAudio(activeUrl);
+      } catch (htmlError) {
         setMode('idle');
-        setStatus('Audio konnte nicht starten', `WebAudio: ${String(webAudioError && webAudioError.message || webAudioError)} · HTML: ${String(htmlError && htmlError.message || htmlError)}`);
+        setStatus(
+          'Audio konnte nicht starten',
+          `WebAudio: ${String(webAudioError && webAudioError.message || webAudioError)} · HTML: ${String(htmlError && htmlError.message || htmlError)}`,
+        );
       }
     }
   }
@@ -458,7 +523,10 @@
   async function applyCommand(params) {
     const command = params || {};
     const action = String(command.action || 'start').toLowerCase();
-    if (action === 'stop') { await stopStream(); return; }
+    if (action === 'stop') {
+      await stopStream();
+      return;
+    }
     if (action === 'volume') {
       setMusicVolume(command.volume);
       setStatus('Musikpegel geändert', `${activeVolume}% · ${playbackMode}`);
@@ -470,8 +538,11 @@
     }
     setMusicVolume(command.volume == null ? activeVolume : command.volume);
     if (action === 'live') {
-      try { await startLiveAudio(command.streamUrl || activeUrl); }
-      catch (error) { setStatus('LIVE-Audio konnte nicht starten', String(error && error.message || error)); }
+      try {
+        await startLiveAudio(command.streamUrl || activeUrl);
+      } catch (error) {
+        setStatus('LIVE-Audio konnte nicht starten', String(error && error.message || error));
+      }
       return;
     }
     await startStream(command.streamUrl || activeUrl, command.volume);
@@ -489,30 +560,44 @@
     return {};
   }
 
-  player.addEventListener('playing', () => { if (playbackMode === 'htmlaudio') setStatus('Media-Stream läuft', `${activeVolume}% · Fallback`); });
-  player.addEventListener('waiting', () => { if (playbackMode === 'htmlaudio') setStatus('Puffert …', activeUrl); });
-  player.addEventListener('error', () => {
-    const code = player.error ? player.error.code : '?';
-    if (playbackMode === 'htmlaudio') setStatus('Audiofehler', `MediaError ${code} · ${activeUrl}`);
-  });
+  if (player) {
+    player.addEventListener('playing', () => {
+      if (playbackMode === 'htmlaudio') setStatus('Media-Stream läuft', `${activeVolume}% · Fallback`);
+    });
+    player.addEventListener('waiting', () => {
+      if (playbackMode === 'htmlaudio') setStatus('Puffert …', activeUrl);
+    });
+    player.addEventListener('error', () => {
+      const code = player.error ? player.error.code : '?';
+      if (playbackMode === 'htmlaudio') setStatus('Audiofehler', `MediaError ${code} · ${activeUrl}`);
+    });
+  }
 
   document.addEventListener('visibilitychange', () => {
-    if (document.hidden && activeUrl) {
-      setMix(true);
-      if (audioContext && audioContext.state === 'suspended') { try { audioContext.resume(); } catch (_) {} }
+    if (activeUrl) setMix(true);
+    if (audioContext && audioContext.state === 'suspended') {
+      try { audioContext.resume(); } catch (_) {}
     }
-  });
+  }, true);
 
-  document.addEventListener('webOSRelaunch', (event) => applyCommand(parseParams(event && event.detail)));
+  document.addEventListener('webOSRelaunch', async (event) => {
+    await applyCommand(parseParams(event && event.detail));
+    activateApp();
+  }, true);
+
+  document.addEventListener('webOSLaunch', async (event) => {
+    await applyCommand(parseParams(event && event.detail));
+    activateApp();
+  }, true);
 
   window.setInterval(renderEqualizer, EQ_INTERVAL_MS);
 
   window.setInterval(() => {
     if (playbackMode !== 'live' || !liveSocket || liveSocket.readyState !== 1) return;
-    if (liveLastPacketAt && Date.now() - liveLastPacketAt > 1400) {
+    if (liveLastPacketAt && Date.now() - liveLastPacketAt > 1600) {
       setStatus('LIVE · wartet auf PCM', 'WLAN verbunden, aber vom Handy kommen gerade keine Audiopakete.');
     }
-  }, 700);
+  }, 800);
 
   window.addEventListener('beforeunload', () => {
     if (mixEnabled) {
