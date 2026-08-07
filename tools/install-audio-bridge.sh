@@ -18,14 +18,14 @@ command -v ares-install >/dev/null 2>&1 || {
   exit 1
 }
 
-if [ "$VERSION" != "0.4.2" ] || [ "$MAIN_PAGE" != "index-v042.html" ] || [ ! -f "$APP_DIR/index-v042.html" ]; then
-  echo "STOP: Lokale Bridge ist nicht SmartIR 0.4.2."
+if [ "$VERSION" != "0.5.0" ] || [ "$MAIN_PAGE" != "index-v050.html" ] || [ ! -f "$APP_DIR/index-v050.html" ]; then
+  echo "STOP: Lokale Bridge ist nicht SmartIR 0.5.0 HQ."
   echo "Gefunden: Version=${VERSION:-leer}, Main=${MAIN_PAGE:-leer}"
   echo "Bitte zuerst den aktuellen main-Stand holen."
   exit 2
 fi
 
-if grep -Fq "ROOT-FREE AUDIO BRIDGE" "$APP_DIR/index-v042.html"; then
+if grep -Fq "ROOT-FREE AUDIO BRIDGE" "$APP_DIR/index-v050.html"; then
   echo "STOP: Veraltete Bridge-Oberfläche erkannt."
   exit 3
 fi
@@ -33,7 +33,7 @@ fi
 printf '\n== SmartIR Audio Bridge Quelle ==\n'
 printf 'Version: %s\n' "$VERSION"
 printf 'Main:    %s\n' "$MAIN_PAGE"
-grep -F "BRIDGE 0.4.2" "$APP_DIR/index-v042.html" >/dev/null
+grep -F "BRIDGE 0.5.0" "$APP_DIR/index-v050.html" >/dev/null
 
 printf '\n== Alte SmartIR Audio Bridge sauber beenden/entfernen ==\n'
 if command -v ares-launch >/dev/null 2>&1; then
@@ -62,5 +62,5 @@ printf '\n== Kontrolle ==\n'
 ares-install -d "$DEVICE" --list | grep -F "$APP_ID" || true
 
 printf '\nFertig. App-ID: %s\n' "$APP_ID"
-printf 'Bridge-Version: %s · Cache-Bust Main + Live PCM/WebSocket + Neon Spectrum\n' "$VERSION"
+printf 'Bridge-Version: %s · HQ Jitter Buffer + PCM 48k Stereo + Neon Spectrum\n' "$VERSION"
 printf 'Jetzt SmartIR Audio Mix auf dem Handy öffnen und LIVE Mix starten.\n'
