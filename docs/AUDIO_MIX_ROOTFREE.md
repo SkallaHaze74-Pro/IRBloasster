@@ -19,6 +19,12 @@ Der bevorzugte Root-free Test braucht keine MP3-Datei mehr:
 
 Technik: Android `AudioPlaybackCapture` liefert PCM16 Stereo mit 48 kHz. Ein LAN-only WebSocket-Server auf dem Handy schickt kleine PCM-Blöcke an die webOS Audio Bridge. Dort werden die Frames mit Web Audio (`ScriptProcessorNode`) abgespielt und durch einen eigenen `GainNode` geregelt. `mixDigitalSoundOutput(true)` bleibt als LG-Mix-Flag aktiv.
 
+## Bluetooth bleibt Ziel Nummer 1
+
+Auf dem Handy ist Bluetooth bereits der passende A2DP-Quelltransport. Das Problem sitzt auf der aktuellen LG-Retail-Firmware: sobald A2DP/Sound Share aktiv wird, trennt die Audio-Policy die Live-TV-Pipeline `ADEC1 -> MAIN`; beim Zurückschalten auf TV/HDMI wird A2DP wieder getrennt. Deshalb kann die Android-App allein den echten Bluetooth-Mix noch nicht erzwingen.
+
+Sobald ein UMI-/Policy-Weg mit ausreichenden Rechten oder Root verfügbar ist, soll der Transport hinter derselben Oberfläche auf `A2DP -> AMIXER4` umgestellt werden. Die Bedienung mit getrenntem TV- und Musikkanal bleibt gleich.
+
 ## Datei/URL-Fallback
 
 Eine lokale MP3/AAC/M4A-Datei oder direkte HTTP(S)-Audio-URL kann weiterhin als Diagnosepfad verwendet werden. Für den normalen Gebrauch ist Live-Audio vorgesehen.
