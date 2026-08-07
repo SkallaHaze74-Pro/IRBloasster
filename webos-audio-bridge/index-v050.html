@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>SmartIR Audio Bridge 0.5.0</title>
+  <link rel="stylesheet" href="style.css?v=050" />
+</head>
+<body>
+  <main id="panel" class="glass-panel">
+    <div class="top-row">
+      <div class="music-mark" aria-hidden="true">♪</div>
+      <div class="live-wrap">
+        <div class="live-line"><span class="live-dot"></span><span id="modeLabel">LIVE HQ</span></div>
+        <div class="source-line">SMARTIR AUDIO MIX · BRIDGE 0.5.0</div>
+      </div>
+      <div class="signal-bars" aria-hidden="true">
+        <span></span><span></span><span></span><span></span><span></span>
+      </div>
+    </div>
+
+    <div id="visualizer" class="visualizer" aria-hidden="true"></div>
+
+    <div class="divider"></div>
+
+    <div class="volume-row">
+      <div class="volume-copy">
+        <span>MUSIC VOLUME</span>
+        <strong id="volumeValue">30%</strong>
+      </div>
+      <div class="slider-shell" aria-hidden="true">
+        <div class="slider-track"><div id="meterFill" class="slider-fill"></div></div>
+        <div id="sliderThumb" class="slider-thumb"></div>
+      </div>
+    </div>
+
+    <div class="controls" aria-hidden="true">
+      <div class="control blue">−</div>
+      <div class="control cyan">+</div>
+      <div class="control amber">⌁</div>
+      <div class="control pink">■</div>
+    </div>
+
+    <div class="status-row">
+      <p id="status">Warte auf Live-Audio …</p>
+      <p id="detail"></p>
+    </div>
+  </main>
+
+  <audio id="player" preload="auto"></audio>
+  <script src="app.js?v=050"></script>
+</body>
+</html>
