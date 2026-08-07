@@ -7,7 +7,7 @@
   "title": "SmartIR Audio Bridge",
   "icon": "icon.png",
   "largeIcon": "icon.png",
-  "appDescription": "SmartIR live PCM/Web Audio bridge for root-free dual-audio testing",
+  "appDescription": "Live PCM/Web Audio bridge for SmartIR root-free dual-audio testing",
   "resolution": "1920x1080",
   "transparent": true,
   "handlesRelaunch": true,
