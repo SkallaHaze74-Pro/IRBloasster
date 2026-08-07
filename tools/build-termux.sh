@@ -14,6 +14,11 @@ if ! command -v keytool >/dev/null 2>&1; then
   pkg install -y openjdk-17
 fi
 
+if ! command -v unzip >/dev/null 2>&1; then
+  echo "[SmartIR] unzip fehlt – installiere Paket …"
+  pkg install -y unzip
+fi
+
 AAPT2_BIN="$(command -v aapt2)"
 mkdir -p "$HOME/.gradle"
 GLOBAL_PROPS="$HOME/.gradle/gradle.properties"
@@ -65,13 +70,56 @@ keytool -list -v -keystore "$KEYSTORE" -storepass "$STORE_PASS" -alias smartir 2
 
 ./gradlew --stop >/dev/null 2>&1 || true
 rm -rf .gradle app/build
-./gradlew --no-daemon clean assembleDebug
+
+# Stable packages are real release APKs. The signing config explicitly enables
+# APK Signature Scheme v1 + v2 + v3; v2+ is required by modern Android targets.
+./gradlew --no-daemon clean assembleRelease
 
 VERSION="$(sed -n "s/.*versionName '\([^']*\)'.*/\1/p" app/build.gradle | head -n1)"
-OUT="$ROOT/SmartIR-v${VERSION:-stable}-stable.apk"
-cp app/build/outputs/apk/debug/app-debug.apk "$OUT"
+SOURCE_APK="$ROOT/app/build/outputs/apk/release/app-release.apk"
+OUT="$ROOT/SmartIR-v${VERSION:-stable}-STABLE.apk"
+
+if [ ! -s "$SOURCE_APK" ]; then
+  echo "[SmartIR] FEHLER: Release-APK fehlt: $SOURCE_APK"
+  exit 10
+fi
+
+cp "$SOURCE_APK" "$OUT"
+
+# Catch truncated/corrupt files before Android's package parser sees them.
+echo "[SmartIR] Prüfe APK-ZIP-Struktur …"
+unzip -t "$OUT" >/dev/null
+
+# If Android build-tools are available, verify the embedded APK signing schemes too.
+SDK_DIR=""
+if [ -f "$ROOT/local.properties" ]; then
+  SDK_DIR="$(sed -n 's/^sdk\.dir=//p' "$ROOT/local.properties" | head -n1 | sed 's/\\:/:/g')"
+fi
+for CANDIDATE in "$SDK_DIR" "${ANDROID_SDK_ROOT:-}" "${ANDROID_HOME:-}" "$HOME/android-sdk"; do
+  [ -n "$CANDIDATE" ] && [ -d "$CANDIDATE" ] || continue
+  APKSIGNER="$(find "$CANDIDATE" -type f -path '*/build-tools/*/apksigner' 2>/dev/null | sort -V | tail -n1)"
+  if [ -n "$APKSIGNER" ]; then
+    echo "[SmartIR] Prüfe APK-Signatur mit apksigner …"
+    "$APKSIGNER" verify --verbose --print-certs "$OUT"
+    break
+  fi
+done
+
+SHA256="$(sha256sum "$OUT" | awk '{print $1}')"
+SIZE="$(wc -c < "$OUT" | tr -d ' ')"
 
 echo
-echo "[SmartIR] STABIL SIGNIERTE APK: $OUT"
-echo "[SmartIR] Künftige Builds mit diesem Termux-Setup können die App ohne Deinstallation aktualisieren."
-echo "[SmartIR] Wichtig: Von einer bereits anders signierten alten APK ist genau ein letzter Wechsel nötig."
+echo "[SmartIR] INSTALLIERBARE STABLE APK: $OUT"
+echo "[SmartIR] Größe: $SIZE Bytes"
+echo "[SmartIR] SHA-256: $SHA256"
+echo "[SmartIR] Künftige Builds mit ~/.smartir können ohne Deinstallation aktualisiert werden."
+
+DOWNLOAD_DIR="$HOME/storage/downloads"
+if [ -d "$DOWNLOAD_DIR" ]; then
+  DOWNLOAD_APK="$DOWNLOAD_DIR/SmartIR-v${VERSION:-stable}-STABLE.apk"
+  cp "$OUT" "$DOWNLOAD_APK"
+  echo "[SmartIR] Kopiert nach Downloads: $DOWNLOAD_APK"
+  echo "[SmartIR] Bitte anschließend über die Dateien-App aus Downloads installieren."
+else
+  echo "[SmartIR] Tipp: einmal 'termux-setup-storage' ausführen, dann wird die APK automatisch nach Downloads kopiert."
+fi
