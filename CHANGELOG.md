@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.3.1
+
+- LG-B1-Testbefund korrigiert: `com.webos.audio/media/setVolume` wirkt auf der Retail-Firmware auf den TV-/Masterpfad und ist daher **kein** separater Musikregler
+- Musiklautstärke der Audio Bridge auf einen lokalen Web-Audio-`GainNode` umgestellt; der Musikregler darf den TV-Pegel damit nicht mehr verändern
+- Root-free Persistenztest nutzt Web Audio zuerst und HTML-Audio nur noch als Fallback
+- Bridge prüft den HTTP-Stream direkt und zeigt Lade-/Decode-/Playback-Fehler getrennt an
+- UI benennt den ersten Regler ehrlich als LG Master / TV; echter `ADEC1`-only TV-Regler bleibt UMI-/Root-Ziel
+- webOS Audio Bridge auf 0.2.0 angehoben
+
 ## 1.3.0
 
 - experimentellen **SmartIR Audio Mix** als eigenen Launcher ergänzt
