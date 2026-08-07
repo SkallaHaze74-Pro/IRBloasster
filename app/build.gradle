@@ -3,6 +3,18 @@ plugins {
     id 'org.jetbrains.kotlin.android'
 }
 
+def smartIrHome = new File(System.getProperty('user.home'), '.smartir')
+def smartIrKeystore = new File(smartIrHome, 'smartir-release.jks')
+def smartIrSigningPropsFile = new File(smartIrHome, 'signing.properties')
+def smartIrSigningProps = new Properties()
+if (smartIrSigningPropsFile.exists()) {
+    smartIrSigningPropsFile.withInputStream { smartIrSigningProps.load(it) }
+}
+def smartIrSigningReady = smartIrKeystore.exists() &&
+    smartIrSigningProps.getProperty('storePassword') &&
+    smartIrSigningProps.getProperty('keyAlias') &&
+    smartIrSigningProps.getProperty('keyPassword')
+
 android {
     namespace 'com.skallahaze.irbloasster'
     compileSdk 34
@@ -13,6 +25,25 @@ android {
         targetSdk 34
         versionCode 21
         versionName '1.4.1'
+    }
+
+    signingConfigs {
+        if (smartIrSigningReady) {
+            smartirStable {
+                storeFile smartIrKeystore
+                storePassword smartIrSigningProps.getProperty('storePassword')
+                keyAlias smartIrSigningProps.getProperty('keyAlias')
+                keyPassword smartIrSigningProps.getProperty('keyPassword')
+            }
+        }
+    }
+
+    buildTypes {
+        debug {
+            if (smartIrSigningReady) {
+                signingConfig signingConfigs.smartirStable
+            }
+        }
     }
 
     buildFeatures {

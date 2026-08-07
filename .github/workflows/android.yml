@@ -39,18 +39,18 @@ jobs:
           chmod +x gradlew
           ./gradlew --no-daemon --stacktrace clean testDebugUnitTest lintDebug assembleDebug
 
-      - name: Prepare named APK and checksum
+      - name: Prepare CI test APK and checksum
         run: |
-          cp app/build/outputs/apk/debug/app-debug.apk SmartIR-v1.4.1-debug.apk
-          sha256sum SmartIR-v1.4.1-debug.apk > SmartIR-v1.4.1-debug.apk.sha256
+          cp app/build/outputs/apk/debug/app-debug.apk SmartIR-v1.4.1-CI-ephemeral-signature.apk
+          sha256sum SmartIR-v1.4.1-CI-ephemeral-signature.apk > SmartIR-v1.4.1-CI-ephemeral-signature.apk.sha256
 
-      - name: Upload SmartIR APK
+      - name: Upload CI test APK
         uses: actions/upload-artifact@v7
         with:
-          name: SmartIR-v1.4.1-debug
+          name: SmartIR-v1.4.1-CI-ephemeral-signature-DO-NOT-USE-FOR-UPDATES
           path: |
-            SmartIR-v1.4.1-debug.apk
-            SmartIR-v1.4.1-debug.apk.sha256
+            SmartIR-v1.4.1-CI-ephemeral-signature.apk
+            SmartIR-v1.4.1-CI-ephemeral-signature.apk.sha256
           if-no-files-found: error
           retention-days: 30
 
