@@ -12,28 +12,15 @@ com.skallahaze.irbloasster
 
 ### SmartIR Live Audio Mix
 
-Der Audio-Mix-Test kann erlaubtes Medien-Audio des Android-Handys live erfassen und ohne vorherige MP3-Datei direkt im lokalen WLAN zur webOS Audio Bridge schicken. Die Bridge spielt Live-PCM über Web Audio und besitzt für den SmartIR-Musikkanal einen eigenen Gain-Regler. Der echte Bluetooth/A2DP-Pfad (`AMIXER4`) bleibt das bevorzugte spätere Backend, sobald die LG-Audio-Policy per UMI/Root steuerbar ist.
+SmartIR kann erlaubtes Medien-Audio des Android-Handys live erfassen und ohne vorherige MP3-Datei direkt im lokalen WLAN zur webOS Audio Bridge schicken. Die Bridge spielt Live-PCM über Web Audio und besitzt für den SmartIR-Musikkanal einen eigenen Gain-Regler.
 
-Android-Apps dürfen Playback-Capture selbst blockieren; Streaming-/DRM-Inhalte können deshalb stumm bleiben. Details stehen unter [`docs/AUDIO_MIX_ROOTFREE.md`](docs/AUDIO_MIX_ROOTFREE.md).
+Die TV-Bridge 0.4.0 verwendet ein hochauflösendes, rein vektorbasiertes Neon/Rainbow-Overlay. Ein echter Web-Audio-`AnalyserNode` steuert den Equalizer im Takt der laufenden Musik. Dadurch sind keine großen Grafik- oder Videoassets nötig.
 
-### SmartIR TV Lab
+Android-Apps dürfen Playback-Capture selbst blockieren; Streaming-/DRM-Inhalte können deshalb stumm bleiben. Der echte Bluetooth/A2DP-Pfad (`AMIXER4`) bleibt das bevorzugte spätere Backend, sobald die LG-Audio-Policy per UMI/Root steuerbar ist.
 
-Die APK enthält zusätzlich den Launcher-Einstieg **SmartIR TV Lab** mit:
+Die früheren Android-TV-Lab-/Bildschirm-Testoberflächen sind aus der normalen APK entfernt. Die historischen Analyse-Dokumente bleiben nur im Repository erhalten und belegen keinen Speicher in der installierten App.
 
-- read-only Hardware- und Funktionsscan über `ssap://config/getConfigs`
-- Modell-, Firmware-, SDK- und Boardinformationen
-- SoC-, RAM-, eMMC-, Display-, OLED-, HDR-, Dolby-Vision-, VRR-, ISF- und Audio-Fähigkeiten
-- ausgewählten Bild-, Ton-, Netzwerk-, CEC- und allgemeinen Einstellungswerten
-- sicherer Erkennung und Startmöglichkeit offizieller versteckter LG-Apps
-- getrennten Kalibrierprofilen für SDR dunkel, SDR hell, HDR/Dolby Vision und Gaming/VRR
-- regelbasierter Smart-Kalibrieranalyse
-- anonymisiertem TV-Bericht
-- getrenntem read-only External-PQ-Snapshot
-- klarer Sperre für Service Reset, Panel-/Tool-Optionen, White Balance, LUT, NVRAM, EDID, DRM und External-PQ-Schreibzugriffe
-
-Zusätzlich liegt unter `webos-tv-lab/` eine offline arbeitende TV-App mit PLUGE-, Near-Black-, Weiß-Clipping-, Graustufen-, Farbbalken-, Geometrie- und Vollflächen-Testbildern.
-
-Die vollständige Dokumentation steht unter [`docs/TV_LAB_AND_CALIBRATION.md`](docs/TV_LAB_AND_CALIBRATION.md).
+Details: [`docs/AUDIO_MIX_ROOTFREE.md`](docs/AUDIO_MIX_ROOTFREE.md)
 
 ### LG OLED55B19LA.DEUQJP
 
@@ -43,10 +30,8 @@ Die vollständige Dokumentation steht unter [`docs/TV_LAB_AND_CALIBRATION.md`](d
 - Wake-on-LAN, Auto-Reconnect, Lautstärke-, Mute-, Power- und App-Status
 - Magic-Remote-Touchpad, D-Pad, Pointer, Klick, Scrollen und TV-Tastatur
 - direkte HDMI-1- bis HDMI-4-Auswahl
-- HDMI 3 als eARC/ARC und 4K/120, HDMI 4 als 4K/120
 - installierte Apps und echte TV-Eingänge dynamisch laden
-- Schnellstarts für Live TV, YouTube, Netflix und Twitch
-- Twitch-App-ID wird bevorzugt direkt aus der TV-App-Liste übernommen
+- Live-Audio-Mix über lokale SmartIR Audio Bridge
 
 ### Sony STR-DB870 CEL
 
@@ -58,34 +43,28 @@ Die vollständige Dokumentation steht unter [`docs/TV_LAB_AND_CALIBRATION.md`](d
 
 ### JBL Simply Cinema SUB125
 
-Der SUB125 besitzt keinen eigenen IR-Empfänger. SmartIR zeigt deshalb auf der Sony-Seite eine eigene Karte **„JBL SUB125 · indirekt über Sony“** mit:
-
-- Subwoofer + / −
-- Test Tone
-- A.F.D.
-- 2CH / OFF
-- technischem Geräteprofil
-- Auto/On-Hinweisen
-- Sicherheits- und Klickdiagnose
-
-Das vollständige Profil liegt unter [`docs/JBL_SUB125_PROFILE.md`](docs/JBL_SUB125_PROFILE.md).
+Der SUB125 besitzt keinen eigenen IR-Empfänger. SmartIR steuert relevante Funktionen indirekt über den Sony-Receiver.
 
 ### Backup und Datenschutz
 
-Unter **Setup → Backup & Datenübertragung** kann SmartIR eine portable JSON-Datei exportieren und importieren. Übertragen werden TV-IP/Hostname, TV-MAC, Theme, Haptik, Auto-Connect und weitere nicht geheime Einstellungen.
+Unter **Setup → Backup & Datenübertragung** kann SmartIR eine portable JSON-Datei exportieren und importieren. Der geheime webOS-Client-Key bleibt im Android-Keystore und wird nicht in das portable Backup geschrieben.
 
-Der geheime webOS-Client-Key bleibt im Android-Keystore und wird nicht in das portable Backup geschrieben. Seriennummern werden weder in der App noch im öffentlichen Repository gespeichert.
+Live Audio speichert weder Video noch einen Audiomitschnitt. PCM-Daten werden nur während der laufenden Sitzung im lokalen WLAN zum TV übertragen.
 
 ## Installation über GitHub Actions
 
-Unter **Actions → SmartIR Android APK** den neuesten erfolgreichen Lauf auf dem Branch beziehungsweise Pull Request öffnen und das Artefakt laden.
+Unter **Actions → SmartIR Android APK** den neuesten erfolgreichen Lauf öffnen und das Artefakt laden:
+
+```text
+SmartIR-v1.4.0-debug
+```
 
 ## Bauen in Termux
 
 ```bash
 pkg install openjdk-17 git
-git clone https://github.com/SkallaHaze74-Pro/IRBloasster.git
-cd IRBloasster
+cd ~/IRBloasster
+git fetch origin
 bash tools/build-termux.sh
 ```
 
@@ -93,6 +72,21 @@ Die APK liegt danach unter:
 
 ```text
 app/build/outputs/apk/debug/app-debug.apk
+```
+
+## Audio Bridge auf dem LG installieren
+
+Bei eingerichteter webOS Developer-Mode-Verbindung:
+
+```bash
+cd ~/IRBloasster
+bash tools/install-audio-bridge.sh smartirtv
+```
+
+App-ID:
+
+```text
+com.skallahaze.smartir.audiobridge
 ```
 
 ## LG TV verbinden
@@ -103,37 +97,16 @@ app/build/outputs/apk/debug/app-debug.apk
 4. **Verbinden** drücken.
 5. Die Kopplungsabfrage am Fernseher bestätigen.
 6. Für Wake-on-LAN zusätzlich die MAC-Adresse speichern.
-7. Vor einer nötigen Deinstallation ein Backup exportieren.
-8. Danach den zweiten Launcher-Eintrag **SmartIR TV Lab** öffnen und **Verbinden & scannen** drücken.
-
-## webOS-Testbild-App
-
-Nach eingerichteter Developer-Mode-Verbindung:
-
-```bash
-cd ~/IRBloasster
-ares-package webos-tv-lab
-ares-install --device smartirtv com.skallahaze.smartir.tvlab_1.0.0_all.ipk
-ares-launch --device smartirtv com.skallahaze.smartir.tvlab
-```
-
-## JBL-Klickgeräusch
-
-Ein einzelnes Klacken unmittelbar beim Einschalten oder Auto-Wake kann vom internen Schaltvorgang kommen. Wiederholtes Klackern, LED-Flackern, Tonaussetzer, verbrannter Geruch oder starke Wärme sind nicht normal. In diesem Fall ausschalten, Netzstecker ziehen und nicht geöffnet weiterbetreiben.
 
 ## Dokumentation
 
+- [`docs/AUDIO_MIX_ROOTFREE.md`](docs/AUDIO_MIX_ROOTFREE.md)
 - [`docs/DEVICE_INVENTORY.md`](docs/DEVICE_INVENTORY.md)
 - [`docs/LG_OLED55B19LA_DEVICE_PROFILE.md`](docs/LG_OLED55B19LA_DEVICE_PROFILE.md)
 - [`docs/LG_FIRMWARE_03_53_31_VS_03_53_45_FINDINGS.md`](docs/LG_FIRMWARE_03_53_31_VS_03_53_45_FINDINGS.md)
-- [`docs/LG_TV_LAB_READONLY_PAYLOADS.json`](docs/LG_TV_LAB_READONLY_PAYLOADS.json)
-- [`docs/TV_LAB_AND_CALIBRATION.md`](docs/TV_LAB_AND_CALIBRATION.md)
-- [`docs/AUDIO_MIX_ROOTFREE.md`](docs/AUDIO_MIX_ROOTFREE.md)
 - [`docs/SONY_STR_DB870_CODES.md`](docs/SONY_STR_DB870_CODES.md)
 - [`docs/JBL_SUB125_PROFILE.md`](docs/JBL_SUB125_PROFILE.md)
 - [`docs/DATA_BACKUP_AND_MIGRATION.md`](docs/DATA_BACKUP_AND_MIGRATION.md)
-- [`docs/HARDWARE_TEST_CHECKLIST.md`](docs/HARDWARE_TEST_CHECKLIST.md)
-- [`docs/LG_THINQ_ANALYSIS.md`](docs/LG_THINQ_ANALYSIS.md)
 
 ## Signatur und Updates
 
@@ -141,4 +114,4 @@ GitHub-Actions-Debug-APKs können unterschiedliche Debug-Signaturen besitzen. F�
 
 ## Herkunft
 
-Das Repository enthält ausschließlich eigenständig geschriebenen Quellcode und beschreibende Interoperabilitätsnotizen. Es werden keine Original-APKs, Kontodaten, Cloud-Schlüssel, Zertifikate, proprietären Grafiken, Seriennummern oder vollständigen Codeset-Datenbanken veröffentlicht. Die vollständigen Firmwarearchive bleiben außerhalb des öffentlichen Repositories.
+Das Repository enthält ausschließlich eigenständig geschriebenen Quellcode und beschreibende Interoperabilitätsnotizen. Es werden keine Original-APKs, Kontodaten, Cloud-Schlüssel, Zertifikate, proprietären Grafiken oder Seriennummern veröffentlicht.
