@@ -1,0 +1,326 @@
+* {
+  box-sizing: border-box;
+}
+
+:root {
+  color-scheme: dark;
+  font-family: Arial, Helvetica, sans-serif;
+  background: #050505;
+  color: #fff;
+}
+
+html,
+body {
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  overflow: hidden;
+}
+
+body {
+  background:
+    radial-gradient(circle at 14% 8%, rgba(255, 94, 0, 0.34), transparent 30%),
+    radial-gradient(circle at 82% 12%, rgba(255, 164, 0, 0.16), transparent 31%),
+    linear-gradient(145deg, #050505 0%, #111 52%, #030303 100%);
+  color: #fff;
+  font-family: Arial, Helvetica, sans-serif;
+}
+
+button {
+  font: inherit;
+}
+
+.hidden {
+  display: none !important;
+}
+
+.screen {
+  width: 100%;
+  height: 100%;
+  padding: 38px 58px 26px;
+  display: flex;
+  flex-direction: column;
+}
+
+.hero {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 36px;
+  min-height: 154px;
+}
+
+.brand-row {
+  display: flex;
+  align-items: center;
+  gap: 28px;
+}
+
+.eyebrow {
+  margin: 0 0 7px;
+  color: #ff9a42;
+  font-size: 18px;
+  font-weight: 800;
+  letter-spacing: 3px;
+}
+
+h1 {
+  margin: 0;
+  font-size: 60px;
+  line-height: 1;
+  letter-spacing: -2px;
+}
+
+.status {
+  margin: 12px 0 0;
+  color: #d6d6d6;
+  font-size: 22px;
+}
+
+.session-pill {
+  max-width: 410px;
+  padding: 16px 22px;
+  border: 1px solid rgba(255, 255, 255, 0.17);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.07);
+  color: #dedede;
+  font-size: 18px;
+  text-align: center;
+}
+
+.menu-grid {
+  flex: 1;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-rows: repeat(3, minmax(0, 1fr));
+  gap: 18px;
+  min-height: 0;
+  margin-top: 20px;
+}
+
+.tile {
+  position: relative;
+  min-width: 0;
+  min-height: 0;
+  padding: 24px 25px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: flex-end;
+  overflow: hidden;
+  border: 2px solid rgba(255, 255, 255, 0.13);
+  border-radius: 24px;
+  background:
+    linear-gradient(145deg, rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0.025)),
+    rgba(12, 12, 12, 0.9);
+  box-shadow: 0 16px 46px rgba(0, 0, 0, 0.34);
+  color: #fff;
+  text-align: left;
+  transition: transform 130ms ease, border-color 130ms ease, box-shadow 130ms ease;
+}
+
+.tile::before {
+  content: '';
+  position: absolute;
+  inset: -55% auto auto -9%;
+  width: 240px;
+  height: 240px;
+  border-radius: 50%;
+  background: rgba(255, 102, 0, 0.12);
+}
+
+.tile-featured {
+  border-color: rgba(255, 119, 0, 0.7);
+  background:
+    linear-gradient(145deg, rgba(255, 136, 0, 0.9), rgba(255, 55, 0, 0.72)),
+    #b43300;
+}
+
+.tile-featured::before {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+.tile-secondary {
+  background:
+    linear-gradient(145deg, rgba(118, 118, 118, 0.28), rgba(30, 30, 30, 0.88)),
+    #191919;
+}
+
+.tile-experiment {
+  border-color: rgba(114, 218, 186, 0.58);
+  background:
+    linear-gradient(145deg, rgba(20, 122, 98, 0.86), rgba(8, 55, 46, 0.96)),
+    #08372e;
+}
+
+.tile-experiment::before {
+  background: rgba(104, 238, 196, 0.2);
+}
+
+.tile:focus {
+  outline: none;
+  transform: scale(1.035);
+  border-color: #fff;
+  box-shadow:
+    0 0 0 5px rgba(255, 255, 255, 0.24),
+    0 20px 60px rgba(255, 92, 0, 0.24);
+  z-index: 3;
+}
+
+.tile:disabled {
+  opacity: 0.58;
+}
+
+.tile-number {
+  position: absolute;
+  top: 18px;
+  right: 21px;
+  color: rgba(255, 255, 255, 0.44);
+  font-size: 21px;
+  font-weight: 800;
+}
+
+.tile-title {
+  position: relative;
+  font-size: 31px;
+  font-weight: 800;
+  line-height: 1.05;
+}
+
+.tile-subtitle {
+  position: relative;
+  margin-top: 9px;
+  color: rgba(255, 255, 255, 0.74);
+  font-size: 17px;
+  line-height: 1.28;
+}
+
+footer {
+  min-height: 48px;
+  padding-top: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 38px;
+  color: #a8a8a8;
+  font-size: 17px;
+}
+
+.wave {
+  width: 126px;
+  height: 94px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  border-radius: 27px;
+  background: linear-gradient(145deg, #ff9a00, #ff3d00);
+  box-shadow: 0 16px 46px rgba(255, 82, 0, 0.32);
+}
+
+.wave span {
+  width: 8px;
+  border-radius: 8px;
+  background: #fff;
+}
+
+.wave span:nth-child(1),
+.wave span:nth-child(9) { height: 23px; }
+.wave span:nth-child(2),
+.wave span:nth-child(8) { height: 35px; }
+.wave span:nth-child(3),
+.wave span:nth-child(7) { height: 49px; }
+.wave span:nth-child(4),
+.wave span:nth-child(6) { height: 64px; }
+.wave span:nth-child(5) { height: 78px; }
+
+.modal {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  padding: 70px 110px;
+  display: grid;
+  place-items: center;
+  background: rgba(0, 0, 0, 0.84);
+  backdrop-filter: blur(12px);
+}
+
+.modal-card {
+  width: min(1180px, 100%);
+  padding: 48px 54px;
+  border: 2px solid rgba(114, 218, 186, 0.42);
+  border-radius: 32px;
+  background:
+    radial-gradient(circle at 14% 0%, rgba(20, 122, 98, 0.3), transparent 34%),
+    linear-gradient(145deg, #10211d, #090d0c);
+  box-shadow: 0 34px 100px rgba(0, 0, 0, 0.62);
+}
+
+.modal-eyebrow {
+  margin: 0 0 10px;
+  color: #72daba;
+  font-size: 18px;
+  font-weight: 800;
+  letter-spacing: 3px;
+}
+
+h2 {
+  margin: 0;
+  font-size: 48px;
+  letter-spacing: -1px;
+}
+
+.modal-status {
+  margin: 18px 0 0;
+  color: #d3dce4;
+  font-size: 23px;
+  line-height: 1.42;
+}
+
+.modal-actions {
+  margin-top: 30px;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+
+.modal-actions button {
+  min-height: 74px;
+  padding: 17px 22px;
+  border: 2px solid rgba(255, 255, 255, 0.14);
+  border-radius: 18px;
+  background: linear-gradient(90deg, #147a62, #0a4f40);
+  color: #fff;
+  font-size: 22px;
+  font-weight: 800;
+}
+
+.modal-actions button.secondary {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.modal-actions button:focus {
+  outline: 5px solid #fff;
+  outline-offset: 4px;
+}
+
+.test-steps {
+  margin-top: 26px;
+  padding: 20px 22px;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.07);
+}
+
+.test-steps strong {
+  color: #72daba;
+  font-size: 19px;
+}
+
+.test-steps span {
+  color: #d1d1d1;
+  font-size: 19px;
+  line-height: 1.38;
+}
