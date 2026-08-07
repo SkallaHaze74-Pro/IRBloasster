@@ -1,5 +1,18 @@
 # Changelog
 
+## 1.4.0
+
+- **Live-Audio vom Handy** ergänzt: keine lokale MP3-Datei mehr nötig
+- Android `AudioPlaybackCapture` + `MediaProjection` nimmt erlaubtes Medien-Audio live auf; es wird kein Video oder Audiomitschnitt gespeichert
+- PCM16/Stereo/48 kHz wird nur im lokalen WLAN über einen kleinen WebSocket-Server an den LG gestreamt
+- webOS Audio Bridge spielt den Live-PCM-Strom über Web Audio (`ScriptProcessorNode` + eigener `GainNode`)
+- Hintergrundmusik-Regler bleibt lokal auf dem SmartIR-Musikkanal und darf den LG-TV-/Masterpegel nicht verändern
+- Bridge puffert nur kurz und verwirft alte Frames bei Verzögerung, statt große Latenz aufzubauen
+- Datei/HTTP-URL bleibt als Diagnose-/Fallbackpfad erhalten
+- Android weist sichtbar darauf hin, dass Streaming-/DRM-Apps interne Audioaufnahme blockieren können
+- Bluetooth/A2DP `AMIXER4` bleibt das bevorzugte spätere Backend, sobald die LG-Policy per UMI/Root umgangen werden kann
+- webOS Audio Bridge auf 0.3.0 angehoben
+
 ## 1.3.1
 
 - LG-B1-Testbefund korrigiert: `com.webos.audio/media/setVolume` wirkt auf der Retail-Firmware auf den TV-/Masterpfad und ist daher **kein** separater Musikregler
