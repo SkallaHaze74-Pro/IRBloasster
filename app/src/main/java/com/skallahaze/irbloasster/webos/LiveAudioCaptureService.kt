@@ -81,6 +81,12 @@ class LiveAudioCaptureService : Service() {
 
     @RequiresApi(Build.VERSION_CODES.Q)
     private fun startCapture(resultCode: Int, resultData: Intent) {
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
+            LiveAudioRuntime.update(false, message = "Audioaufnahme-Berechtigung wurde entzogen")
+            stopSelf()
+            return
+        }
+
         runCatching {
             val manager = getSystemService(MediaProjectionManager::class.java)
             val mediaProjection = manager.getMediaProjection(resultCode, resultData)
@@ -112,11 +118,15 @@ class LiveAudioCaptureService : Service() {
                 AudioFormat.CHANNEL_IN_STEREO,
                 AudioFormat.ENCODING_PCM_16BIT,
             )
-            val record = AudioRecord.Builder()
-                .setAudioFormat(format)
-                .setAudioPlaybackCaptureConfig(config)
-                .setBufferSizeInBytes(max(minBuffer * 2, 16_384))
-                .build()
+            val record = try {
+                AudioRecord.Builder()
+                    .setAudioFormat(format)
+                    .setAudioPlaybackCaptureConfig(config)
+                    .setBufferSizeInBytes(max(minBuffer * 2, 16_384))
+                    .build()
+            } catch (security: SecurityException) {
+                error("Audioaufnahme nicht erlaubt: ${security.message ?: "Berechtigung fehlt"}")
+            }
             if (record.state != AudioRecord.STATE_INITIALIZED) {
                 record.release()
                 error("AudioRecord konnte nicht initialisiert werden")
