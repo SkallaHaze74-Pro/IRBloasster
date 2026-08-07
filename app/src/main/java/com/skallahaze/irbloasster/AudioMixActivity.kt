@@ -120,7 +120,7 @@ private fun AudioMixScreen(
     var streamUrl by rememberSaveable { mutableStateOf("") }
     var directUrl by rememberSaveable { mutableStateOf("") }
     var sourceName by rememberSaveable { mutableStateOf("Noch keine Musikquelle gewählt") }
-    var status by rememberSaveable { mutableStateOf("Bereit für Root-Free Audio Mix") }
+    var status by rememberSaveable { mutableStateOf("Bereit für Web-Audio Mix Test") }
     var tvVolume by remember { mutableFloatStateOf((webState.volume ?: 50).toFloat()) }
     var musicVolume by rememberSaveable { mutableFloatStateOf(30f) }
     var bridgeRunning by rememberSaveable { mutableStateOf(false) }
@@ -195,7 +195,7 @@ private fun AudioMixScreen(
         }
         if (sendBridge(action = "start", includeStream = true)) {
             bridgeRunning = true
-            status = "Audio Bridge gestartet. Falls sie kurz ins Bild springt: wieder auf TV/HDMI wechseln und prüfen, ob Musik weiterläuft."
+            status = "Web-Audio Test gestartet. Erst prüfen, ob Musik in der Bridge hörbar ist; dann auf TV/HDMI wechseln."
         }
     }
 
@@ -212,7 +212,7 @@ private fun AudioMixScreen(
                 title = {
                     Column {
                         Text("SmartIR Audio Mix")
-                        Text("Root-free Dual-Media Test", style = MaterialTheme.typography.labelMedium)
+                        Text("Web-Audio Persistenz-Test", style = MaterialTheme.typography.labelMedium)
                     }
                 },
                 navigationIcon = {
@@ -267,7 +267,7 @@ private fun AudioMixScreen(
             item {
                 MixCard(
                     title = "🎵 Musikquelle",
-                    subtitle = "Für den ersten Root-free Test eine lokale MP3/AAC/FLAC-Datei wählen oder eine direkte Audio-URL eintragen.",
+                    subtitle = "Für den Test eine MP3/AAC/M4A-Datei wählen oder eine direkte Audio-URL eintragen.",
                 ) {
                     OutlinedButton(
                         onClick = { picker.launch(arrayOf("audio/*")) },
@@ -294,8 +294,8 @@ private fun AudioMixScreen(
 
             item {
                 MixCard(
-                    title = "📺 TV / HDMI",
-                    subtitle = "TV-Pegel. Der normale LG-Ausgang bleibt die erste Medienquelle.",
+                    title = "📺 LG Master / TV",
+                    subtitle = "Aktuell der normale LG-Masterpegel. Er wirkt im Root-free Modus auf den TV-Ausgang und damit grundsätzlich auch auf gemischtes Audio. Ein echter ADEC1-only Regler braucht noch UMI-Zugriff/Root.",
                 ) {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
@@ -309,7 +309,7 @@ private fun AudioMixScreen(
                         onValueChange = { tvVolume = it },
                         onValueChangeFinished = {
                             if (!webOs.setVolume(tvVolume.toInt())) {
-                                status = "TV-Lautstärke konnte nicht gesetzt werden"
+                                status = "LG-Masterlautstärke konnte nicht gesetzt werden"
                             }
                         },
                         valueRange = 0f..100f,
@@ -320,7 +320,7 @@ private fun AudioMixScreen(
             item {
                 MixCard(
                     title = "🎵 Hintergrundmusik",
-                    subtitle = "Eigener Medien-Pegel der webOS Audio Bridge. Dieser Wert wird nicht über die normale TV-Lautstärke gesetzt.",
+                    subtitle = "Nur der Web-Audio-Gain dieser Musikquelle. Dieser Regler darf den TV-Ton nicht mehr verändern.",
                 ) {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
@@ -334,7 +334,7 @@ private fun AudioMixScreen(
                         onValueChange = { musicVolume = it },
                         onValueChangeFinished = {
                             if (bridgeRunning && !sendBridge(action = "volume")) {
-                                status = "Musikpegel konnte nicht aktualisiert werden"
+                                status = "Musik-Gain konnte nicht aktualisiert werden"
                             }
                         },
                         valueRange = 0f..100f,
@@ -345,7 +345,7 @@ private fun AudioMixScreen(
             item {
                 MixCard(
                     title = "BT/WLAN Mix",
-                    subtitle = "Die Bridge ruft am TV mixDigitalSoundOutput(true) auf und spielt die Musik als eigenen webOS-Media-Stream.",
+                    subtitle = "Bridge aktiviert mixDigitalSoundOutput(true) und testet Web Audio zuerst. Web Audio hat einen eigenen Gain und soll beim Wechsel auf TV/HDMI weiterlaufen.",
                 ) {
                     Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                         Button(onClick = ::startBridge) {
@@ -358,7 +358,7 @@ private fun AudioMixScreen(
                     Spacer(Modifier.height(4.dp))
                     Text(status, style = MaterialTheme.typography.bodyMedium)
                     Text(
-                        "Testablauf: Mix starten → falls die Bridge sichtbar wird wieder TV/HDMI wählen → prüfen, ob Musik weiterläuft. Wenn ja, ist der Root-free Parallelpfad bestätigt.",
+                        "Test: 1) Mix starten. 2) In der Bridge muss Musik hörbar sein. 3) Erst dann auf TV/HDMI wechseln. 4) Prüfen, ob die Musik weiterläuft. Hintergrundmusik-Regler darf den TV-Pegel nicht verändern.",
                         style = MaterialTheme.typography.bodySmall,
                     )
                 }
