@@ -1,0 +1,15 @@
+{
+  "id": "com.skallahaze.smartir.audiobridge",
+  "version": "0.1.0",
+  "vendor": "SmartIR",
+  "type": "web",
+  "main": "index.html",
+  "title": "SmartIR Audio Bridge",
+  "icon": "icon.svg",
+  "largeIcon": "icon.svg",
+  "appDescription": "Root-free dual-audio test bridge for SmartIR",
+  "resolution": "1920x1080",
+  "transparent": true,
+  "handlesRelaunch": true,
+  "disableBackHistoryAPI": true
+}

@@ -27,6 +27,19 @@
         android:usesCleartextTraffic="true">
 
         <activity
+            android:name=".AudioMixActivity"
+            android:excludeFromRecents="false"
+            android:exported="true"
+            android:label="SmartIR Audio Mix"
+            android:launchMode="singleTask"
+            android:taskAffinity="com.skallahaze.irbloasster.audiomix">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+
+        <activity
             android:name=".ExpertServiceActivity"
             android:excludeFromRecents="false"
             android:exported="true"
