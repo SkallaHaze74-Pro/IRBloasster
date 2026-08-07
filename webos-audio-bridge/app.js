@@ -9,6 +9,10 @@
   let activeUrl = '';
   let activeVolume = 30;
   let mixEnabled = false;
+  let audioContext = null;
+  let gainNode = null;
+  let bufferSource = null;
+  let playbackMode = 'idle';
 
   function setStatus(text, detail) {
     statusEl.textContent = text || '';
@@ -58,19 +62,105 @@
     }
   }
 
-  async function setMusicVolume(volume) {
+  function setMusicVolume(volume) {
     activeVolume = Math.max(0, Math.min(100, Number(volume) || 0));
-    player.volume = activeVolume / 100;
     meterFill.style.width = `${activeVolume}%`;
 
-    // LG keeps a dedicated media volume path for web/media audio. The HTML
-    // element volume is kept as a second independent limiter in case this API
-    // is not exposed on a particular firmware.
-    try {
-      await bridgeCall('luna://com.webos.audio/media/setVolume', { volume: activeVolume });
-    } catch (_) {
-      // player.volume remains an independent per-stream fallback.
+    // IMPORTANT: do not call com.webos.audio/media/setVolume here. On the
+    // retail B1 firmware that endpoint changes the TV/master path as well.
+    // Web Audio GainNode is strictly local to this music stream.
+    if (gainNode && audioContext) {
+      gainNode.gain.setValueAtTime(activeVolume / 100, audioContext.currentTime);
     }
+    player.volume = activeVolume / 100;
+  }
+
+  async function stopPlayers() {
+    try { bufferSource && bufferSource.stop(0); } catch (_) {}
+    try { bufferSource && bufferSource.disconnect(); } catch (_) {}
+    bufferSource = null;
+    try { gainNode && gainNode.disconnect(); } catch (_) {}
+    gainNode = null;
+    if (audioContext) {
+      try { await audioContext.close(); } catch (_) {}
+    }
+    audioContext = null;
+
+    try {
+      player.pause();
+      player.removeAttribute('src');
+      player.load();
+    } catch (_) {}
+    playbackMode = 'idle';
+  }
+
+  async function fetchAudioBuffer(streamUrl) {
+    const response = await fetch(streamUrl, { cache: 'no-store' });
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    const bytes = await response.arrayBuffer();
+    if (!bytes || bytes.byteLength === 0) throw new Error('Leere Audiodatei');
+    return bytes;
+  }
+
+  async function startWebAudio(streamUrl) {
+    const AudioCtx = window.AudioContext || window.webkitAudioContext;
+    if (!AudioCtx) throw new Error('Web Audio API fehlt');
+
+    setStatus('Lade Musik …', streamUrl);
+    const encoded = await fetchAudioBuffer(streamUrl);
+    const context = new AudioCtx();
+    const decoded = await new Promise((resolve, reject) => {
+      let completed = false;
+      const ok = (buffer) => {
+        if (completed) return;
+        completed = true;
+        resolve(buffer);
+      };
+      const fail = (error) => {
+        if (completed) return;
+        completed = true;
+        reject(error || new Error('decodeAudioData fehlgeschlagen'));
+      };
+      try {
+        const maybePromise = context.decodeAudioData(encoded.slice(0), ok, fail);
+        if (maybePromise && typeof maybePromise.then === 'function') {
+          maybePromise.then(ok, fail);
+        }
+      } catch (error) {
+        fail(error);
+      }
+    });
+
+    const gain = context.createGain();
+    gain.gain.value = activeVolume / 100;
+    gain.connect(context.destination);
+
+    const source = context.createBufferSource();
+    source.buffer = decoded;
+    source.connect(gain);
+    source.onended = () => {
+      if (bufferSource === source) setStatus('Musik beendet', 'Stream vollständig abgespielt');
+    };
+
+    audioContext = context;
+    gainNode = gain;
+    bufferSource = source;
+    playbackMode = 'webaudio';
+
+    if (context.state === 'suspended') {
+      try { await context.resume(); } catch (_) {}
+    }
+    source.start(0);
+    setStatus('Web-Audio läuft', `${activeVolume}% · Hintergrund-Test bereit`);
+  }
+
+  async function startHtmlAudio(streamUrl) {
+    playbackMode = 'htmlaudio';
+    player.src = streamUrl;
+    player.load();
+    player.volume = activeVolume / 100;
+    await player.play();
+    setStatus('HTML-Audio läuft', `${activeVolume}% · Fallback`);
   }
 
   async function startStream(streamUrl, volume) {
@@ -80,28 +170,30 @@
     }
 
     activeUrl = streamUrl;
-    await setMusicVolume(volume == null ? activeVolume : volume);
+    setMusicVolume(volume == null ? activeVolume : volume);
+    await stopPlayers();
     await setMix(true);
 
-    if (player.src !== activeUrl) {
-      player.src = activeUrl;
-      player.load();
-    }
-
     try {
-      await player.play();
-      setStatus('Musik läuft', `${activeVolume}% · ${activeUrl}`);
-    } catch (error) {
-      setStatus('Audio konnte nicht starten', String(error && error.message || error));
+      // The B1 suspends normal HTML media when returning to TV/HDMI. Web Audio
+      // is intentionally tested first because webOS does not automatically stop
+      // Web Audio processing on app suspend.
+      await startWebAudio(activeUrl);
+    } catch (webAudioError) {
+      try {
+        await startHtmlAudio(activeUrl);
+      } catch (htmlError) {
+        playbackMode = 'idle';
+        setStatus(
+          'Audio konnte nicht starten',
+          `WebAudio: ${String(webAudioError && webAudioError.message || webAudioError)} · HTML: ${String(htmlError && htmlError.message || htmlError)}`,
+        );
+      }
     }
   }
 
   async function stopStream() {
-    try {
-      player.pause();
-      player.removeAttribute('src');
-      player.load();
-    } catch (_) {}
+    await stopPlayers();
     activeUrl = '';
     await setMix(false);
     setStatus('Gestoppt', 'TV-Audio bleibt unverändert');
@@ -117,15 +209,13 @@
     }
 
     if (action === 'volume') {
-      await setMusicVolume(command.volume);
-      if (mixEnabled) {
-        setStatus('Musikpegel geändert', `${activeVolume}%`);
-      }
+      setMusicVolume(command.volume);
+      setStatus('Musikpegel geändert', `${activeVolume}% · ${playbackMode}`);
       return;
     }
 
     if (action === 'ping') {
-      setStatus('Bridge bereit', activeUrl ? `Stream aktiv · ${activeVolume}%` : 'Kein Stream aktiv');
+      setStatus('Bridge bereit', activeUrl ? `${playbackMode} aktiv · ${activeVolume}%` : 'Kein Stream aktiv');
       return;
     }
 
@@ -153,28 +243,26 @@
   }
 
   player.addEventListener('playing', () => {
-    setStatus('Musik läuft', `${activeVolume}% · Root-free Test aktiv`);
+    if (playbackMode === 'htmlaudio') setStatus('HTML-Audio läuft', `${activeVolume}% · Fallback`);
   });
 
   player.addEventListener('waiting', () => {
-    setStatus('Puffert …', activeUrl);
+    if (playbackMode === 'htmlaudio') setStatus('Puffert …', activeUrl);
   });
 
   player.addEventListener('error', () => {
     const code = player.error ? player.error.code : '?';
-    setStatus('Audiofehler', `MediaError ${code} · ${activeUrl}`);
+    if (playbackMode === 'htmlaudio') setStatus('Audiofehler', `MediaError ${code} · ${activeUrl}`);
   });
 
   document.addEventListener('visibilitychange', () => {
     if (document.hidden && activeUrl) {
-      // Do not pause. Re-assert the mix flag before webOS suspends the page.
+      // Do not stop Web Audio here: this is the actual root-free persistence test.
       setMix(true);
     }
   });
 
   document.addEventListener('webOSRelaunch', (event) => {
-    // appinfo handlesRelaunch=true: volume/stop updates can be processed while
-    // the app is backgrounded without calling PalmSystem.activate().
     applyCommand(parseParams(event && event.detail));
   });
 
