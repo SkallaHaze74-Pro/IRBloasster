@@ -12,6 +12,10 @@
   let audioContext = null;
   let gainNode = null;
   let bufferSource = null;
+  let liveSocket = null;
+  let liveProcessor = null;
+  let liveQueue = [];
+  let liveOffset = 0;
   let playbackMode = 'idle';
 
   function setStatus(text, detail) {
@@ -66,9 +70,8 @@
     activeVolume = Math.max(0, Math.min(100, Number(volume) || 0));
     meterFill.style.width = `${activeVolume}%`;
 
-    // IMPORTANT: do not call com.webos.audio/media/setVolume here. On the
-    // retail B1 firmware that endpoint changes the TV/master path as well.
-    // Web Audio GainNode is strictly local to this music stream.
+    // Never call LG's media/master volume APIs here. On this retail B1 they
+    // also affect the TV path. GainNode is local to SmartIR music only.
     if (gainNode && audioContext) {
       gainNode.gain.setValueAtTime(activeVolume / 100, audioContext.currentTime);
     }
@@ -79,6 +82,17 @@
     try { bufferSource && bufferSource.stop(0); } catch (_) {}
     try { bufferSource && bufferSource.disconnect(); } catch (_) {}
     bufferSource = null;
+
+    try { liveSocket && liveSocket.close(); } catch (_) {}
+    liveSocket = null;
+    if (liveProcessor) {
+      try { liveProcessor.disconnect(); } catch (_) {}
+      liveProcessor.onaudioprocess = null;
+    }
+    liveProcessor = null;
+    liveQueue = [];
+    liveOffset = 0;
+
     try { gainNode && gainNode.disconnect(); } catch (_) {}
     gainNode = null;
     if (audioContext) {
@@ -123,9 +137,7 @@
       };
       try {
         const maybePromise = context.decodeAudioData(encoded.slice(0), ok, fail);
-        if (maybePromise && typeof maybePromise.then === 'function') {
-          maybePromise.then(ok, fail);
-        }
+        if (maybePromise && typeof maybePromise.then === 'function') maybePromise.then(ok, fail);
       } catch (error) {
         fail(error);
       }
@@ -163,6 +175,85 @@
     setStatus('HTML-Audio läuft', `${activeVolume}% · Fallback`);
   }
 
+  function decodePcm16(arrayBuffer) {
+    const view = new DataView(arrayBuffer);
+    const count = Math.floor(view.byteLength / 2);
+    const values = new Float32Array(count);
+    for (let i = 0; i < count; i += 1) {
+      values[i] = view.getInt16(i * 2, true) / 32768;
+    }
+    return values;
+  }
+
+  async function startLiveAudio(streamUrl) {
+    const AudioCtx = window.AudioContext || window.webkitAudioContext;
+    if (!AudioCtx) throw new Error('Web Audio API fehlt');
+    if (!/^ws:\/\//i.test(streamUrl)) throw new Error('Ungültige Live-URL');
+
+    await stopPlayers();
+    activeUrl = streamUrl;
+    await setMix(true);
+
+    const context = new AudioCtx();
+    const gain = context.createGain();
+    gain.gain.value = activeVolume / 100;
+    gain.connect(context.destination);
+
+    const processor = context.createScriptProcessor(2048, 0, 2);
+    processor.onaudioprocess = (event) => {
+      const left = event.outputBuffer.getChannelData(0);
+      const right = event.outputBuffer.getChannelData(1);
+      for (let frame = 0; frame < left.length; frame += 1) {
+        while (liveQueue.length && liveOffset >= liveQueue[0].length) {
+          liveQueue.shift();
+          liveOffset = 0;
+        }
+        if (!liveQueue.length) {
+          left[frame] = 0;
+          right[frame] = 0;
+          continue;
+        }
+        const chunk = liveQueue[0];
+        left[frame] = chunk[liveOffset] || 0;
+        right[frame] = chunk[liveOffset + 1] || left[frame];
+        liveOffset += 2;
+      }
+    };
+    processor.connect(gain);
+
+    audioContext = context;
+    gainNode = gain;
+    liveProcessor = processor;
+    playbackMode = 'live';
+
+    if (context.state === 'suspended') {
+      try { await context.resume(); } catch (_) {}
+    }
+
+    const socket = new WebSocket(streamUrl);
+    socket.binaryType = 'arraybuffer';
+    socket.onopen = () => {
+      setStatus('LIVE-Audio verbunden', `${activeVolume}% · Handy → WLAN → TV`);
+    };
+    socket.onmessage = (event) => {
+      if (!(event.data instanceof ArrayBuffer)) return;
+      liveQueue.push(decodePcm16(event.data));
+      // Cap queue to roughly one second. If TV scheduling stalls, prefer
+      // dropping old audio over accumulating huge latency.
+      while (liveQueue.length > 50) {
+        liveQueue.shift();
+        liveOffset = 0;
+      }
+    };
+    socket.onerror = () => {
+      setStatus('LIVE-Verbindung fehlerhaft', streamUrl);
+    };
+    socket.onclose = () => {
+      if (playbackMode === 'live') setStatus('LIVE-Verbindung beendet', streamUrl);
+    };
+    liveSocket = socket;
+  }
+
   async function startStream(streamUrl, volume) {
     if (!streamUrl || !/^https?:\/\//i.test(streamUrl)) {
       setStatus('Keine gültige Audio-URL', streamUrl || 'streamUrl fehlt');
@@ -175,9 +266,6 @@
     await setMix(true);
 
     try {
-      // The B1 suspends normal HTML media when returning to TV/HDMI. Web Audio
-      // is intentionally tested first because webOS does not automatically stop
-      // Web Audio processing on app suspend.
       await startWebAudio(activeUrl);
     } catch (webAudioError) {
       try {
@@ -219,6 +307,16 @@
       return;
     }
 
+    setMusicVolume(command.volume == null ? activeVolume : command.volume);
+    if (action === 'live') {
+      try {
+        await startLiveAudio(command.streamUrl || activeUrl);
+      } catch (error) {
+        setStatus('LIVE-Audio konnte nicht starten', String(error && error.message || error));
+      }
+      return;
+    }
+
     await startStream(command.streamUrl || activeUrl, command.volume);
   }
 
@@ -257,8 +355,12 @@
 
   document.addEventListener('visibilitychange', () => {
     if (document.hidden && activeUrl) {
-      // Do not stop Web Audio here: this is the actual root-free persistence test.
+      // Keep Web Audio alive and re-assert LG's digital-mix flag when the app
+      // moves behind Live TV/HDMI.
       setMix(true);
+      if (audioContext && audioContext.state === 'suspended') {
+        try { audioContext.resume(); } catch (_) {}
+      }
     }
   });
 
