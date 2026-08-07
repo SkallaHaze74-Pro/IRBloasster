@@ -31,4 +31,5 @@ printf '\n== Installiere auf %s ==\n' "$DEVICE"
 ares-install -d "$DEVICE" "$IPK"
 
 printf '\nFertig. App-ID: com.skallahaze.smartir.audiobridge\n'
+printf 'Bridge-Version: 0.3.0 · Live PCM/WebSocket + Web Audio\n'
 printf 'Jetzt SmartIR Audio Mix auf dem Handy öffnen.\n'

@@ -24,4 +24,4 @@ rm -rf .gradle app/build
 ./gradlew --no-daemon clean assembleDebug
 
 echo
-echo "[SmartIR] APK: $ROOT/app/build/outputs/apk/debug/app-debug.apk"
+echo "[SmartIR] 1.4.0 APK: $ROOT/app/build/outputs/apk/debug/app-debug.apk"

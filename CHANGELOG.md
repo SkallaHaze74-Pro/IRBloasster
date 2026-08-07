@@ -1,5 +1,30 @@
 # Changelog
 
+## 1.4.0
+
+- **Live-Audio vom Handy** ergänzt: für normalen Betrieb keine lokale MP3-Datei mehr nötig
+- Android `AudioPlaybackCapture` + `MediaProjection` nimmt erlaubtes Medien-Audio live auf; es wird kein Video oder Audiomitschnitt gespeichert
+- PCM16/Stereo/48 kHz wird nur im lokalen WLAN über einen kleinen WebSocket-Server an den LG gestreamt
+- webOS Audio Bridge spielt den Live-PCM-Strom über Web Audio (`ScriptProcessorNode` + eigener `GainNode`)
+- Hintergrundmusik-Regler bleibt lokal auf dem SmartIR-Musikkanal und darf den LG-TV-/Masterpegel nicht verändern
+- echter Audio-Spektrum-Visualizer über `AnalyserNode` ergänzt; Rainbow-Neon-Balken reagieren auf den laufenden Musikstrom
+- neues Premium-TV-Overlay im gewählten Neon/Rainbow-Design mit LIVE-Status, Pegel und kompakten Mini-Controls
+- Bridge puffert nur kurz und verwirft alte Frames bei Verzögerung, statt große Latenz aufzubauen
+- Datei/HTTP-URL bleibt als Diagnose-/Fallbackpfad erhalten
+- Android weist sichtbar darauf hin, dass Streaming-/DRM-Apps interne Audioaufnahme blockieren können
+- alte Android-TV-Lab-/Bildschirm-Testoberflächen entfernt, damit die normale SmartIR-App schlanker bleibt
+- Bluetooth/A2DP `AMIXER4` bleibt das bevorzugte spätere Backend, sobald die LG-Policy per UMI/Root umgangen werden kann
+- webOS Audio Bridge auf 0.4.0 angehoben
+
+## 1.3.1
+
+- LG-B1-Testbefund korrigiert: `com.webos.audio/media/setVolume` wirkt auf der Retail-Firmware auf den TV-/Masterpfad und ist daher **kein** separater Musikregler
+- Musiklautstärke der Audio Bridge auf einen lokalen Web-Audio-`GainNode` umgestellt; der Musikregler darf den TV-Pegel damit nicht mehr verändern
+- Root-free Persistenztest nutzt Web Audio zuerst und HTML-Audio nur noch als Fallback
+- Bridge prüft den HTTP-Stream direkt und zeigt Lade-/Decode-/Playback-Fehler getrennt an
+- UI benennt den ersten Regler ehrlich als LG Master / TV; echter `ADEC1`-only TV-Regler bleibt UMI-/Root-Ziel
+- webOS Audio Bridge auf 0.2.0 angehoben
+
 ## 1.3.0
 
 - experimentellen **SmartIR Audio Mix** als eigenen Launcher ergänzt

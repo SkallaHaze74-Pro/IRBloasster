@@ -1,61 +1,55 @@
-# SmartIR Audio Mix – Root-free Test
+# SmartIR Audio Mix – Root-free / Live-Audio
 
-Ziel: normales TV-/HDMI-Bild und TV-Ton weiterlaufen lassen und zusätzlich eine zweite Musikquelle über den LG-TV ausgeben, ohne Root und ohne A2DP/Sound-Share als Bildquelle zu verwenden.
+## Ziel
 
-## Architektur
+SmartIR soll TV/HDMI-Bild und TV-Ton weiterlaufen lassen und zusätzlich einen eigenen Hintergrundmusik-Kanal einblenden. Der LG-B1-Test hat gezeigt, dass die Retail-Firmware beim normalen Bluetooth-Sound-Share `ADEC1` abklemmt und beim Zurückschalten A2DP trennt. Deshalb testet SmartIR ohne Root einen separaten Web-Audio-Pfad.
 
-- TV/HDMI bleibt die erste Medienquelle.
-- Die Android-App stellt eine ausgewählte Audiodatei nur im lokalen Netzwerk per HTTP bereit (oder verwendet eine direkte HTTP(S)-Audio-URL).
-- Die webOS-App `com.skallahaze.smartir.audiobridge` spielt diese zweite Quelle.
-- Die Bridge ruft `luna://com.webos.service.audio/tv/mixDigitalSoundOutput` mit `{ "mix": true }` auf.
-- Der Musikpegel wird in der Bridge separat über den Web-Media-Pegel und zusätzlich `com.webos.audio/media/setVolume` geregelt.
-- Der TV-Regler bleibt in SmartIR separat vorhanden.
+## 1.4.0 Live-Audio
+
+Der bevorzugte Root-free Test braucht keine MP3-Datei mehr:
+
+1. SmartIR Audio Mix öffnen und mit dem LG verbinden.
+2. `Live-Capture starten` drücken.
+3. Androids Systemdialog für Audio-/Bildschirmaufnahme bestätigen. SmartIR speichert kein Video und keinen Audiomitschnitt.
+4. Warten, bis `LIVE` und eine `ws://.../live`-Adresse angezeigt werden.
+5. `LIVE Mix starten` drücken.
+6. Musik-App auf dem Handy starten bzw. weiterlaufen lassen.
+7. Am LG wieder TV/HDMI wählen.
+8. Prüfen, ob die Hintergrundmusik weiterläuft und der Musikregler nur SmartIR-Musik verändert.
+
+Technik: Android `AudioPlaybackCapture` liefert PCM16 Stereo mit 48 kHz. Ein LAN-only WebSocket-Server auf dem Handy schickt kleine PCM-Blöcke an die webOS Audio Bridge. Dort werden die Frames mit Web Audio (`ScriptProcessorNode`) abgespielt und durch einen eigenen `GainNode` geregelt. `mixDigitalSoundOutput(true)` bleibt als LG-Mix-Flag aktiv.
+
+Die Android-Systemfreigabe ist nötig, weil Playback-Capture über `MediaProjection` autorisiert wird. SmartIR erzeugt dabei keine Bildschirmdatei; die Freigabe dient nur als Betriebssystem-Gate für den laufenden Audio-Capture-Service.
+
+## Bluetooth bleibt Ziel Nummer 1
+
+Auf dem Handy ist Bluetooth bereits der passende A2DP-Quelltransport. Das Problem sitzt auf der aktuellen LG-Retail-Firmware: sobald A2DP/Sound Share aktiv wird, trennt die Audio-Policy die Live-TV-Pipeline `ADEC1 -> MAIN`; beim Zurückschalten auf TV/HDMI wird A2DP wieder getrennt. Deshalb kann die Android-App allein den echten Bluetooth-Mix noch nicht erzwingen.
+
+Sobald ein UMI-/Policy-Weg mit ausreichenden Rechten oder Root verfügbar ist, soll der Transport hinter derselben Oberfläche auf `A2DP -> AMIXER4` umgestellt werden. Die Bedienung mit getrenntem TV- und Musikkanal bleibt gleich.
+
+## Datei/URL-Fallback
+
+Eine lokale MP3/AAC/M4A-Datei oder direkte HTTP(S)-Audio-URL kann weiterhin als Diagnosepfad verwendet werden. Für den normalen Gebrauch ist Live-Audio vorgesehen.
+
+## Einschränkungen
+
+- Android erlaubt Playback-Capture nur für Audio, das die abspielende App zur Aufnahme freigibt. Streaming-/DRM-Apps können die interne Aufnahme blockieren.
+- Der obere `LG Master / TV`-Regler ist noch kein echter `ADEC1`-only Regler. Auf der aktuellen Retail-Firmware wirkt der normale LG-Master grundsätzlich auf den Lautsprecherausgang.
+- Ein echter Bluetooth-Backend-Pfad (`A2DP -> AMIXER4`) bleibt das Ziel, sobald UMI/Audio-Policy mit ausreichenden Rechten bzw. Root steuerbar ist.
 
 ## Einmalige Installation der TV-Bridge
 
-Im bereits geklonten IRBloasster-Repo in Termux:
-
 ```bash
 cd ~/IRBloasster
-git pull
 bash tools/install-audio-bridge.sh smartirtv
 ```
 
-Alternativ manuell:
+## Erfolgskriterium
 
-```bash
-mkdir -p build-webos
-ares-package webos-audio-bridge -o build-webos
-ares-install -d smartirtv build-webos/*.ipk
-```
-
-## Android-Test
-
-1. SmartIR 1.3.0 installieren.
-2. Launcher **SmartIR Audio Mix** öffnen.
-3. Mit dem LG-TV verbinden.
-4. Eine lokale MP3/AAC/FLAC-Datei wählen oder eine direkte Audio-URL eintragen.
-5. TV-Pegel und Musikpegel einstellen.
-6. **Mix starten**.
-7. Falls die Bridge sichtbar wird, wieder auf die gewünschte TV-/HDMI-Quelle wechseln.
-8. Prüfen, ob die Musik danach weiterläuft.
-
-### Positives Ergebnis
-
-Wenn Bild + TV-Ton bleiben und die Musik weiterläuft, ist der Root-free Parallelpfad bestätigt. Danach kann die Bridge weiter versteckt/automatisiert und die Bedienung in die Hauptoberfläche integriert werden.
-
-### Negatives Ergebnis
-
-Wenn die Musik beim Zurückschalten sofort stoppt, suspendiert die Retail-webOS-App den Web-Media-Stream. Dann ist dieser Root-free Weg als dauerhafte Lösung nicht ausreichend. Die bisherigen Analyse-Ergebnisse bleiben trotzdem nutzbar: Ein zukünftiger Root-/Homebrew-Weg kann dieselbe SmartIR-Oberfläche verwenden und den Transport später durch den echten `AMIXER4`-/A2DP-Pfad ersetzen.
+Erfolg bedeutet: TV/HDMI bleibt sichtbar und hörbar, SmartIR-Live-Musik bleibt zusätzlich hörbar, und der Hintergrundmusik-Regler verändert nicht den TV-Ton.
 
 ## Datenschutz / Netzwerk
 
-- Lokale Dateien werden nicht hochgeladen.
-- SmartIR kopiert die gewählte Datei nur temporär in den App-Cache.
-- Der HTTP-Server bindet einen zufälligen Port im lokalen Netzwerk und wird beim Schließen von SmartIR Audio Mix beendet.
-
-## Bekannte Einschränkungen
-
-- Systemweite Audioaufnahme von Spotify/YouTube/etc. ist in diesem ersten Root-free Test noch nicht aktiviert.
-- Einige Streaming-Dienste erlauben Android Audio Playback Capture grundsätzlich nicht oder schützen DRM-Audio.
-- Die tatsächliche Hintergrund-Audiofähigkeit muss auf dem LG OLED B1 mit der aktuellen Firmware praktisch bestätigt werden.
+- Live-Audio wird nicht als Datei gespeichert.
+- PCM-Daten werden nur während der aktiven Capture-Sitzung im lokalen WLAN übertragen.
+- Beim Stoppen von Live-Capture wird der lokale WebSocket-Server beendet.
