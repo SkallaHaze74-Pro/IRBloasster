@@ -5,22 +5,55 @@
   const statusEl = document.getElementById('status');
   const detailEl = document.getElementById('detail');
   const meterFill = document.getElementById('meterFill');
+  const sliderThumb = document.getElementById('sliderThumb');
+  const volumeValue = document.getElementById('volumeValue');
+  const modeLabel = document.getElementById('modeLabel');
+  const visualizer = document.getElementById('visualizer');
 
   let activeUrl = '';
   let activeVolume = 30;
   let mixEnabled = false;
   let audioContext = null;
   let gainNode = null;
+  let analyserNode = null;
   let bufferSource = null;
   let liveSocket = null;
   let liveProcessor = null;
   let liveQueue = [];
   let liveOffset = 0;
   let playbackMode = 'idle';
+  let animationFrame = 0;
+  let lastVisualUpdate = 0;
+
+  const EQ_BARS = 36;
+  const eqBars = [];
+
+  function createEqualizer() {
+    if (!visualizer) return;
+    visualizer.textContent = '';
+    for (let i = 0; i < EQ_BARS; i += 1) {
+      const bar = document.createElement('span');
+      bar.className = 'eq-bar';
+      const hue = Math.round((i / Math.max(1, EQ_BARS - 1)) * 320 + 300) % 360;
+      bar.style.setProperty('--bar-color', `hsl(${hue}, 96%, 58%)`);
+      bar.style.setProperty('--bar-mid', `hsl(${(hue + 22) % 360}, 100%, 68%)`);
+      visualizer.appendChild(bar);
+      eqBars.push(bar);
+    }
+  }
 
   function setStatus(text, detail) {
     statusEl.textContent = text || '';
     detailEl.textContent = detail || '';
+  }
+
+  function setMode(mode) {
+    playbackMode = mode;
+    if (!modeLabel) return;
+    if (mode === 'live') modeLabel.textContent = 'LIVE';
+    else if (mode === 'webaudio') modeLabel.textContent = 'STREAM';
+    else if (mode === 'htmlaudio') modeLabel.textContent = 'MEDIA';
+    else modeLabel.textContent = 'READY';
   }
 
   function bridgeCall(uri, payload) {
@@ -63,9 +96,53 @@
 
   function setMusicVolume(volume) {
     activeVolume = Math.max(0, Math.min(100, Number(volume) || 0));
-    meterFill.style.width = `${activeVolume}%`;
+    const percent = `${activeVolume}%`;
+    meterFill.style.width = percent;
+    if (sliderThumb) sliderThumb.style.left = percent;
+    if (volumeValue) volumeValue.textContent = percent;
     if (gainNode && audioContext) gainNode.gain.setValueAtTime(activeVolume / 100, audioContext.currentTime);
     player.volume = activeVolume / 100;
+  }
+
+  function connectOutputGraph(context, gain) {
+    const analyser = context.createAnalyser();
+    analyser.fftSize = 256;
+    analyser.smoothingTimeConstant = 0.76;
+    analyser.minDecibels = -88;
+    analyser.maxDecibels = -18;
+    gain.connect(analyser);
+    analyser.connect(context.destination);
+    analyserNode = analyser;
+  }
+
+  function renderEqualizer(now) {
+    animationFrame = requestAnimationFrame(renderEqualizer);
+    if (!eqBars.length || now - lastVisualUpdate < 32) return;
+    lastVisualUpdate = now;
+
+    if (analyserNode && audioContext && audioContext.state !== 'closed') {
+      const bins = new Uint8Array(analyserNode.frequencyBinCount);
+      analyserNode.getByteFrequencyData(bins);
+      for (let i = 0; i < eqBars.length; i += 1) {
+        const start = Math.floor((i / eqBars.length) * Math.min(bins.length, 70));
+        const end = Math.min(bins.length - 1, start + 2);
+        let value = 0;
+        for (let b = start; b <= end; b += 1) value = Math.max(value, bins[b] || 0);
+        const normalized = Math.max(0.04, Math.min(1, value / 255));
+        const shaped = Math.pow(normalized, 0.72);
+        eqBars[i].style.height = `${8 + shaped * 116}px`;
+        eqBars[i].style.opacity = `${0.42 + shaped * 0.58}`;
+      }
+      return;
+    }
+
+    const time = now / 470;
+    for (let i = 0; i < eqBars.length; i += 1) {
+      const wave = (Math.sin(time + i * 0.63) + Math.sin(time * 0.67 + i * 0.31) + 2) / 4;
+      const height = playbackMode === 'idle' ? 7 + wave * 18 : 12 + wave * 34;
+      eqBars[i].style.height = `${height}px`;
+      eqBars[i].style.opacity = playbackMode === 'idle' ? '.42' : '.72';
+    }
   }
 
   async function stopPlayers() {
@@ -83,6 +160,8 @@
     liveOffset = 0;
     try { gainNode && gainNode.disconnect(); } catch (_) {}
     gainNode = null;
+    try { analyserNode && analyserNode.disconnect(); } catch (_) {}
+    analyserNode = null;
     if (audioContext) {
       try { await audioContext.close(); } catch (_) {}
     }
@@ -92,7 +171,7 @@
       player.removeAttribute('src');
       player.load();
     } catch (_) {}
-    playbackMode = 'idle';
+    setMode('idle');
   }
 
   async function fetchAudioBuffer(streamUrl) {
@@ -118,9 +197,11 @@
         if (maybePromise && typeof maybePromise.then === 'function') maybePromise.then(ok, fail);
       } catch (error) { fail(error); }
     });
+
     const gain = context.createGain();
     gain.gain.value = activeVolume / 100;
-    gain.connect(context.destination);
+    connectOutputGraph(context, gain);
+
     const source = context.createBufferSource();
     source.buffer = decoded;
     source.connect(gain);
@@ -128,19 +209,19 @@
     audioContext = context;
     gainNode = gain;
     bufferSource = source;
-    playbackMode = 'webaudio';
+    setMode('webaudio');
     if (context.state === 'suspended') { try { await context.resume(); } catch (_) {} }
     source.start(0);
-    setStatus('Web-Audio läuft', `${activeVolume}% · Datei-Fallback`);
+    setStatus('Stream läuft', `${activeVolume}% · Web Audio`);
   }
 
   async function startHtmlAudio(streamUrl) {
-    playbackMode = 'htmlaudio';
+    setMode('htmlaudio');
     player.src = streamUrl;
     player.load();
     player.volume = activeVolume / 100;
     await player.play();
-    setStatus('HTML-Audio läuft', `${activeVolume}% · Fallback`);
+    setStatus('Media-Stream läuft', `${activeVolume}% · Fallback`);
   }
 
   function decodePcm16(arrayBuffer) {
@@ -162,7 +243,8 @@
     const context = new AudioCtx();
     const gain = context.createGain();
     gain.gain.value = activeVolume / 100;
-    gain.connect(context.destination);
+    connectOutputGraph(context, gain);
+
     const processor = context.createScriptProcessor(2048, 0, 2);
     processor.onaudioprocess = (event) => {
       const left = event.outputBuffer.getChannelData(0);
@@ -184,15 +266,16 @@
       }
     };
     processor.connect(gain);
+
     audioContext = context;
     gainNode = gain;
     liveProcessor = processor;
-    playbackMode = 'live';
+    setMode('live');
     if (context.state === 'suspended') { try { await context.resume(); } catch (_) {} }
 
     const socket = new WebSocket(streamUrl);
     socket.binaryType = 'arraybuffer';
-    socket.onopen = () => setStatus('LIVE-Audio verbunden', `${activeVolume}% · Handy → WLAN → TV`);
+    socket.onopen = () => setStatus('LIVE · verbunden', `${activeVolume}% · Handy → WLAN → TV`);
     socket.onmessage = (event) => {
       if (!(event.data instanceof ArrayBuffer)) return;
       liveQueue.push(decodePcm16(event.data));
@@ -220,7 +303,7 @@
     } catch (webAudioError) {
       try { await startHtmlAudio(activeUrl); }
       catch (htmlError) {
-        playbackMode = 'idle';
+        setMode('idle');
         setStatus('Audio konnte nicht starten', `WebAudio: ${String(webAudioError && webAudioError.message || webAudioError)} · HTML: ${String(htmlError && htmlError.message || htmlError)}`);
       }
     }
@@ -267,7 +350,7 @@
     return {};
   }
 
-  player.addEventListener('playing', () => { if (playbackMode === 'htmlaudio') setStatus('HTML-Audio läuft', `${activeVolume}% · Fallback`); });
+  player.addEventListener('playing', () => { if (playbackMode === 'htmlaudio') setStatus('Media-Stream läuft', `${activeVolume}% · Fallback`); });
   player.addEventListener('waiting', () => { if (playbackMode === 'htmlaudio') setStatus('Puffert …', activeUrl); });
   player.addEventListener('error', () => {
     const code = player.error ? player.error.code : '?';
@@ -290,6 +373,10 @@
     }
   });
 
-  setStatus('Bridge startet …', 'SmartIR wartet auf Audio');
+  createEqualizer();
+  setMusicVolume(activeVolume);
+  setMode('idle');
+  animationFrame = requestAnimationFrame(renderEqualizer);
+  setStatus('Bridge bereit', 'SmartIR wartet auf Audio');
   applyCommand(initialParams());
 })();
