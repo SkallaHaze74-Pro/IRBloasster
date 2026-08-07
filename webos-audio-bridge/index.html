@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>SmartIR Audio Bridge</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <main id="panel">
+    <div class="badge">SMARTIR · ROOT-FREE AUDIO BRIDGE</div>
+    <h1>Audio Mix</h1>
+    <p id="status">Warte auf Stream …</p>
+    <p id="detail"></p>
+    <div class="meter"><div id="meterFill"></div></div>
+    <p class="hint">Nach dem Start wieder auf TV/HDMI wechseln. Wenn die Musik weiterläuft, ist der Parallelpfad bestätigt.</p>
+  </main>
+  <audio id="player" preload="auto"></audio>
+  <script src="app.js"></script>
+</body>
+</html>
