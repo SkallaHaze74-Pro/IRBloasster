@@ -2,7 +2,7 @@
 
 ## 1.4.0
 
-- **Live-Audio vom Handy** ergänzt: keine lokale MP3-Datei mehr nötig
+- **Live-Audio vom Handy** ergänzt: für normalen Betrieb keine lokale MP3-Datei mehr nötig
 - Android `AudioPlaybackCapture` + `MediaProjection` nimmt erlaubtes Medien-Audio live auf; es wird kein Video oder Audiomitschnitt gespeichert
 - PCM16/Stereo/48 kHz wird nur im lokalen WLAN über einen kleinen WebSocket-Server an den LG gestreamt
 - webOS Audio Bridge spielt den Live-PCM-Strom über Web Audio (`ScriptProcessorNode` + eigener `GainNode`)
