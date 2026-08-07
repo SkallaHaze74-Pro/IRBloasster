@@ -19,6 +19,8 @@ Der bevorzugte Root-free Test braucht keine MP3-Datei mehr:
 
 Technik: Android `AudioPlaybackCapture` liefert PCM16 Stereo mit 48 kHz. Ein LAN-only WebSocket-Server auf dem Handy schickt kleine PCM-Blöcke an die webOS Audio Bridge. Dort werden die Frames mit Web Audio (`ScriptProcessorNode`) abgespielt und durch einen eigenen `GainNode` geregelt. `mixDigitalSoundOutput(true)` bleibt als LG-Mix-Flag aktiv.
 
+Die Android-Systemfreigabe ist nötig, weil Playback-Capture über `MediaProjection` autorisiert wird. SmartIR erzeugt dabei keine Bildschirmdatei; die Freigabe dient nur als Betriebssystem-Gate für den laufenden Audio-Capture-Service.
+
 ## Bluetooth bleibt Ziel Nummer 1
 
 Auf dem Handy ist Bluetooth bereits der passende A2DP-Quelltransport. Das Problem sitzt auf der aktuellen LG-Retail-Firmware: sobald A2DP/Sound Share aktiv wird, trennt die Audio-Policy die Live-TV-Pipeline `ADEC1 -> MAIN`; beim Zurückschalten auf TV/HDMI wird A2DP wieder getrennt. Deshalb kann die Android-App allein den echten Bluetooth-Mix noch nicht erzwingen.
