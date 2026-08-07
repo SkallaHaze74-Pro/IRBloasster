@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.3.0
+
+- experimentellen **SmartIR Audio Mix** als eigenen Launcher ergänzt
+- Root-free Dual-Media-Test für LG webOS ergänzt
+- lokale Audiodateien werden ausschließlich im Heimnetz vom Handy per HTTP mit Byte-Range-Unterstützung bereitgestellt
+- direkte HTTP(S)-Audio-URLs können alternativ als Musikquelle verwendet werden
+- TV- und Musikpegel erhalten getrennte Regler in der Audio-Mix-Oberfläche
+- webOS-Begleit-App `com.skallahaze.smartir.audiobridge` ergänzt
+- Audio Bridge nutzt `mixDigitalSoundOutput(true)` und einen eigenen Media-Pegel für Hintergrundmusik
+- Termux-Installer `tools/install-audio-bridge.sh` ergänzt
+- Root/A2DP-Pfad bleibt als späteres Upgrade vorgesehen; der Root-free Test verändert keine Systemdateien
+
 ## 1.1.1
 
 - eigenes adaptives und monochromes SmartIR-App-Icon ergänzt
