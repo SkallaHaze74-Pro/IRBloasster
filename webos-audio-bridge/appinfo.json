@@ -1,15 +1,18 @@
 {
   "id": "com.skallahaze.smartir.audiobridge",
-  "version": "0.5.1",
+  "version": "0.5.2",
   "vendor": "SmartIR",
   "type": "web",
-  "main": "index-v051.html",
+  "main": "index-v052.html",
   "title": "SmartIR Audio Bridge",
   "icon": "icon.png",
   "largeIcon": "icon.png",
-  "appDescription": "Low-latency PCM/Web Audio bridge with adaptive resync and responsive neon spectrum",
+  "appDescription": "Stable grouped PCM/Web Audio bridge with responsive neon spectrum and foreground relaunch",
   "resolution": "1920x1080",
   "transparent": true,
   "handlesRelaunch": true,
-  "disableBackHistoryAPI": true
+  "disableBackHistoryAPI": true,
+  "screenSaverProperties": {
+    "preferredType": 2
+  }
 }
