@@ -8,13 +8,13 @@ Der Paketname bleibt dauerhaft:
 com.skallahaze.irbloasster
 ```
 
-## SmartIR 1.4.0 – Live Audio Mix
+## Aktueller Entwicklungsstand: 1.4.0
+
+### SmartIR Live Audio Mix
 
 Der Audio-Mix-Test kann erlaubtes Medien-Audio des Android-Handys live erfassen und ohne vorherige MP3-Datei direkt im lokalen WLAN zur webOS Audio Bridge schicken. Die Bridge spielt Live-PCM über Web Audio und besitzt für den SmartIR-Musikkanal einen eigenen Gain-Regler. Der echte Bluetooth/A2DP-Pfad (`AMIXER4`) bleibt das bevorzugte spätere Backend, sobald die LG-Audio-Policy per UMI/Root steuerbar ist.
 
 Android-Apps dürfen Playback-Capture selbst blockieren; Streaming-/DRM-Inhalte können deshalb stumm bleiben. Details stehen unter [`docs/AUDIO_MIX_ROOTFREE.md`](docs/AUDIO_MIX_ROOTFREE.md).
-
-## Aktueller Entwicklungsstand: 1.2.0
 
 ### SmartIR TV Lab
 
