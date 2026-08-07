@@ -20,21 +20,24 @@
   let bufferSource = null;
   let liveSocket = null;
   let playbackMode = 'idle';
-  let animationFrame = 0;
-  let lastVisualUpdate = 0;
   let liveNextTime = 0;
   let liveLastPacketAt = 0;
   let liveLastSignalAt = 0;
   let liveLastStatusAt = 0;
-  let liveUnderruns = 0;
+  let liveResyncs = 0;
+  let liveDrops = 0;
+  let eqFrequencyData = null;
   const liveSources = new Set();
 
-  const EQ_BARS = 36;
+  const EQ_BARS = 30;
+  const EQ_INTERVAL_MS = 40;
   const SAMPLE_RATE = 48000;
-  const LIVE_PREBUFFER_SECONDS = 0.12;
-  const LIVE_MIN_AHEAD_SECONDS = 0.035;
-  const LIVE_MAX_AHEAD_SECONDS = 0.55;
+  const LIVE_PREBUFFER_SECONDS = 0.055;
+  const LIVE_MIN_AHEAD_SECONDS = 0.018;
+  const LIVE_SOFT_MAX_AHEAD_SECONDS = 0.12;
+  const LIVE_HARD_MAX_AHEAD_SECONDS = 0.17;
   const eqBars = [];
+  const eqLevels = new Float32Array(EQ_BARS);
 
   function createEqualizer() {
     if (!visualizer) return;
@@ -45,6 +48,11 @@
       const hue = Math.round((i / Math.max(1, EQ_BARS - 1)) * 320 + 300) % 360;
       bar.style.setProperty('--bar-color', `hsl(${hue}, 96%, 58%)`);
       bar.style.setProperty('--bar-mid', `hsl(${(hue + 22) % 360}, 100%, 68%)`);
+      bar.style.height = '118px';
+      bar.style.transform = 'scaleY(.06)';
+      bar.style.transformOrigin = 'bottom center';
+      bar.style.transition = 'transform 38ms linear, opacity 70ms linear';
+      bar.style.willChange = 'transform, opacity';
       visualizer.appendChild(bar);
       eqBars.push(bar);
     }
@@ -58,7 +66,7 @@
   function setMode(mode) {
     playbackMode = mode;
     if (!modeLabel) return;
-    if (mode === 'live') modeLabel.textContent = 'LIVE HQ';
+    if (mode === 'live') modeLabel.textContent = 'LIVE LL';
     else if (mode === 'webaudio') modeLabel.textContent = 'STREAM';
     else if (mode === 'htmlaudio') modeLabel.textContent = 'MEDIA';
     else modeLabel.textContent = 'READY';
@@ -114,10 +122,10 @@
 
   function connectOutputGraph(context, gain) {
     const analyser = context.createAnalyser();
-    analyser.fftSize = 256;
-    analyser.smoothingTimeConstant = 0.72;
+    analyser.fftSize = 512;
+    analyser.smoothingTimeConstant = 0.42;
     analyser.minDecibels = -92;
-    analyser.maxDecibels = -14;
+    analyser.maxDecibels = -12;
 
     const compressor = context.createDynamicsCompressor();
     compressor.threshold.value = -3;
@@ -131,45 +139,80 @@
     compressor.connect(context.destination);
     analyserNode = analyser;
     compressorNode = compressor;
+    eqFrequencyData = new Uint8Array(analyser.frequencyBinCount);
   }
 
-  function renderEqualizer(now) {
-    animationFrame = requestAnimationFrame(renderEqualizer);
-    if (!eqBars.length || now - lastVisualUpdate < 32) return;
-    lastVisualUpdate = now;
+  function setEqLevel(index, target, opacityBase) {
+    const previous = eqLevels[index] || 0;
+    const next = target > previous
+      ? previous * 0.28 + target * 0.72
+      : previous * 0.76 + target * 0.24;
+    eqLevels[index] = next;
+    const scale = Math.max(0.055, Math.min(1, 0.055 + next * 0.945));
+    eqBars[index].style.transform = `scaleY(${scale.toFixed(3)})`;
+    eqBars[index].style.opacity = `${Math.max(opacityBase, 0.34 + next * 0.66).toFixed(2)}`;
+  }
+
+  function renderEqualizer() {
+    if (!eqBars.length) return;
 
     if (analyserNode && audioContext && audioContext.state !== 'closed') {
-      const bins = new Uint8Array(analyserNode.frequencyBinCount);
-      analyserNode.getByteFrequencyData(bins);
+      if (!eqFrequencyData || eqFrequencyData.length !== analyserNode.frequencyBinCount) {
+        eqFrequencyData = new Uint8Array(analyserNode.frequencyBinCount);
+      }
+      analyserNode.getByteFrequencyData(eqFrequencyData);
+
       let overallPeak = 0;
-      for (let i = 0; i < Math.min(bins.length, 70); i += 1) overallPeak = Math.max(overallPeak, bins[i] || 0);
+      const maxObservedBin = Math.min(eqFrequencyData.length - 1, 112);
+      for (let i = 1; i <= maxObservedBin; i += 1) overallPeak = Math.max(overallPeak, eqFrequencyData[i] || 0);
       const silent = overallPeak < 3;
+      const minBin = 1;
+      const maxBin = Math.max(minBin + 1, maxObservedBin);
+      const ratio = maxBin / minBin;
 
       for (let i = 0; i < eqBars.length; i += 1) {
-        const start = Math.floor((i / eqBars.length) * Math.min(bins.length, 70));
-        const end = Math.min(bins.length - 1, start + 2);
-        let value = 0;
-        for (let b = start; b <= end; b += 1) value = Math.max(value, bins[b] || 0);
         if (silent) {
-          eqBars[i].style.height = `${7 + (i % 4)}px`;
-          eqBars[i].style.opacity = '.34';
+          setEqLevel(i, 0.015 + (i % 3) * 0.006, 0.34);
           continue;
         }
-        const normalized = Math.max(0, Math.min(1, value / 255));
-        const shaped = Math.pow(normalized, 0.64);
-        eqBars[i].style.height = `${8 + shaped * 118}px`;
-        eqBars[i].style.opacity = `${0.45 + shaped * 0.55}`;
+
+        const start = Math.max(minBin, Math.floor(minBin * Math.pow(ratio, i / eqBars.length)));
+        const end = Math.min(maxBin, Math.max(start, Math.floor(minBin * Math.pow(ratio, (i + 1) / eqBars.length))));
+        let peak = 0;
+        let sum = 0;
+        let count = 0;
+        for (let bin = start; bin <= end; bin += 1) {
+          const value = eqFrequencyData[bin] || 0;
+          peak = Math.max(peak, value);
+          sum += value;
+          count += 1;
+        }
+        const average = count ? sum / count : peak;
+        const mixed = peak * 0.72 + average * 0.28;
+        const normalized = Math.max(0, Math.min(1, mixed / 255));
+        const shaped = Math.pow(normalized, 0.62);
+        setEqLevel(i, shaped, 0.44);
       }
       return;
     }
 
-    const time = now / 470;
+    const time = Date.now() / 420;
     for (let i = 0; i < eqBars.length; i += 1) {
-      const wave = (Math.sin(time + i * 0.63) + Math.sin(time * 0.67 + i * 0.31) + 2) / 4;
-      const height = playbackMode === 'idle' ? 7 + wave * 18 : 12 + wave * 34;
-      eqBars[i].style.height = `${height}px`;
-      eqBars[i].style.opacity = playbackMode === 'idle' ? '.42' : '.72';
+      const wave = (Math.sin(time + i * 0.61) + Math.sin(time * 0.69 + i * 0.29) + 2) / 4;
+      const target = playbackMode === 'idle' ? 0.03 + wave * 0.08 : 0.07 + wave * 0.17;
+      setEqLevel(i, target, playbackMode === 'idle' ? 0.34 : 0.52);
     }
+  }
+
+  function stopFutureLiveSources(now) {
+    liveSources.forEach((source) => {
+      const startAt = Number(source.__smartIrStartAt || 0);
+      if (startAt > now + 0.008) {
+        try { source.stop(0); } catch (_) {}
+        try { source.disconnect(); } catch (_) {}
+        liveSources.delete(source);
+      }
+    });
   }
 
   async function stopPlayers() {
@@ -189,12 +232,14 @@
     liveLastPacketAt = 0;
     liveLastSignalAt = 0;
     liveLastStatusAt = 0;
-    liveUnderruns = 0;
+    liveResyncs = 0;
+    liveDrops = 0;
 
     try { gainNode && gainNode.disconnect(); } catch (_) {}
     gainNode = null;
     try { analyserNode && analyserNode.disconnect(); } catch (_) {}
     analyserNode = null;
+    eqFrequencyData = null;
     try { compressorNode && compressorNode.disconnect(); } catch (_) {}
     compressorNode = null;
 
@@ -279,6 +324,28 @@
     return { frames, left, right, peak };
   }
 
+  function updateLiveStatus(pcm, context, wallNow) {
+    liveLastPacketAt = wallNow;
+    if (pcm.peak > 0.002) liveLastSignalAt = wallNow;
+    if (wallNow - liveLastStatusAt < 500) return;
+
+    liveLastStatusAt = wallNow;
+    const bufferMs = Math.max(0, Math.round((liveNextTime - context.currentTime) * 1000));
+    const signalPercent = Math.min(100, Math.round(pcm.peak * 100));
+    const hasRecentSignal = wallNow - liveLastSignalAt < 1600;
+    if (hasRecentSignal) {
+      setStatus(
+        'LIVE · LOW LATENCY PCM',
+        `${activeVolume}% · Signal ${signalPercent}% · Puffer ${bufferMs} ms · Resync ${liveResyncs} · Drop ${liveDrops}`,
+      );
+    } else {
+      setStatus(
+        'LIVE · verbunden · kein Audiosignal',
+        'Android liefert nur Stille. Die aktive Musik-App kann Playback-Capture blockieren.',
+      );
+    }
+  }
+
   function scheduleLivePcm(arrayBuffer) {
     if (!audioContext || !gainNode || playbackMode !== 'live') return;
     const pcm = decodePcm16Stereo(arrayBuffer);
@@ -286,9 +353,24 @@
 
     const context = audioContext;
     const now = context.currentTime;
-    if (liveNextTime < now + LIVE_MIN_AHEAD_SECONDS || liveNextTime > now + LIVE_MAX_AHEAD_SECONDS) {
-      if (liveNextTime > 0 && liveNextTime < now + LIVE_MIN_AHEAD_SECONDS) liveUnderruns += 1;
+    const wallNow = Date.now();
+
+    if (liveNextTime <= 0) liveNextTime = now + LIVE_PREBUFFER_SECONDS;
+    let ahead = liveNextTime - now;
+
+    if (ahead < LIVE_MIN_AHEAD_SECONDS) {
+      liveResyncs += 1;
       liveNextTime = now + LIVE_PREBUFFER_SECONDS;
+      ahead = liveNextTime - now;
+    } else if (ahead > LIVE_HARD_MAX_AHEAD_SECONDS) {
+      liveResyncs += 1;
+      stopFutureLiveSources(now);
+      liveNextTime = now + LIVE_PREBUFFER_SECONDS;
+      ahead = liveNextTime - now;
+    } else if (ahead > LIVE_SOFT_MAX_AHEAD_SECONDS) {
+      liveDrops += 1;
+      updateLiveStatus(pcm, context, wallNow);
+      return;
     }
 
     const audioBuffer = context.createBuffer(2, pcm.frames, SAMPLE_RATE);
@@ -298,6 +380,7 @@
     const source = context.createBufferSource();
     source.buffer = audioBuffer;
     source.connect(gainNode);
+    source.__smartIrStartAt = liveNextTime;
     source.onended = () => {
       liveSources.delete(source);
       try { source.disconnect(); } catch (_) {}
@@ -306,27 +389,7 @@
     source.start(liveNextTime);
     liveNextTime += pcm.frames / SAMPLE_RATE;
 
-    const wallNow = Date.now();
-    liveLastPacketAt = wallNow;
-    if (pcm.peak > 0.002) liveLastSignalAt = wallNow;
-
-    if (wallNow - liveLastStatusAt >= 800) {
-      liveLastStatusAt = wallNow;
-      const bufferMs = Math.max(0, Math.round((liveNextTime - context.currentTime) * 1000));
-      const signalPercent = Math.min(100, Math.round(pcm.peak * 100));
-      const hasRecentSignal = wallNow - liveLastSignalAt < 1800;
-      if (hasRecentSignal) {
-        setStatus(
-          'LIVE · HQ PCM',
-          `${activeVolume}% · Signal ${signalPercent}% · Puffer ${bufferMs} ms · Resync ${liveUnderruns}`,
-        );
-      } else {
-        setStatus(
-          'LIVE · verbunden · kein Audiosignal',
-          'Android liefert nur Stille. Die aktive Musik-App kann Playback-Capture blockieren.',
-        );
-      }
-    }
+    updateLiveStatus(pcm, context, wallNow);
   }
 
   async function startLiveAudio(streamUrl) {
@@ -352,7 +415,7 @@
     socket.binaryType = 'arraybuffer';
     socket.onopen = () => {
       liveNextTime = context.currentTime + LIVE_PREBUFFER_SECONDS;
-      setStatus('LIVE · HQ verbunden', `${activeVolume}% · PCM 48 kHz Stereo · 120 ms Jitterpuffer`);
+      setStatus('LIVE · Low-Latency verbunden', `${activeVolume}% · PCM 48 kHz Stereo · 55 ms Startpuffer`);
     };
     socket.onmessage = (event) => {
       if (!(event.data instanceof ArrayBuffer)) return;
@@ -442,12 +505,14 @@
 
   document.addEventListener('webOSRelaunch', (event) => applyCommand(parseParams(event && event.detail)));
 
+  window.setInterval(renderEqualizer, EQ_INTERVAL_MS);
+
   window.setInterval(() => {
     if (playbackMode !== 'live' || !liveSocket || liveSocket.readyState !== 1) return;
-    if (liveLastPacketAt && Date.now() - liveLastPacketAt > 1800) {
+    if (liveLastPacketAt && Date.now() - liveLastPacketAt > 1400) {
       setStatus('LIVE · wartet auf PCM', 'WLAN verbunden, aber vom Handy kommen gerade keine Audiopakete.');
     }
-  }, 900);
+  }, 700);
 
   window.addEventListener('beforeunload', () => {
     if (mixEnabled) {
@@ -461,7 +526,7 @@
   createEqualizer();
   setMusicVolume(activeVolume);
   setMode('idle');
-  animationFrame = requestAnimationFrame(renderEqualizer);
+  renderEqualizer();
   setStatus('Bridge bereit', 'SmartIR wartet auf Audio');
   applyCommand(initialParams());
 })();

@@ -17,7 +17,7 @@ import kotlin.concurrent.thread
 
 class LiveAudioWebSocketServer : Closeable {
     private val clients = Collections.synchronizedSet(mutableSetOf<Socket>())
-    private val outboundFrames = ArrayBlockingQueue<ByteArray>(12)
+    private val outboundFrames = ArrayBlockingQueue<ByteArray>(4)
 
     @Volatile
     private var serverSocket: ServerSocket? = null
@@ -47,7 +47,7 @@ class LiveAudioWebSocketServer : Closeable {
                 runCatching {
                     client.tcpNoDelay = true
                     client.keepAlive = true
-                    client.sendBufferSize = maxOf(client.sendBufferSize, 64 * 1024)
+                    client.sendBufferSize = maxOf(client.sendBufferSize, 32 * 1024)
                 }
                 thread(name = "SmartIR-LiveAudio-Handshake", isDaemon = true) {
                     if (handshake(client)) {
@@ -62,9 +62,10 @@ class LiveAudioWebSocketServer : Closeable {
     }
 
     /**
-     * Never block the AudioRecord thread on WLAN I/O. If the TV/network is
-     * temporarily slower than capture, discard the oldest pending frame instead
-     * of creating an ever-growing latency spike.
+     * Never block the AudioRecord thread on WLAN I/O. The queue is deliberately
+     * tiny: with 20 ms PCM packets it can only hold roughly 80 ms. If the TV or
+     * WLAN falls behind, discard the oldest pending packet instead of growing
+     * latency.
      */
     fun broadcastPcm(bytes: ByteArray, length: Int) {
         if (length <= 0 || !running) return
@@ -85,7 +86,7 @@ class LiveAudioWebSocketServer : Closeable {
     private fun sendLoop() {
         while (running) {
             val frame = runCatching {
-                outboundFrames.poll(500, TimeUnit.MILLISECONDS)
+                outboundFrames.poll(250, TimeUnit.MILLISECONDS)
             }.getOrNull() ?: continue
 
             val dead = mutableListOf<Socket>()
