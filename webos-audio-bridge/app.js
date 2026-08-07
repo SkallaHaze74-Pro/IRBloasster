@@ -16,16 +16,24 @@
   let audioContext = null;
   let gainNode = null;
   let analyserNode = null;
+  let compressorNode = null;
   let bufferSource = null;
   let liveSocket = null;
-  let liveProcessor = null;
-  let liveQueue = [];
-  let liveOffset = 0;
   let playbackMode = 'idle';
   let animationFrame = 0;
   let lastVisualUpdate = 0;
+  let liveNextTime = 0;
+  let liveLastPacketAt = 0;
+  let liveLastSignalAt = 0;
+  let liveLastStatusAt = 0;
+  let liveUnderruns = 0;
+  const liveSources = new Set();
 
   const EQ_BARS = 36;
+  const SAMPLE_RATE = 48000;
+  const LIVE_PREBUFFER_SECONDS = 0.12;
+  const LIVE_MIN_AHEAD_SECONDS = 0.035;
+  const LIVE_MAX_AHEAD_SECONDS = 0.55;
   const eqBars = [];
 
   function createEqualizer() {
@@ -50,7 +58,7 @@
   function setMode(mode) {
     playbackMode = mode;
     if (!modeLabel) return;
-    if (mode === 'live') modeLabel.textContent = 'LIVE';
+    if (mode === 'live') modeLabel.textContent = 'LIVE HQ';
     else if (mode === 'webaudio') modeLabel.textContent = 'STREAM';
     else if (mode === 'htmlaudio') modeLabel.textContent = 'MEDIA';
     else modeLabel.textContent = 'READY';
@@ -107,12 +115,22 @@
   function connectOutputGraph(context, gain) {
     const analyser = context.createAnalyser();
     analyser.fftSize = 256;
-    analyser.smoothingTimeConstant = 0.76;
-    analyser.minDecibels = -88;
-    analyser.maxDecibels = -18;
+    analyser.smoothingTimeConstant = 0.72;
+    analyser.minDecibels = -92;
+    analyser.maxDecibels = -14;
+
+    const compressor = context.createDynamicsCompressor();
+    compressor.threshold.value = -3;
+    compressor.knee.value = 5;
+    compressor.ratio.value = 4;
+    compressor.attack.value = 0.003;
+    compressor.release.value = 0.16;
+
     gain.connect(analyser);
-    analyser.connect(context.destination);
+    analyser.connect(compressor);
+    compressor.connect(context.destination);
     analyserNode = analyser;
+    compressorNode = compressor;
   }
 
   function renderEqualizer(now) {
@@ -123,15 +141,24 @@
     if (analyserNode && audioContext && audioContext.state !== 'closed') {
       const bins = new Uint8Array(analyserNode.frequencyBinCount);
       analyserNode.getByteFrequencyData(bins);
+      let overallPeak = 0;
+      for (let i = 0; i < Math.min(bins.length, 70); i += 1) overallPeak = Math.max(overallPeak, bins[i] || 0);
+      const silent = overallPeak < 3;
+
       for (let i = 0; i < eqBars.length; i += 1) {
         const start = Math.floor((i / eqBars.length) * Math.min(bins.length, 70));
         const end = Math.min(bins.length - 1, start + 2);
         let value = 0;
         for (let b = start; b <= end; b += 1) value = Math.max(value, bins[b] || 0);
-        const normalized = Math.max(0.04, Math.min(1, value / 255));
-        const shaped = Math.pow(normalized, 0.72);
-        eqBars[i].style.height = `${8 + shaped * 116}px`;
-        eqBars[i].style.opacity = `${0.42 + shaped * 0.58}`;
+        if (silent) {
+          eqBars[i].style.height = `${7 + (i % 4)}px`;
+          eqBars[i].style.opacity = '.34';
+          continue;
+        }
+        const normalized = Math.max(0, Math.min(1, value / 255));
+        const shaped = Math.pow(normalized, 0.64);
+        eqBars[i].style.height = `${8 + shaped * 118}px`;
+        eqBars[i].style.opacity = `${0.45 + shaped * 0.55}`;
       }
       return;
     }
@@ -149,23 +176,33 @@
     try { bufferSource && bufferSource.stop(0); } catch (_) {}
     try { bufferSource && bufferSource.disconnect(); } catch (_) {}
     bufferSource = null;
+
     try { liveSocket && liveSocket.close(); } catch (_) {}
     liveSocket = null;
-    if (liveProcessor) {
-      try { liveProcessor.disconnect(); } catch (_) {}
-      liveProcessor.onaudioprocess = null;
-    }
-    liveProcessor = null;
-    liveQueue = [];
-    liveOffset = 0;
+
+    liveSources.forEach((source) => {
+      try { source.stop(0); } catch (_) {}
+      try { source.disconnect(); } catch (_) {}
+    });
+    liveSources.clear();
+    liveNextTime = 0;
+    liveLastPacketAt = 0;
+    liveLastSignalAt = 0;
+    liveLastStatusAt = 0;
+    liveUnderruns = 0;
+
     try { gainNode && gainNode.disconnect(); } catch (_) {}
     gainNode = null;
     try { analyserNode && analyserNode.disconnect(); } catch (_) {}
     analyserNode = null;
+    try { compressorNode && compressorNode.disconnect(); } catch (_) {}
+    compressorNode = null;
+
     if (audioContext) {
       try { await audioContext.close(); } catch (_) {}
     }
     audioContext = null;
+
     try {
       player.pause();
       player.removeAttribute('src');
@@ -224,18 +261,79 @@
     setStatus('Media-Stream läuft', `${activeVolume}% · Fallback`);
   }
 
-  function decodePcm16(arrayBuffer) {
+  function decodePcm16Stereo(arrayBuffer) {
     const view = new DataView(arrayBuffer);
-    const count = Math.floor(view.byteLength / 2);
-    const values = new Float32Array(count);
-    for (let i = 0; i < count; i += 1) values[i] = view.getInt16(i * 2, true) / 32768;
-    return values;
+    const frames = Math.floor(view.byteLength / 4);
+    const left = new Float32Array(frames);
+    const right = new Float32Array(frames);
+    let peak = 0;
+
+    for (let frame = 0; frame < frames; frame += 1) {
+      const offset = frame * 4;
+      const l = view.getInt16(offset, true) / 32768;
+      const r = view.getInt16(offset + 2, true) / 32768;
+      left[frame] = l;
+      right[frame] = r;
+      peak = Math.max(peak, Math.abs(l), Math.abs(r));
+    }
+    return { frames, left, right, peak };
+  }
+
+  function scheduleLivePcm(arrayBuffer) {
+    if (!audioContext || !gainNode || playbackMode !== 'live') return;
+    const pcm = decodePcm16Stereo(arrayBuffer);
+    if (!pcm.frames) return;
+
+    const context = audioContext;
+    const now = context.currentTime;
+    if (liveNextTime < now + LIVE_MIN_AHEAD_SECONDS || liveNextTime > now + LIVE_MAX_AHEAD_SECONDS) {
+      if (liveNextTime > 0 && liveNextTime < now + LIVE_MIN_AHEAD_SECONDS) liveUnderruns += 1;
+      liveNextTime = now + LIVE_PREBUFFER_SECONDS;
+    }
+
+    const audioBuffer = context.createBuffer(2, pcm.frames, SAMPLE_RATE);
+    audioBuffer.getChannelData(0).set(pcm.left);
+    audioBuffer.getChannelData(1).set(pcm.right);
+
+    const source = context.createBufferSource();
+    source.buffer = audioBuffer;
+    source.connect(gainNode);
+    source.onended = () => {
+      liveSources.delete(source);
+      try { source.disconnect(); } catch (_) {}
+    };
+    liveSources.add(source);
+    source.start(liveNextTime);
+    liveNextTime += pcm.frames / SAMPLE_RATE;
+
+    const wallNow = Date.now();
+    liveLastPacketAt = wallNow;
+    if (pcm.peak > 0.002) liveLastSignalAt = wallNow;
+
+    if (wallNow - liveLastStatusAt >= 800) {
+      liveLastStatusAt = wallNow;
+      const bufferMs = Math.max(0, Math.round((liveNextTime - context.currentTime) * 1000));
+      const signalPercent = Math.min(100, Math.round(pcm.peak * 100));
+      const hasRecentSignal = wallNow - liveLastSignalAt < 1800;
+      if (hasRecentSignal) {
+        setStatus(
+          'LIVE · HQ PCM',
+          `${activeVolume}% · Signal ${signalPercent}% · Puffer ${bufferMs} ms · Resync ${liveUnderruns}`,
+        );
+      } else {
+        setStatus(
+          'LIVE · verbunden · kein Audiosignal',
+          'Android liefert nur Stille. Die aktive Musik-App kann Playback-Capture blockieren.',
+        );
+      }
+    }
   }
 
   async function startLiveAudio(streamUrl) {
     const AudioCtx = window.AudioContext || window.webkitAudioContext;
     if (!AudioCtx) throw new Error('Web Audio API fehlt');
     if (!/^ws:\/\//i.test(streamUrl)) throw new Error('Ungültige Live-URL');
+
     await stopPlayers();
     activeUrl = streamUrl;
     await setMix(true);
@@ -245,47 +343,25 @@
     gain.gain.value = activeVolume / 100;
     connectOutputGraph(context, gain);
 
-    const processor = context.createScriptProcessor(2048, 0, 2);
-    processor.onaudioprocess = (event) => {
-      const left = event.outputBuffer.getChannelData(0);
-      const right = event.outputBuffer.getChannelData(1);
-      for (let frame = 0; frame < left.length; frame += 1) {
-        while (liveQueue.length && liveOffset >= liveQueue[0].length) {
-          liveQueue.shift();
-          liveOffset = 0;
-        }
-        if (!liveQueue.length) {
-          left[frame] = 0;
-          right[frame] = 0;
-          continue;
-        }
-        const chunk = liveQueue[0];
-        left[frame] = chunk[liveOffset] || 0;
-        right[frame] = chunk[liveOffset + 1] || left[frame];
-        liveOffset += 2;
-      }
-    };
-    processor.connect(gain);
-
     audioContext = context;
     gainNode = gain;
-    liveProcessor = processor;
     setMode('live');
     if (context.state === 'suspended') { try { await context.resume(); } catch (_) {} }
 
     const socket = new WebSocket(streamUrl);
     socket.binaryType = 'arraybuffer';
-    socket.onopen = () => setStatus('LIVE · verbunden', `${activeVolume}% · Handy → WLAN → TV`);
+    socket.onopen = () => {
+      liveNextTime = context.currentTime + LIVE_PREBUFFER_SECONDS;
+      setStatus('LIVE · HQ verbunden', `${activeVolume}% · PCM 48 kHz Stereo · 120 ms Jitterpuffer`);
+    };
     socket.onmessage = (event) => {
       if (!(event.data instanceof ArrayBuffer)) return;
-      liveQueue.push(decodePcm16(event.data));
-      while (liveQueue.length > 50) {
-        liveQueue.shift();
-        liveOffset = 0;
-      }
+      scheduleLivePcm(event.data);
     };
     socket.onerror = () => setStatus('LIVE-Verbindung fehlerhaft', streamUrl);
-    socket.onclose = () => { if (playbackMode === 'live') setStatus('LIVE-Verbindung beendet', streamUrl); };
+    socket.onclose = () => {
+      if (playbackMode === 'live') setStatus('LIVE-Verbindung beendet', streamUrl);
+    };
     liveSocket = socket;
   }
 
@@ -363,7 +439,16 @@
       if (audioContext && audioContext.state === 'suspended') { try { audioContext.resume(); } catch (_) {} }
     }
   });
+
   document.addEventListener('webOSRelaunch', (event) => applyCommand(parseParams(event && event.detail)));
+
+  window.setInterval(() => {
+    if (playbackMode !== 'live' || !liveSocket || liveSocket.readyState !== 1) return;
+    if (liveLastPacketAt && Date.now() - liveLastPacketAt > 1800) {
+      setStatus('LIVE · wartet auf PCM', 'WLAN verbunden, aber vom Handy kommen gerade keine Audiopakete.');
+    }
+  }, 900);
+
   window.addEventListener('beforeunload', () => {
     if (mixEnabled) {
       try {

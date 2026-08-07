@@ -1,14 +1,14 @@
 {
   "id": "com.skallahaze.smartir.tvlab",
-  "version": "1.2.2",
+  "version": "1.3.0",
   "vendor": "SkallaHaze74-Pro",
   "type": "web",
   "main": "index.html",
-  "title": "SmartIR TV Lab",
+  "title": "SmartIR TV Lab Lite",
   "icon": "icon.png",
   "largeIcon": "largeicon.png",
   "iconColor": "#111827",
-  "appDescription": "4K OLED test suite with HLG, HDR10, HEVC and playback diagnostics",
+  "appDescription": "Lightweight OLED test patterns without large HDR/4K media files",
   "resolution": "1920x1080",
   "disableBackHistoryAPI": true,
   "transparent": false

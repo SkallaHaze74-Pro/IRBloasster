@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.4.1
+
+- Live-Audio-Verbindung geglättet: WLAN-Schreiben läuft jetzt entkoppelt vom `AudioRecord`-Thread, damit Netzwerkrückstau die Aufnahme nicht mehr ausbremst
+- 40-ms-PCM-Pakete, Audio-Thread-Priorität, Low-Latency-WLAN-Lock und CPU-Wake-Lock ergänzt
+- webOS-Bridge auf zeitgesteuerte `AudioBufferSourceNode`-Wiedergabe mit ca. 120-ms-Jitterpuffer umgestellt; der alte `ScriptProcessorNode`-Livepfad entfällt
+- kurzer Soft-Limiter ergänzt, um Pegelspitzen sauber abzufangen
+- Bridge zeigt jetzt klar an, ob echtes Audiosignal ankommt oder Android nur Stille liefert
+- Android-Live-Status zeigt Signal und TV-Verbindung an; so lässt sich eine von der Musik-App gesperrte Playback-Capture-Ausgabe erkennen
+- Audio Bridge auf **0.5.0** angehoben und erneut cache-busted gestartet
+- **SmartIR TV Lab Lite 1.3.0**: HDR-/HLG-/4K-Testvideos, Decoder-Gegenproben und generierte Mediendateien entfernt; übrig bleiben nur leichte OLED-Testmuster
+- TV-Lab-Installer entfernt die alte medienlastige Version vor der Lite-Neuinstallation
+
 ## 1.4.0
 
 - **Live-Audio vom Handy** ergänzt: für normalen Betrieb keine lokale MP3-Datei mehr nötig
