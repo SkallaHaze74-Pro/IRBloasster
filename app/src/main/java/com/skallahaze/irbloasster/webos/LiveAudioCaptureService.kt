@@ -50,7 +50,7 @@ class LiveAudioCaptureService : Service() {
             NotificationCompat.Builder(this, CHANNEL_ID)
                 .setSmallIcon(android.R.drawable.stat_sys_headset)
                 .setContentTitle("SmartIR Live Audio · HQ")
-                .setContentText("PCM 48 kHz Stereo wird im Heimnetz zum TV gestreamt")
+                .setContentText("PCM 48 kHz Stereo · Low-Latency WLAN zum TV")
                 .setOngoing(true)
                 .build(),
         )
@@ -128,7 +128,7 @@ class LiveAudioCaptureService : Service() {
                 AudioRecord.Builder()
                     .setAudioFormat(format)
                     .setAudioPlaybackCaptureConfig(config)
-                    .setBufferSizeInBytes(max(minBuffer * 4, 32_768))
+                    .setBufferSizeInBytes(max(minBuffer * 2, 16_384))
                     .build()
             } catch (security: SecurityException) {
                 error("Audioaufnahme nicht erlaubt: ${security.message ?: "Berechtigung fehlt"}")
@@ -146,7 +146,7 @@ class LiveAudioCaptureService : Service() {
             acquirePerformanceLocks()
             capturing.set(true)
             record.startRecording()
-            LiveAudioRuntime.update(true, url, "LIVE · HQ PCM 48 kHz Stereo · $url")
+            LiveAudioRuntime.update(true, url, "LIVE · Low-Latency PCM 48 kHz Stereo · $url")
 
             captureThread = thread(name = "SmartIR-LiveAudio-Capture", isDaemon = true) {
                 Process.setThreadPriority(Process.THREAD_PRIORITY_AUDIO)
@@ -269,7 +269,7 @@ class LiveAudioCaptureService : Service() {
         private const val CHANNEL_ID = "smartir_live_audio"
         private const val NOTIFICATION_ID = 4102
         private const val SAMPLE_RATE = 48_000
-        private const val PCM_CHUNK_BYTES = 7_680
+        private const val PCM_CHUNK_BYTES = 3_840
         private const val STATS_INTERVAL_MS = 750L
     }
 }
