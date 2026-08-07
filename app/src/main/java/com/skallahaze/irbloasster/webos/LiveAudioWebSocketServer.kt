@@ -11,22 +11,44 @@ import java.net.ServerSocket
 import java.net.Socket
 import java.security.MessageDigest
 import java.util.Collections
+import java.util.concurrent.ArrayBlockingQueue
+import java.util.concurrent.TimeUnit
 import kotlin.concurrent.thread
 
 class LiveAudioWebSocketServer : Closeable {
     private val clients = Collections.synchronizedSet(mutableSetOf<Socket>())
-    @Volatile private var serverSocket: ServerSocket? = null
-    @Volatile var port: Int = -1
+    private val outboundFrames = ArrayBlockingQueue<ByteArray>(12)
+
+    @Volatile
+    private var serverSocket: ServerSocket? = null
+
+    @Volatile
+    private var running: Boolean = false
+
+    @Volatile
+    var port: Int = -1
         private set
 
     fun start(): String {
         if (serverSocket?.isClosed == false && port > 0) return url()
+
         val server = ServerSocket(0).apply { reuseAddress = true }
         serverSocket = server
         port = server.localPort
+        running = true
+
+        thread(name = "SmartIR-LiveAudio-Sender", isDaemon = true) {
+            sendLoop()
+        }
+
         thread(name = "SmartIR-LiveAudio-Accept", isDaemon = true) {
-            while (!server.isClosed) {
+            while (running && !server.isClosed) {
                 val client = runCatching { server.accept() }.getOrNull() ?: break
+                runCatching {
+                    client.tcpNoDelay = true
+                    client.keepAlive = true
+                    client.sendBufferSize = maxOf(client.sendBufferSize, 64 * 1024)
+                }
                 thread(name = "SmartIR-LiveAudio-Handshake", isDaemon = true) {
                     if (handshake(client)) {
                         clients += client
@@ -39,29 +61,49 @@ class LiveAudioWebSocketServer : Closeable {
         return url()
     }
 
+    /**
+     * Never block the AudioRecord thread on WLAN I/O. If the TV/network is
+     * temporarily slower than capture, discard the oldest pending frame instead
+     * of creating an ever-growing latency spike.
+     */
     fun broadcastPcm(bytes: ByteArray, length: Int) {
-        if (length <= 0) return
-        val frame = frame(bytes, length)
-        val dead = mutableListOf<Socket>()
-        synchronized(clients) {
-            clients.forEach { client ->
-                val ok = runCatching {
-                    val output = client.getOutputStream()
-                    output.write(frame)
-                    output.flush()
-                }.isSuccess
-                if (!ok) dead += client
-            }
-            dead.forEach {
-                clients.remove(it)
-                runCatching { it.close() }
-            }
+        if (length <= 0 || !running) return
+        val framed = frame(bytes, length)
+        if (!outboundFrames.offer(framed)) {
+            outboundFrames.poll()
+            outboundFrames.offer(framed)
         }
     }
+
+    fun clientCount(): Int = synchronized(clients) { clients.size }
 
     fun url(): String {
         val host = findLanIpv4() ?: "127.0.0.1"
         return "ws://$host:$port/live"
+    }
+
+    private fun sendLoop() {
+        while (running) {
+            val frame = runCatching {
+                outboundFrames.poll(500, TimeUnit.MILLISECONDS)
+            }.getOrNull() ?: continue
+
+            val dead = mutableListOf<Socket>()
+            synchronized(clients) {
+                clients.forEach { client ->
+                    val ok = runCatching {
+                        val output = client.getOutputStream()
+                        output.write(frame)
+                        output.flush()
+                    }.isSuccess
+                    if (!ok) dead += client
+                }
+                dead.forEach {
+                    clients.remove(it)
+                    runCatching { it.close() }
+                }
+            }
+        }
     }
 
     private fun handshake(socket: Socket): Boolean {
@@ -127,10 +169,12 @@ class LiveAudioWebSocketServer : Closeable {
     }
 
     private fun findLanIpv4(): String? {
-        val interfaces = runCatching { NetworkInterface.getNetworkInterfaces() }.getOrNull() ?: return null
-        while (interfaces.hasMoreElements()) {
-            val networkInterface = interfaces.nextElement()
-            if (!networkInterface.isUp || networkInterface.isLoopback) continue
+        val enumeration = runCatching { NetworkInterface.getNetworkInterfaces() }.getOrNull() ?: return null
+        val interfaces = Collections.list(enumeration)
+            .filter { runCatching { it.isUp && !it.isLoopback }.getOrDefault(false) }
+            .sortedBy { iface -> if (iface.name.startsWith("wlan", ignoreCase = true)) 0 else 1 }
+
+        for (networkInterface in interfaces) {
             val addresses = networkInterface.inetAddresses
             while (addresses.hasMoreElements()) {
                 val address: InetAddress = addresses.nextElement()
@@ -143,6 +187,8 @@ class LiveAudioWebSocketServer : Closeable {
     }
 
     override fun close() {
+        running = false
+        outboundFrames.clear()
         runCatching { serverSocket?.close() }
         serverSocket = null
         port = -1
