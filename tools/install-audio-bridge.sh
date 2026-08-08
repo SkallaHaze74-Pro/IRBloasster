@@ -18,22 +18,19 @@ command -v ares-install >/dev/null 2>&1 || {
   exit 1
 }
 
-if [ "$VERSION" != "0.5.2" ] || [ "$MAIN_PAGE" != "index-v052.html" ] || [ ! -f "$APP_DIR/index-v052.html" ]; then
-  echo "STOP: Lokale Bridge ist nicht SmartIR 0.5.2 Stable."
+if [ "$VERSION" != "0.6.0" ] || [ "$MAIN_PAGE" != "index-v060.html" ] || [ ! -f "$APP_DIR/index-v060.html" ] || [ ! -f "$APP_DIR/visualizer.js" ]; then
+  echo "STOP: Lokale Bridge ist nicht SmartIR Visualizer 0.6.0."
   echo "Gefunden: Version=${VERSION:-leer}, Main=${MAIN_PAGE:-leer}"
   echo "Bitte zuerst den aktuellen main-Stand holen."
   exit 2
 fi
 
-if grep -Fq "ROOT-FREE AUDIO BRIDGE" "$APP_DIR/index-v052.html"; then
-  echo "STOP: Veraltete Bridge-Oberfläche erkannt."
-  exit 3
-fi
+grep -F "Neon Hanfblatt" "$APP_DIR/index-v060.html" >/dev/null
 
-printf '\n== SmartIR Audio Bridge Quelle ==\n'
+printf '\n== SmartIR Visualizer Quelle ==\n'
 printf 'Version: %s\n' "$VERSION"
 printf 'Main:    %s\n' "$MAIN_PAGE"
-grep -F "BRIDGE 0.5.2" "$APP_DIR/index-v052.html" >/dev/null
+printf 'Modus:   Audio-synchroner Hanf-/Neon-Visualizer\n'
 
 printf '\n== Alte SmartIR Audio Bridge sauber beenden/entfernen ==\n'
 if command -v ares-launch >/dev/null 2>&1; then
@@ -46,7 +43,7 @@ fi
 rm -rf "$OUT_DIR"
 mkdir -p "$OUT_DIR"
 
-printf '\n== SmartIR Audio Bridge %s paketieren ==\n' "$VERSION"
+printf '\n== SmartIR Visualizer %s paketieren ==\n' "$VERSION"
 ares-package "$APP_DIR" -o "$OUT_DIR"
 
 IPK="$(find "$OUT_DIR" -maxdepth 1 -type f -name '*.ipk' | sort | tail -n1)"
@@ -62,5 +59,6 @@ printf '\n== Kontrolle ==\n'
 ares-install -d "$DEVICE" --list | grep -F "$APP_ID" || true
 
 printf '\nFertig. App-ID: %s\n' "$APP_ID"
-printf 'Bridge-Version: %s · stabile 3×20-ms-Pufferung + schneller Equalizer + Relaunch-Fix\n' "$VERSION"
+printf 'Bridge-Version: %s · Hanfblatt + Partikel + Radial-EQ + farbsynchrone Audioanalyse\n' "$VERSION"
+printf 'Fernbedienung: Links/Rechts = Sync, Hoch/Runter = Intensität, OK = HUD.\n'
 printf 'Jetzt SmartIR Audio Mix auf dem Handy öffnen und LIVE Mix starten.\n'
