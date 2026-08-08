@@ -28,9 +28,10 @@ jobs:
           node --check webos-audio-bridge/app.js
           node --check webos-audio-bridge/visualizer.js
           python -m json.tool webos-audio-bridge/appinfo.json >/dev/null
-          grep -F '"version": "0.6.0"' webos-audio-bridge/appinfo.json
-          grep -F 'visualizer.js?v=060' webos-audio-bridge/index-v060.html
-          grep -F 'Neon Hanfblatt' webos-audio-bridge/index-v060.html
+          grep -F '"version": "0.6.1"' webos-audio-bridge/appinfo.json
+          grep -F 'visualizer.js?v=061' webos-audio-bridge/index-v061.html
+          grep -F 'HQ Smooth' webos-audio-bridge/index-v061.html
+          grep -F 'reportAudioHealth' webos-audio-bridge/visualizer.js
 
       - name: Set up JDK 17
         uses: actions/setup-java@v5

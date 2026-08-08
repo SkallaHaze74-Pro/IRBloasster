@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="de" class="audio-idle">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>SmartIR HQ Smooth Visualizer</title>
+  <link rel="stylesheet" href="style.css?v=061" />
+</head>
+<body>
+  <main id="stage" class="stage" aria-live="polite">
+    <canvas id="fxCanvas" aria-hidden="true"></canvas>
+
+    <div class="ambient ambient-left" aria-hidden="true"></div>
+    <div class="ambient ambient-right" aria-hidden="true"></div>
+
+    <section class="centerpiece" aria-hidden="true">
+      <div id="orbitShell" class="orbit-shell">
+        <div class="orbit orbit-a"></div>
+        <div class="orbit orbit-b"></div>
+        <div class="orbit orbit-c"></div>
+        <div class="beat-halo"></div>
+      </div>
+
+      <div class="leaf-core">
+        <div class="leaf-aura"></div>
+        <svg class="hemp-leaf" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Neon Hanfblatt">
+          <!-- Cannabis silhouette adapted from Pictogrammers Material Design Icons (Apache-2.0). -->
+          <defs>
+            <linearGradient id="leafFill" x1="3" y1="2" x2="21" y2="22" gradientUnits="userSpaceOnUse">
+              <stop offset="0%" stop-color="#effff9" />
+              <stop offset="18%" stop-color="#72ffd3" />
+              <stop offset="48%" stop-color="#00ec99" />
+              <stop offset="75%" stop-color="#14d2f2" />
+              <stop offset="100%" stop-color="#805cff" />
+            </linearGradient>
+          </defs>
+          <path class="leaf-outline" d="M11.5,22V17.35C11,18.13 10,19.09 8.03,19.81C8.03,19.81 8.53,18.1 9.94,16.95C8.64,17.23 6.68,17.19 4,16C4,16 6.47,14.59 9.28,14.97C7.69,14 5.7,12.08 4.17,8.11C4.17,8.11 8.67,9.34 10.91,13.14C8.88,8.24 12,2 12,2C14.43,7.47 13.91,11.1 13.12,13.1C15.37,9.33 19.83,8.11 19.83,8.11C18.3,12.08 16.31,14 14.72,14.97C17.53,14.59 20,16 20,16C17.32,17.19 15.36,17.23 14.06,16.95C15.47,18.1 15.97,19.81 15.97,19.81C14,19.09 13,18.13 12.5,17.35V22H11.5Z" />
+          <path class="leaf-body" d="M11.5,22V17.35C11,18.13 10,19.09 8.03,19.81C8.03,19.81 8.53,18.1 9.94,16.95C8.64,17.23 6.68,17.19 4,16C4,16 6.47,14.59 9.28,14.97C7.69,14 5.7,12.08 4.17,8.11C4.17,8.11 8.67,9.34 10.91,13.14C8.88,8.24 12,2 12,2C14.43,7.47 13.91,11.1 13.12,13.1C15.37,9.33 19.83,8.11 19.83,8.11C18.3,12.08 16.31,14 14.72,14.97C17.53,14.59 20,16 20,16C17.32,17.19 15.36,17.23 14.06,16.95C15.47,18.1 15.97,19.81 15.97,19.81C14,19.09 13,18.13 12.5,17.35V22H11.5Z" />
+          <g class="leaf-veins" fill="none" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 21.5V5.1" />
+            <path d="M12 15.4L6.2 10.2 M12 15.4L17.8 10.2" />
+            <path d="M12 16.25L5.25 15.25 M12 16.25L18.75 15.25" />
+            <path d="M12 17.3L9.55 18.55 M12 17.3L14.45 18.55" />
+          </g>
+        </svg>
+      </div>
+    </section>
+
+    <section id="hud" class="hud">
+      <div class="hud-left">
+        <div class="live-pill">
+          <span class="live-dot"></span>
+          <span id="modeLabel">READY</span>
+        </div>
+        <div class="status-copy">
+          <p id="status">Bridge bereit</p>
+          <p id="detail">Ruhiger Start · wartet auf Audio</p>
+        </div>
+      </div>
+
+      <div class="hud-center">
+        <div class="volume-label">
+          <span>MUSIC</span>
+          <strong id="volumeValue">30%</strong>
+        </div>
+        <div class="slider-shell" aria-hidden="true">
+          <div class="slider-track"><div id="meterFill" class="slider-fill"></div></div>
+          <div id="sliderThumb" class="slider-thumb"></div>
+        </div>
+      </div>
+
+      <div class="hud-right">
+        <span id="syncValue">SYNC +40 ms · FX 100%</span>
+        <span class="hint">◀ ▶ Sync · ▲ ▼ Intensität · OK HUD</span>
+      </div>
+    </section>
+  </main>
+
+  <audio id="player" preload="auto"></audio>
+  <script src="visualizer.js?v=061"></script>
+  <script src="app.js?v=061"></script>
+</body>
+</html>
