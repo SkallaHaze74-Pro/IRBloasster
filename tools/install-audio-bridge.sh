@@ -18,19 +18,20 @@ command -v ares-install >/dev/null 2>&1 || {
   exit 1
 }
 
-if [ "$VERSION" != "0.6.0" ] || [ "$MAIN_PAGE" != "index-v060.html" ] || [ ! -f "$APP_DIR/index-v060.html" ] || [ ! -f "$APP_DIR/visualizer.js" ]; then
-  echo "STOP: Lokale Bridge ist nicht SmartIR Visualizer 0.6.0."
+if [ "$VERSION" != "0.6.1" ] || [ "$MAIN_PAGE" != "index-v061.html" ] || [ ! -f "$APP_DIR/index-v061.html" ] || [ ! -f "$APP_DIR/visualizer.js" ]; then
+  echo "STOP: Lokale Bridge ist nicht SmartIR HQ Smooth 0.6.1."
   echo "Gefunden: Version=${VERSION:-leer}, Main=${MAIN_PAGE:-leer}"
   echo "Bitte zuerst den aktuellen main-Stand holen."
   exit 2
 fi
 
-grep -F "Neon Hanfblatt" "$APP_DIR/index-v060.html" >/dev/null
+grep -F "HQ Smooth" "$APP_DIR/index-v061.html" >/dev/null
+grep -F "reportAudioHealth" "$APP_DIR/visualizer.js" >/dev/null
 
-printf '\n== SmartIR Visualizer Quelle ==\n'
+printf '\n== SmartIR HQ Smooth Quelle ==\n'
 printf 'Version: %s\n' "$VERSION"
 printf 'Main:    %s\n' "$MAIN_PAGE"
-printf 'Modus:   Audio-synchroner Hanf-/Neon-Visualizer\n'
+printf 'Modus:   Audio zuerst · ruhiger Start · adaptiver Performance-Schutz\n'
 
 printf '\n== Alte SmartIR Audio Bridge sauber beenden/entfernen ==\n'
 if command -v ares-launch >/dev/null 2>&1; then
@@ -43,7 +44,7 @@ fi
 rm -rf "$OUT_DIR"
 mkdir -p "$OUT_DIR"
 
-printf '\n== SmartIR Visualizer %s paketieren ==\n' "$VERSION"
+printf '\n== SmartIR HQ Smooth %s paketieren ==\n' "$VERSION"
 ares-package "$APP_DIR" -o "$OUT_DIR"
 
 IPK="$(find "$OUT_DIR" -maxdepth 1 -type f -name '*.ipk' | sort | tail -n1)"
@@ -59,6 +60,6 @@ printf '\n== Kontrolle ==\n'
 ares-install -d "$DEVICE" --list | grep -F "$APP_ID" || true
 
 printf '\nFertig. App-ID: %s\n' "$APP_ID"
-printf 'Bridge-Version: %s · Hanfblatt + Partikel + Radial-EQ + farbsynchrone Audioanalyse\n' "$VERSION"
+printf 'Bridge-Version: %s · 180-ms-HQ-Puffer + sanfter Limiter + Low-Load-Visualizer\n' "$VERSION"
 printf 'Fernbedienung: Links/Rechts = Sync, Hoch/Runter = Intensität, OK = HUD.\n'
 printf 'Jetzt SmartIR Audio Mix auf dem Handy öffnen und LIVE Mix starten.\n'
