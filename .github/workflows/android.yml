@@ -23,7 +23,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6
 
-      - name: Validate webOS visualizer assets
+      - name: Validate webOS visualizer and Android capsule assets
         run: |
           node --check webos-audio-bridge/app.js
           node --check webos-audio-bridge/visualizer.js
@@ -31,7 +31,9 @@ jobs:
           grep -F '"version": "0.6.1"' webos-audio-bridge/appinfo.json
           grep -F 'visualizer.js?v=061' webos-audio-bridge/index-v061.html
           grep -F 'HQ Smooth' webos-audio-bridge/index-v061.html
-          grep -F 'reportAudioHealth' webos-audio-bridge/visualizer.js
+          grep -F 'class MusicCapsuleOverlayService' app/src/main/java/com/skallahaze/irbloasster/capsule/MusicCapsuleOverlayService.kt
+          grep -F 'class MusicCapsuleNotificationListener' app/src/main/java/com/skallahaze/irbloasster/capsule/MusicCapsuleNotificationListener.kt
+          grep -F "versionName '1.5.0'" app/build.gradle
 
       - name: Set up JDK 17
         uses: actions/setup-java@v5
@@ -47,7 +49,7 @@ jobs:
       - name: Create ephemeral CI signing key
         run: |
           mkdir -p "$HOME/.smartir"
-          PASS="ci-smartir-1.4.3-only"
+          PASS="ci-smartir-1.5.0-only"
           keytool -genkeypair \
             -keystore "$HOME/.smartir/smartir-release.jks" \
             -storetype PKCS12 \
@@ -79,16 +81,16 @@ jobs:
 
       - name: Prepare CI test APK and checksum
         run: |
-          cp app/build/outputs/apk/release/app-release.apk SmartIR-v1.4.3-CI-ephemeral-signature.apk
-          sha256sum SmartIR-v1.4.3-CI-ephemeral-signature.apk > SmartIR-v1.4.3-CI-ephemeral-signature.apk.sha256
+          cp app/build/outputs/apk/release/app-release.apk SmartIR-v1.5.0-CI-ephemeral-signature.apk
+          sha256sum SmartIR-v1.5.0-CI-ephemeral-signature.apk > SmartIR-v1.5.0-CI-ephemeral-signature.apk.sha256
 
       - name: Upload CI test APK
         uses: actions/upload-artifact@v7
         with:
-          name: SmartIR-v1.4.3-CI-ephemeral-signature-DO-NOT-USE-FOR-UPDATES
+          name: SmartIR-v1.5.0-CI-ephemeral-signature-DO-NOT-USE-FOR-UPDATES
           path: |
-            SmartIR-v1.4.3-CI-ephemeral-signature.apk
-            SmartIR-v1.4.3-CI-ephemeral-signature.apk.sha256
+            SmartIR-v1.5.0-CI-ephemeral-signature.apk
+            SmartIR-v1.5.0-CI-ephemeral-signature.apk.sha256
             apksigner-verify.txt
           if-no-files-found: error
           retention-days: 30
@@ -97,7 +99,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: SmartIR-v1.4.3-lint
+          name: SmartIR-v1.5.0-lint
           path: app/build/reports/lint-results-debug.html
           if-no-files-found: ignore
           retention-days: 30
