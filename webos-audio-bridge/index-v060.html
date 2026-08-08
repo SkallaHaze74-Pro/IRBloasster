@@ -1,0 +1,122 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Live Music Visualizer</title>
+  <link rel="stylesheet" href="style.css?v=060" />
+</head>
+<body>
+  <main id="stage" class="stage" aria-live="polite">
+    <canvas id="fxCanvas" aria-hidden="true"></canvas>
+
+    <div class="ambient ambient-a" aria-hidden="true"></div>
+    <div class="ambient ambient-b" aria-hidden="true"></div>
+    <div class="ambient ambient-c" aria-hidden="true"></div>
+
+    <section class="centerpiece" aria-hidden="true">
+      <div id="orbitShell" class="orbit-shell">
+        <div class="orbit orbit-a"></div>
+        <div class="orbit orbit-b"></div>
+        <div class="orbit orbit-c"></div>
+        <div id="beatHalo" class="beat-halo"></div>
+      </div>
+
+      <div id="leafCore" class="leaf-core">
+        <div class="leaf-aura"></div>
+        <svg id="hempLeaf" class="hemp-leaf" viewBox="0 0 512 512" xmlns:xlink="http://www.w3.org/1999/xlink" role="img" aria-label="Neon Hanfblatt">
+          <defs>
+            <linearGradient id="leafFill" x1="0%" y1="0%" x2="100%" y2="100%">
+              <stop offset="0%" stop-color="#eafff8" />
+              <stop offset="20%" stop-color="#62ffd0" />
+              <stop offset="52%" stop-color="#00f59b" />
+              <stop offset="78%" stop-color="#19d9ff" />
+              <stop offset="100%" stop-color="#f64dff" />
+            </linearGradient>
+            <linearGradient id="leafVein" x1="0%" y1="100%" x2="0%" y2="0%">
+              <stop offset="0%" stop-color="#ffffff" stop-opacity=".24" />
+              <stop offset="45%" stop-color="#ffffff" stop-opacity=".82" />
+              <stop offset="100%" stop-color="#b9fff1" stop-opacity=".45" />
+            </linearGradient>
+            <filter id="leafNeon" x="-80%" y="-80%" width="260%" height="260%">
+              <feGaussianBlur stdDeviation="4.2" result="blurA" />
+              <feGaussianBlur stdDeviation="10" result="blurB" />
+              <feMerge>
+                <feMergeNode in="blurB" />
+                <feMergeNode in="blurA" />
+                <feMergeNode in="SourceGraphic" />
+              </feMerge>
+            </filter>
+            <path id="leaflet" d="
+              M256 314
+              L244 286 L221 282 L238 266 L207 257 L232 243
+              L199 231 L230 220 L202 202 L236 198 L212 177
+              L241 178 L224 150 L247 159 L235 126 L252 143
+              L256 63
+              L260 143 L277 126 L265 159 L288 150 L271 178
+              L300 177 L276 198 L310 202 L282 220 L313 231
+              L280 243 L305 257 L274 266 L291 282 L268 286
+              Z" />
+          </defs>
+
+          <g filter="url(#leafNeon)" fill="url(#leafFill)" stroke="#eaffff" stroke-width="2.2" stroke-linejoin="round">
+            <use href="#leaflet" xlink:href="#leaflet" transform="translate(256 314) rotate(-74) scale(.60) translate(-256 -314)" />
+            <use href="#leaflet" xlink:href="#leaflet" transform="translate(256 314) rotate(-51) scale(.76) translate(-256 -314)" />
+            <use href="#leaflet" xlink:href="#leaflet" transform="translate(256 314) rotate(-28) scale(.90) translate(-256 -314)" />
+            <use href="#leaflet" xlink:href="#leaflet" />
+            <use href="#leaflet" xlink:href="#leaflet" transform="translate(256 314) rotate(28) scale(.90) translate(-256 -314)" />
+            <use href="#leaflet" xlink:href="#leaflet" transform="translate(256 314) rotate(51) scale(.76) translate(-256 -314)" />
+            <use href="#leaflet" xlink:href="#leaflet" transform="translate(256 314) rotate(74) scale(.60) translate(-256 -314)" />
+          </g>
+
+          <g fill="none" stroke="url(#leafVein)" stroke-width="2.7" stroke-linecap="round" opacity=".82">
+            <path d="M256 425 L256 92" />
+            <path d="M256 316 L141 207" />
+            <path d="M256 316 L101 285" />
+            <path d="M256 316 L169 145" />
+            <path d="M256 316 L371 207" />
+            <path d="M256 316 L411 285" />
+            <path d="M256 316 L343 145" />
+          </g>
+          <path d="M256 304 C252 350 251 392 256 452" fill="none" stroke="url(#leafFill)" stroke-width="11" stroke-linecap="round" filter="url(#leafNeon)" />
+        </svg>
+      </div>
+    </section>
+
+    <section id="hud" class="hud">
+      <div class="hud-left">
+        <div class="live-pill">
+          <span class="live-dot"></span>
+          <span id="modeLabel">READY</span>
+        </div>
+        <div class="status-copy">
+          <p id="status">Bridge bereit</p>
+          <p id="detail">Warte auf Audio</p>
+        </div>
+      </div>
+
+      <div class="hud-center">
+        <div class="volume-label">
+          <span>MUSIC</span>
+          <strong id="volumeValue">30%</strong>
+        </div>
+        <div class="slider-shell" aria-hidden="true">
+          <div class="slider-track">
+            <div id="meterFill" class="slider-fill"></div>
+          </div>
+          <div id="sliderThumb" class="slider-thumb"></div>
+        </div>
+      </div>
+
+      <div class="hud-right">
+        <span id="syncValue">SYNC +35 ms</span>
+        <span class="hint">◀ ▶ Sync · ▲ ▼ Intensität · OK HUD</span>
+      </div>
+    </section>
+  </main>
+
+  <audio id="player" preload="auto"></audio>
+  <script src="visualizer.js?v=060"></script>
+  <script src="app.js?v=060"></script>
+</body>
+</html>
