@@ -6,6 +6,22 @@
   --mid: .05;
   --treble: .05;
   --intensity: 1;
+  --stage-alpha: .12;
+  --stage-scale: 1;
+  --ambient-opacity: .16;
+  --ambient-a-x: 0px;
+  --ambient-a-y: 0px;
+  --ambient-b-x: 0px;
+  --ambient-b-y: 0px;
+  --ambient-c-scale: 1;
+  --halo-scale: 1;
+  --halo-opacity: .62;
+  --leaf-scale: .93;
+  --leaf-hue: 0deg;
+  --leaf-saturate: 1.25;
+  --leaf-brightness: 1;
+  --aura-alpha: .16;
+  --aura-scale: 1;
   color-scheme: dark;
 }
 
@@ -35,7 +51,7 @@ body {
   overflow: hidden;
   isolation: isolate;
   background:
-    radial-gradient(circle at 50% 43%, hsla(var(--accent-hue), 100%, 52%, calc(.10 + var(--energy) * .20)), transparent 29%),
+    radial-gradient(circle at 50% 43%, hsla(var(--accent-hue), 100%, 52%, var(--stage-alpha)), transparent 29%),
     radial-gradient(circle at 18% 72%, rgba(0, 223, 255, .12), transparent 34%),
     radial-gradient(circle at 82% 68%, rgba(255, 29, 203, .12), transparent 36%),
     linear-gradient(180deg, #010207 0%, #050616 56%, #010207 100%);
@@ -52,7 +68,7 @@ body {
     radial-gradient(circle, hsla(var(--accent-hue-2),100%,70%,.16) 0 1px, transparent 1.7px);
   background-size: 55px 55px, 87px 87px;
   background-position: 0 0, 21px 17px;
-  transform: scale(calc(1 + var(--bass) * .018));
+  transform: scale(var(--stage-scale));
 }
 
 .stage::after {
@@ -86,7 +102,7 @@ body {
   max-height: 900px;
   border-radius: 50%;
   filter: blur(80px);
-  opacity: calc(.12 + var(--energy) * .22);
+  opacity: var(--ambient-opacity);
   will-change: transform, opacity;
 }
 
@@ -94,21 +110,21 @@ body {
   left: -16vw;
   top: 20vh;
   background: hsla(var(--accent-hue), 100%, 54%, .52);
-  transform: translate3d(calc(var(--mid) * 30px), calc(var(--bass) * -26px), 0);
+  transform: translate3d(var(--ambient-a-x), var(--ambient-a-y), 0);
 }
 
 .ambient-b {
   right: -14vw;
   top: 8vh;
   background: hsla(var(--accent-hue-2), 100%, 57%, .48);
-  transform: translate3d(calc(var(--treble) * -30px), calc(var(--mid) * 22px), 0);
+  transform: translate3d(var(--ambient-b-x), var(--ambient-b-y), 0);
 }
 
 .ambient-c {
   left: 28vw;
   bottom: -32vw;
   background: rgba(124, 58, 237, .46);
-  transform: scale(calc(1 + var(--bass) * .18));
+  transform: scale(var(--ambient-c-scale));
 }
 
 .centerpiece {
@@ -186,25 +202,25 @@ body {
   border-radius: 50%;
   border: 1px solid rgba(255,255,255,.68);
   box-shadow:
-    0 0 calc(26px + var(--bass) * 70px) hsla(var(--accent-hue),100%,62%,.70),
-    0 0 calc(50px + var(--mid) * 90px) hsla(var(--accent-hue-2),100%,58%,.36),
-    inset 0 0 calc(24px + var(--bass) * 58px) hsla(var(--accent-hue),100%,68%,.32);
-  transform: scale(calc(1 + var(--bass) * .075));
-  opacity: calc(.58 + var(--energy) * .34);
+    0 0 52px hsla(var(--accent-hue),100%,62%,.70),
+    0 0 92px hsla(var(--accent-hue-2),100%,58%,.36),
+    inset 0 0 48px hsla(var(--accent-hue),100%,68%,.32);
+  transform: scale(var(--halo-scale));
+  opacity: var(--halo-opacity);
   transition: transform 35ms linear, box-shadow 45ms linear, opacity 60ms linear;
 }
 
 .leaf-core {
   width: 67%;
   height: 67%;
-  transform: translate(-50%, -50%) scale(calc(.92 + var(--bass) * .085));
+  transform: translate(-50%, -50%) scale(var(--leaf-scale));
   transform-origin: center;
   will-change: transform, filter;
   transition: transform 36ms linear;
   filter:
-    hue-rotate(calc((var(--accent-hue) - 130) * 1deg))
-    saturate(calc(1.22 + var(--mid) * .90))
-    brightness(calc(1 + var(--energy) * .42));
+    hue-rotate(var(--leaf-hue))
+    saturate(var(--leaf-saturate))
+    brightness(var(--leaf-brightness));
 }
 
 .leaf-aura {
@@ -212,9 +228,9 @@ body {
   inset: 7%;
   border-radius: 50%;
   background:
-    radial-gradient(circle, hsla(var(--accent-hue),100%,65%,calc(.14 + var(--bass) * .24)), transparent 64%);
+    radial-gradient(circle, hsla(var(--accent-hue),100%,65%,var(--aura-alpha)), transparent 64%);
   filter: blur(18px);
-  transform: scale(calc(1 + var(--bass) * .16));
+  transform: scale(var(--aura-scale));
 }
 
 .hemp-leaf {
@@ -226,7 +242,7 @@ body {
   filter:
     drop-shadow(0 0 9px hsla(var(--accent-hue),100%,68%,.98))
     drop-shadow(0 0 23px hsla(var(--accent-hue-2),100%,58%,.82))
-    drop-shadow(0 0 calc(28px + var(--bass) * 36px) hsla(var(--accent-hue),100%,55%,.58));
+    drop-shadow(0 0 46px hsla(var(--accent-hue),100%,55%,.58));
 }
 
 .hud {
