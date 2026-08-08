@@ -3,6 +3,7 @@ package com.skallahaze.irbloasster.capsule
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Paint
+import android.graphics.Path
 import android.graphics.Rect
 import android.graphics.RectF
 import android.view.View
@@ -22,6 +23,16 @@ internal fun Canvas.drawBitmap(
         source.bottom.toInt().coerceIn(0, bitmap.height),
     )
     drawBitmap(bitmap, sourceRect, destination, paint)
+}
+
+internal fun Canvas.clipRoundRect(
+    rect: RectF,
+    radiusX: Float,
+    radiusY: Float,
+) {
+    val rounded = Path()
+    rounded.addRoundRect(rect, radiusX, radiusY, Path.Direction.CW)
+    clipPath(rounded)
 }
 
 internal fun WindowManager.updateViewLayout(
