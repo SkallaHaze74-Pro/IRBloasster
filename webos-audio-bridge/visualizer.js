@@ -250,6 +250,22 @@
     root.style.setProperty('--bass', frame.bass.toFixed(3));
     root.style.setProperty('--mid', frame.mid.toFixed(3));
     root.style.setProperty('--treble', frame.treble.toFixed(3));
+    root.style.setProperty('--stage-alpha', (0.10 + frame.energy * 0.20).toFixed(3));
+    root.style.setProperty('--stage-scale', (1 + frame.bass * 0.018).toFixed(3));
+    root.style.setProperty('--ambient-opacity', (0.12 + frame.energy * 0.22).toFixed(3));
+    root.style.setProperty('--ambient-a-x', `${(frame.mid * 30).toFixed(1)}px`);
+    root.style.setProperty('--ambient-a-y', `${(frame.bass * -26).toFixed(1)}px`);
+    root.style.setProperty('--ambient-b-x', `${(frame.treble * -30).toFixed(1)}px`);
+    root.style.setProperty('--ambient-b-y', `${(frame.mid * 22).toFixed(1)}px`);
+    root.style.setProperty('--ambient-c-scale', (1 + frame.bass * 0.18).toFixed(3));
+    root.style.setProperty('--halo-scale', (1 + frame.bass * 0.075).toFixed(3));
+    root.style.setProperty('--halo-opacity', (0.58 + frame.energy * 0.34).toFixed(3));
+    root.style.setProperty('--leaf-scale', (0.92 + frame.bass * 0.085).toFixed(3));
+    root.style.setProperty('--leaf-hue', `${(frame.hue - 130).toFixed(1)}deg`);
+    root.style.setProperty('--leaf-saturate', (1.22 + frame.mid * 0.90).toFixed(3));
+    root.style.setProperty('--leaf-brightness', (1 + frame.energy * 0.42).toFixed(3));
+    root.style.setProperty('--aura-alpha', (0.14 + frame.bass * 0.24).toFixed(3));
+    root.style.setProperty('--aura-scale', (1 + frame.bass * 0.16).toFixed(3));
 
     if (orbitShell) {
       const rotation = (now * 0.004 + frame.mid * 15) % 360;
