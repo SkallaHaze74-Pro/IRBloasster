@@ -67,6 +67,47 @@ enum class MediaSourceLock(
     }
 }
 
+enum class ReactiveFlowMode(
+    val storedValue: String,
+    val label: String,
+) {
+    AUTO("auto", "Beat Auto"),
+    INWARD("inward", "Nach innen"),
+    OUTWARD("outward", "Nach außen"),
+    UP("up", "Nach oben"),
+    DOWN("down", "Nach unten"),
+    ;
+
+    fun next(): ReactiveFlowMode {
+        val values = entries
+        return values[(ordinal + 1) % values.size]
+    }
+
+    companion object {
+        fun from(value: String?): ReactiveFlowMode = entries.firstOrNull { it.storedValue == value } ?: AUTO
+    }
+}
+
+enum class BeatFxMode(
+    val storedValue: String,
+    val label: String,
+    val multiplier: Float,
+) {
+    SMOOTH("smooth", "Smooth", .58f),
+    REACTIVE("reactive", "Reactive", 1f),
+    BRUTAL("brutal", "Brutal", 1.42f),
+    ;
+
+    fun next(): BeatFxMode {
+        val values = entries
+        return values[(ordinal + 1) % values.size]
+    }
+
+    companion object {
+        fun from(value: String?): BeatFxMode = entries.firstOrNull { it.storedValue == value } ?: BRUTAL
+    }
+}
+
 object CapsulePreferences {
     private const val PREFS = "music_capsule_design"
     private const val KEY_DISPLAY_MODE = "display_mode"
@@ -74,6 +115,8 @@ object CapsulePreferences {
     private const val KEY_EDGE_PANELS = "edge_panels"
     private const val KEY_NEON_INTENSITY = "neon_intensity"
     private const val KEY_LOCK_SCREEN = "lock_screen"
+    private const val KEY_FLOW_MODE = "flow_mode"
+    private const val KEY_BEAT_FX = "beat_fx"
 
     fun displayMode(context: Context): CapsuleDisplayMode = CapsuleDisplayMode.from(
         prefs(context).getString(KEY_DISPLAY_MODE, CapsuleDisplayMode.MINI.storedValue),
@@ -120,6 +163,22 @@ object CapsulePreferences {
 
     fun setLockScreenEnabled(context: Context, enabled: Boolean) {
         prefs(context).edit().putBoolean(KEY_LOCK_SCREEN, enabled).apply()
+    }
+
+    fun flowMode(context: Context): ReactiveFlowMode = ReactiveFlowMode.from(
+        prefs(context).getString(KEY_FLOW_MODE, ReactiveFlowMode.AUTO.storedValue),
+    )
+
+    fun setFlowMode(context: Context, mode: ReactiveFlowMode) {
+        prefs(context).edit().putString(KEY_FLOW_MODE, mode.storedValue).apply()
+    }
+
+    fun beatFxMode(context: Context): BeatFxMode = BeatFxMode.from(
+        prefs(context).getString(KEY_BEAT_FX, BeatFxMode.BRUTAL.storedValue),
+    )
+
+    fun setBeatFxMode(context: Context, mode: BeatFxMode) {
+        prefs(context).edit().putString(KEY_BEAT_FX, mode.storedValue).apply()
     }
 
     private fun prefs(context: Context) = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
