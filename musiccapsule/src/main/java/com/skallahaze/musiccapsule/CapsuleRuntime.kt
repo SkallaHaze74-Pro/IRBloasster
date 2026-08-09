@@ -14,6 +14,12 @@ data class CapsuleSnapshot(
     val isPlaying: Boolean = false,
     val signal: Float = 0f,
     val levels: FloatArray = FloatArray(CapsuleRuntime.BAND_COUNT),
+    val bass: Float = 0f,
+    val mid: Float = 0f,
+    val treble: Float = 0f,
+    val beat: Float = 0f,
+    val spectralFlux: Float = 0f,
+    val beatSequence: Long = 0L,
     val source: String = "idle",
 )
 
@@ -84,6 +90,12 @@ object CapsuleRuntime {
     fun updateLevels(
         levels: FloatArray,
         signal: Float,
+        bass: Float = 0f,
+        mid: Float = 0f,
+        treble: Float = 0f,
+        beat: Float = 0f,
+        spectralFlux: Float = 0f,
+        beatSequence: Long = state.beatSequence,
         message: String,
         source: String = "playback-capture",
     ) = synchronized(lock) {
@@ -95,6 +107,12 @@ object CapsuleRuntime {
             analyzerRunning = true,
             levels = safe,
             signal = signal.coerceIn(0f, 1f),
+            bass = bass.coerceIn(0f, 1f),
+            mid = mid.coerceIn(0f, 1f),
+            treble = treble.coerceIn(0f, 1f),
+            beat = beat.coerceIn(0f, 1f),
+            spectralFlux = spectralFlux.coerceIn(0f, 1f),
+            beatSequence = beatSequence,
             message = message,
             source = source,
         )
@@ -105,6 +123,11 @@ object CapsuleRuntime {
             analyzerRunning = false,
             signal = 0f,
             levels = FloatArray(BAND_COUNT),
+            bass = 0f,
+            mid = 0f,
+            treble = 0f,
+            beat = 0f,
+            spectralFlux = 0f,
             message = message,
             source = "idle",
         )
