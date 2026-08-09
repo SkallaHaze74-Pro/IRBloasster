@@ -36,6 +36,7 @@ class MainActivity : Activity() {
     private lateinit var modeButton: Button
     private lateinit var edgeButton: Button
     private lateinit var intensityButton: Button
+    private lateinit var lockScreenButton: Button
     private lateinit var previewView: NeonPreviewView
     private lateinit var projectionManager: MediaProjectionManager
     private val mainHandler = Handler(Looper.getMainLooper())
@@ -82,11 +83,11 @@ class MainActivity : Activity() {
         root.addView(text("MUSIC CAPSULE", 11f, Color.rgb(91, 255, 210), bold = true).apply {
             letterSpacing = .18f
         })
-        root.addView(text("Full Neon 1.2", 31f, Color.WHITE, bold = true).apply {
+        root.addView(text("Lock + Rotate 1.2.2", 31f, Color.WHITE, bold = true).apply {
             setPadding(0, dp(3), 0, 0)
         })
         root.addView(text(
-            "Xiaomi 15T Pro · ${displaySizeLabel()} Vollbild · höchste Display-Hz-Anfrage",
+            "Xiaomi 15T Pro · aktuell ${displaySizeLabel()} · höchste Display-Hz-Anfrage",
             13f,
             Color.rgb(177, 194, 222),
         ).apply { setPadding(0, dp(4), 0, dp(14)) })
@@ -101,7 +102,7 @@ class MainActivity : Activity() {
 
         root.addView(sectionCard("Medienquelle + SoundCloud Watchdog", Color.rgb(255, 91, 220)).apply {
             addView(text(
-                "AUTO bewertet PLAYING-Status, frische MediaSession und Medienbenachrichtigung. Der Watchdog hält den letzten bestätigten SoundCloud-Titel bei kurzen HyperOS-Unterbrechungen fest, statt sofort auf ‚Keine Wiedergabe‘ zu springen. Du kannst SoundCloud oder YouTube zusätzlich fest anheften.",
+                "AUTO bewertet PLAYING-Status, frische MediaSession und Medienbenachrichtigung. Der Watchdog hält den letzten bestätigten SoundCloud-Titel bei kurzen HyperOS-Unterbrechungen fest. Du kannst SoundCloud oder YouTube zusätzlich fest anheften.",
                 13.5f,
                 Color.rgb(210, 219, 237),
             ).apply { setPadding(0, dp(6), 0, dp(11)) })
@@ -117,7 +118,7 @@ class MainActivity : Activity() {
 
         root.addView(sectionCard("Variante 2 · Vollbild-Design", Color.rgb(81, 205, 255)).apply {
             addView(text(
-                "Der Rahmen nutzt jetzt die maximalen Displaygrenzen statt nur den App-Bereich. Dadurch laufen Neon, Frequenzlinien, Diamanten, Musiknoten und Pulse über Statusleiste, Kameraausschnitt und Navigationsbereich bis an den echten ${displaySizeLabel()}-Rand.",
+                "Der Neonrahmen nutzt immer die aktuellen Displayachsen. Beim Drehen werden 1280×2772 und 2772×1280 neu vermessen; Widget und Paneele werden passend neu aufgebaut und die Kapsel oben mittig ausgerichtet.",
                 13.5f,
                 Color.rgb(210, 219, 237),
             ).apply { setPadding(0, dp(6), 0, dp(10)) })
@@ -146,13 +147,29 @@ class MainActivity : Activity() {
                 refreshDesignButtons()
             }
             addView(intensityButton, fullButtonParams(topMargin = 9))
+
+            lockScreenButton = neonButton("Sperrbildschirm: AN", Color.rgb(255, 104, 196)) {
+                val next = !CapsulePreferences.lockScreenEnabled(this@MainActivity)
+                CapsulePreferences.setLockScreenEnabled(this@MainActivity, next)
+                applyLiveSettings()
+                refreshDesignButtons()
+            }
+            addView(lockScreenButton, fullButtonParams(topMargin = 9))
+
+            addView(text(
+                "Root-free versucht Music Capsule, Widget und Paneele auch über dem Sperrbildschirm einzublenden, ohne das Display wach zu halten. Falls HyperOS sie trotzdem versteckt: App-Info → Sonstige Berechtigungen → Anzeige auf Sperrbildschirm / Pop-up-Fenster im Hintergrund erlauben. AOD-Integration kommt später mit Root.",
+                11.5f,
+                Color.rgb(174, 188, 215),
+            ).apply { setPadding(0, dp(9), 0, dp(6)) })
+
+            addView(outlineButton("HyperOS App-Info öffnen") { openAppDetails() }, fullButtonParams(topMargin = 4))
         })
 
         root.addView(sectionCard("Einrichtung", Color.rgb(255, 195, 74)).apply {
             overlayStateView = stateText()
             addView(permissionRow(
                 title = "1 · Overlay",
-                body = "Kapsel und Vollbild-Paneele über anderen Apps",
+                body = "Kapsel, Vollbild-Paneele und Sperrbildschirm",
                 state = overlayStateView,
                 action = "Erlauben",
             ) { openOverlaySettings() })
@@ -196,7 +213,7 @@ class MainActivity : Activity() {
 
         root.addView(sectionCard("Bedienung", Color.rgb(105, 255, 205)).apply {
             addView(text(
-                "Klein/Rand antippen oder den neuen leuchtenden Pfeil darunter berühren → großer Hanf-Visualizer. Der Pfeil bleibt auch dann unterhalb der geschützten Statusleiste klickbar, wenn du die Kapsel über die Uhr schiebst. Ziehen verschiebt das Widget; lang halten wechselt Klein/Rand. Im großen Modus sind die oberen Trefferflächen jetzt deutlich größer.",
+                "Klein/Rand antippen oder den leuchtenden Pfeil darunter berühren → großer Hanf-Visualizer. Ziehen verschiebt das Widget; lang halten wechselt Klein/Rand. Nach jeder Hoch-/Querformat-Drehung wird das Widget automatisch neu zentriert, damit es nicht mehr links hängen bleibt.",
                 13.5f,
                 Color.rgb(210, 219, 237),
             ))
@@ -229,7 +246,7 @@ class MainActivity : Activity() {
         CapsuleOverlayService.start(this)
         requestNotificationRebind()
         startActivityForResult(projectionManager.createScreenCaptureIntent(), REQUEST_MEDIA_PROJECTION)
-        statusView.text = "Systemfreigabe bestätigen – danach laufen Widget und Vollbild-Paneele zum echten Medienaudio."
+        statusView.text = "Systemfreigabe bestätigen – danach laufen Widget, Paneele, Drehung und Sperrbildschirm."
     }
 
     private fun stopEverything() {
@@ -250,6 +267,15 @@ class MainActivity : Activity() {
         startActivity(
             Intent(
                 Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                Uri.parse("package:$packageName"),
+            ),
+        )
+    }
+
+    private fun openAppDetails() {
+        startActivity(
+            Intent(
+                Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
                 Uri.parse("package:$packageName"),
             ),
         )
@@ -286,11 +312,13 @@ class MainActivity : Activity() {
 
         val snapshot = CapsuleRuntime.snapshot()
         val sourceLock = CapsulePreferences.sourceLock(this)
+        val lockEnabled = CapsulePreferences.lockScreenEnabled(this)
         statusView.text = buildString {
             append(if (snapshot.overlayRunning) "FULL NEON LIVE" else "Overlay aus")
             append(" · ")
             append(if (snapshot.analyzerRunning) "FFT LIVE" else "Audioanalyse aus")
             append(" · ${displaySizeLabel()}")
+            append(" · Lock ${if (lockEnabled) "AN" else "AUS"}")
             append(" · Quelle ${sourceLock.label}\n")
             append(snapshot.title)
             if (snapshot.artist.isNotBlank()) append(" — ${snapshot.artist}")
@@ -306,10 +334,12 @@ class MainActivity : Activity() {
         val mode = CapsulePreferences.displayMode(this)
         val edge = CapsulePreferences.edgePanelsEnabled(this)
         val intensity = CapsulePreferences.neonIntensity(this)
+        val lockEnabled = CapsulePreferences.lockScreenEnabled(this)
         sourceButton.text = "Quelle: ${source.label}"
         modeButton.text = "Widget: ${if (mode == CapsuleDisplayMode.RIM) "Nur Rand" else "Klein"}"
         edgeButton.text = "Paneele: ${if (edge) "AN" else "AUS"}"
         intensityButton.text = "Neon: ${(intensity * 100).toInt()}%"
+        lockScreenButton.text = "Sperrbildschirm: ${if (lockEnabled) "AN" else "AUS"}"
         previewView.setConfig(mode, edge, intensity, source)
     }
 
@@ -347,7 +377,7 @@ class MainActivity : Activity() {
                 },
             )
             CapsuleOverlayService.start(this)
-            statusView.text = "LIVE – Musik starten. SoundCloud-Watchdog hält Metadaten während kurzer HyperOS-Unterbrechungen fest."
+            statusView.text = "LIVE – Musik starten. Rotation und Sperrbildschirm bleiben aktiv, solange der Dienst läuft."
         } else {
             statusView.text = "Audiofreigabe abgebrochen."
         }
@@ -510,7 +540,7 @@ class MainActivity : Activity() {
     private fun displaySizeLabel(): String {
         val manager = getSystemService(WINDOW_SERVICE) as WindowManager
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-            val bounds = manager.maximumWindowMetrics.bounds
+            val bounds = manager.currentWindowMetrics.bounds
             return "${bounds.width()}×${bounds.height()}"
         }
         @Suppress("DEPRECATION")

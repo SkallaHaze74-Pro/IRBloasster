@@ -73,6 +73,7 @@ object CapsulePreferences {
     private const val KEY_SOURCE_LOCK = "source_lock"
     private const val KEY_EDGE_PANELS = "edge_panels"
     private const val KEY_NEON_INTENSITY = "neon_intensity"
+    private const val KEY_LOCK_SCREEN = "lock_screen"
 
     fun displayMode(context: Context): CapsuleDisplayMode = CapsuleDisplayMode.from(
         prefs(context).getString(KEY_DISPLAY_MODE, CapsuleDisplayMode.MINI.storedValue),
@@ -113,6 +114,12 @@ object CapsulePreferences {
         }
         setNeonIntensity(context, next)
         return next
+    }
+
+    fun lockScreenEnabled(context: Context): Boolean = prefs(context).getBoolean(KEY_LOCK_SCREEN, true)
+
+    fun setLockScreenEnabled(context: Context, enabled: Boolean) {
+        prefs(context).edit().putBoolean(KEY_LOCK_SCREEN, enabled).apply()
     }
 
     private fun prefs(context: Context) = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
