@@ -16,8 +16,10 @@ import android.os.Handler
 import android.os.Looper
 import android.provider.Settings
 import android.service.notification.NotificationListenerService
+import android.util.DisplayMetrics
 import android.view.Gravity
 import android.view.View
+import android.view.WindowManager
 import android.widget.Button
 import android.widget.LinearLayout
 import android.widget.ScrollView
@@ -67,7 +69,7 @@ class MainActivity : Activity() {
         val scroll = ScrollView(this).apply {
             background = GradientDrawable(
                 GradientDrawable.Orientation.TL_BR,
-                intArrayOf(Color.rgb(3, 5, 15), Color.rgb(19, 4, 32), Color.rgb(2, 21, 27)),
+                intArrayOf(Color.rgb(3, 5, 15), Color.rgb(20, 4, 34), Color.rgb(2, 23, 29)),
             )
             isFillViewport = true
         }
@@ -80,12 +82,14 @@ class MainActivity : Activity() {
         root.addView(text("MUSIC CAPSULE", 11f, Color.rgb(91, 255, 210), bold = true).apply {
             letterSpacing = .18f
         })
-        root.addView(text("Edge Neon 1.1", 31f, Color.WHITE, bold = true).apply {
+        root.addView(text("Full Neon 1.2", 31f, Color.WHITE, bold = true).apply {
             setPadding(0, dp(3), 0, 0)
         })
-        root.addView(text("Variante 2 · eigenständige Xiaomi-App · 144-Hz-Anfrage", 13f, Color.rgb(177, 194, 222)).apply {
-            setPadding(0, dp(4), 0, dp(14))
-        })
+        root.addView(text(
+            "Xiaomi 15T Pro · ${displaySizeLabel()} Vollbild · höchste Display-Hz-Anfrage",
+            13f,
+            Color.rgb(177, 194, 222),
+        ).apply { setPadding(0, dp(4), 0, dp(14)) })
 
         previewView = NeonPreviewView(this).apply {
             layoutParams = LinearLayout.LayoutParams(
@@ -95,9 +99,9 @@ class MainActivity : Activity() {
         }
         root.addView(previewView)
 
-        root.addView(sectionCard("Medienquelle", Color.rgb(255, 91, 220)).apply {
+        root.addView(sectionCard("Medienquelle + SoundCloud Watchdog", Color.rgb(255, 91, 220)).apply {
             addView(text(
-                "Der AUTO-Modus bewertet jetzt PLAYING-Status, letzte MediaSession-Aktivität und die frischeste Medienbenachrichtigung. Für absolute Sicherheit kannst du YouTube fest anheften – dann darf eine alte Twitch-Session nicht mehr übernehmen.",
+                "AUTO bewertet PLAYING-Status, frische MediaSession und Medienbenachrichtigung. Der Watchdog hält den letzten bestätigten SoundCloud-Titel bei kurzen HyperOS-Unterbrechungen fest, statt sofort auf ‚Keine Wiedergabe‘ zu springen. Du kannst SoundCloud oder YouTube zusätzlich fest anheften.",
                 13.5f,
                 Color.rgb(210, 219, 237),
             ).apply { setPadding(0, dp(6), 0, dp(11)) })
@@ -111,9 +115,9 @@ class MainActivity : Activity() {
             addView(sourceButton, fullButtonParams())
         })
 
-        root.addView(sectionCard("Variante 2 · Design", Color.rgb(81, 205, 255)).apply {
+        root.addView(sectionCard("Variante 2 · Vollbild-Design", Color.rgb(81, 205, 255)).apply {
             addView(text(
-                "Mehrfarbige Neon-Paneele laufen berührungsfrei am kompletten Displayrand. Das obere Widget ist kleiner; im Randmodus bleiben fast nur die leuchtende Kontur und Mini-Balken sichtbar.",
+                "Der Rahmen nutzt jetzt die maximalen Displaygrenzen statt nur den App-Bereich. Dadurch laufen Neon, Frequenzlinien, Diamanten, Musiknoten und Pulse über Statusleiste, Kameraausschnitt und Navigationsbereich bis an den echten ${displaySizeLabel()}-Rand.",
                 13.5f,
                 Color.rgb(210, 219, 237),
             ).apply { setPadding(0, dp(6), 0, dp(10)) })
@@ -148,7 +152,7 @@ class MainActivity : Activity() {
             overlayStateView = stateText()
             addView(permissionRow(
                 title = "1 · Overlay",
-                body = "Kapsel und Seiten-Paneele über anderen Apps",
+                body = "Kapsel und Vollbild-Paneele über anderen Apps",
                 state = overlayStateView,
                 action = "Erlauben",
             ) { openOverlaySettings() })
@@ -192,7 +196,7 @@ class MainActivity : Activity() {
 
         root.addView(sectionCard("Bedienung", Color.rgb(105, 255, 205)).apply {
             addView(text(
-                "Klein/Rand antippen → großer Hanf-Visualizer. Ziehen → Widget verschieben. Im großen Modus: links oben zwischen Klein und Rand wechseln, rechts oben schließen; unten Vorheriger, Play/Pause und Nächster.",
+                "Klein/Rand antippen oder den neuen leuchtenden Pfeil darunter berühren → großer Hanf-Visualizer. Der Pfeil bleibt auch dann unterhalb der geschützten Statusleiste klickbar, wenn du die Kapsel über die Uhr schiebst. Ziehen verschiebt das Widget; lang halten wechselt Klein/Rand. Im großen Modus sind die oberen Trefferflächen jetzt deutlich größer.",
                 13.5f,
                 Color.rgb(210, 219, 237),
             ))
@@ -225,7 +229,7 @@ class MainActivity : Activity() {
         CapsuleOverlayService.start(this)
         requestNotificationRebind()
         startActivityForResult(projectionManager.createScreenCaptureIntent(), REQUEST_MEDIA_PROJECTION)
-        statusView.text = "Systemfreigabe bestätigen – danach laufen Widget und Edge-Paneele zum echten Medienaudio."
+        statusView.text = "Systemfreigabe bestätigen – danach laufen Widget und Vollbild-Paneele zum echten Medienaudio."
     }
 
     private fun stopEverything() {
@@ -283,9 +287,10 @@ class MainActivity : Activity() {
         val snapshot = CapsuleRuntime.snapshot()
         val sourceLock = CapsulePreferences.sourceLock(this)
         statusView.text = buildString {
-            append(if (snapshot.overlayRunning) "EDGE NEON LIVE" else "Overlay aus")
+            append(if (snapshot.overlayRunning) "FULL NEON LIVE" else "Overlay aus")
             append(" · ")
             append(if (snapshot.analyzerRunning) "FFT LIVE" else "Audioanalyse aus")
+            append(" · ${displaySizeLabel()}")
             append(" · Quelle ${sourceLock.label}\n")
             append(snapshot.title)
             if (snapshot.artist.isNotBlank()) append(" — ${snapshot.artist}")
@@ -342,7 +347,7 @@ class MainActivity : Activity() {
                 },
             )
             CapsuleOverlayService.start(this)
-            statusView.text = "LIVE – Musik starten. In AUTO gewinnt jetzt die frischeste aktive Session; YouTube kann zusätzlich fest angeheftet werden."
+            statusView.text = "LIVE – Musik starten. SoundCloud-Watchdog hält Metadaten während kurzer HyperOS-Unterbrechungen fest."
         } else {
             statusView.text = "Audiofreigabe abgebrochen."
         }
@@ -500,6 +505,17 @@ class MainActivity : Activity() {
 
     private fun space(width: Int): View = View(this).apply {
         layoutParams = LinearLayout.LayoutParams(width, 1)
+    }
+
+    private fun displaySizeLabel(): String {
+        val manager = getSystemService(WINDOW_SERVICE) as WindowManager
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            val bounds = manager.maximumWindowMetrics.bounds
+            return "${bounds.width()}×${bounds.height()}"
+        }
+        @Suppress("DEPRECATION")
+        val metrics = DisplayMetrics().also { manager.defaultDisplay.getRealMetrics(it) }
+        return "${metrics.widthPixels}×${metrics.heightPixels}"
     }
 
     private fun dp(value: Int): Int = (value * resources.displayMetrics.density).toInt()
