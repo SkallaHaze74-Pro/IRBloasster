@@ -31,6 +31,7 @@ import kotlin.math.abs
 import kotlin.math.cos
 import kotlin.math.ln
 import kotlin.math.max
+import kotlin.math.min
 import kotlin.math.sqrt
 
 class PlaybackAnalyzerService : Service() {
@@ -38,6 +39,15 @@ class PlaybackAnalyzerService : Service() {
         PLAYBACK_CAPTURE,
         MICROPHONE_FALLBACK,
     }
+
+    private data class AudioFeatures(
+        val bass: Float,
+        val mid: Float,
+        val treble: Float,
+        val beat: Float,
+        val spectralFlux: Float,
+        val beatSequence: Long,
+    )
 
     private val mainHandler = Handler(Looper.getMainLooper())
     private var projection: MediaProjection? = null
@@ -61,6 +71,11 @@ class PlaybackAnalyzerService : Service() {
     private var nonSoundCloudSince = 0L
     private var lastFallbackWarningAt = 0L
     private val smoothedLevels = FloatArray(CapsuleRuntime.BAND_COUNT)
+    private val previousRawLevels = FloatArray(CapsuleRuntime.BAND_COUNT)
+    private var spectralFluxAverage = .018f
+    private var bassAverage = .03f
+    private var lastBeatAt = 0L
+    private var beatSequence = 0L
     private var lastSignalAt = 0L
     private var lastPublishAt = 0L
 
@@ -110,7 +125,7 @@ class PlaybackAnalyzerService : Service() {
             switchingMode = true
             stopRecorderOnly()
             releaseProjectionOnly()
-            smoothedLevels.fill(0f)
+            resetFeatureDetector(resetSequence = false)
             playbackSilenceSince = 0L
             nonSoundCloudSince = 0L
             analyzerMode = AnalyzerMode.PLAYBACK_CAPTURE
@@ -175,7 +190,7 @@ class PlaybackAnalyzerService : Service() {
             record = record,
             channels = 2,
             mode = AnalyzerMode.PLAYBACK_CAPTURE,
-            startMessage = "Audioanalyse LIVE · internes Medienaudio",
+            startMessage = "BRUTAL REACTIVE bereit · internes Medienaudio",
         )
     }
 
@@ -194,7 +209,7 @@ class PlaybackAnalyzerService : Service() {
         runCatching {
             switchingMode = true
             stopRecorderOnly()
-            smoothedLevels.fill(0f)
+            resetFeatureDetector(resetSequence = false)
 
             val audioManager = getSystemService(AudioManager::class.java)
             val unprocessedSupported = Build.VERSION.SDK_INT >= Build.VERSION_CODES.N &&
@@ -232,7 +247,7 @@ class PlaybackAnalyzerService : Service() {
                 record = record,
                 channels = 1,
                 mode = AnalyzerMode.MICROPHONE_FALLBACK,
-                startMessage = "SoundCloud Mikrofon-Fallback LIVE · nur FFT, keine Speicherung",
+                startMessage = "SoundCloud Mikrofon-Fallback · Beat-FX aktiv",
             )
             switchingMode = false
         }.onFailure { error ->
@@ -253,7 +268,7 @@ class PlaybackAnalyzerService : Service() {
         runCatching {
             switchingMode = true
             stopRecorderOnly()
-            smoothedLevels.fill(0f)
+            resetFeatureDetector(resetSequence = false)
             startPlaybackRecorder(activeProjection)
             switchingMode = false
         }.onFailure { error ->
@@ -416,6 +431,7 @@ class PlaybackAnalyzerService : Service() {
         val multiplier = if (mode == AnalyzerMode.MICROPHONE_FALLBACK) 7.2f else 4.2f
         val signal = max(rms * multiplier, peak * .72f).coerceIn(0f, 1f)
         val levels = FloatArray(CapsuleRuntime.BAND_COUNT)
+        val rawLevels = FloatArray(CapsuleRuntime.BAND_COUNT)
 
         for (index in BAND_FREQUENCIES.indices) {
             val magnitude = goertzel(samples, BAND_FREQUENCIES[index])
@@ -427,6 +443,7 @@ class PlaybackAnalyzerService : Service() {
                 (ln(1.0 + weighted * normalization) / ln(1.0 + normalization * .50)).toFloat()
                     .coerceIn(0f, 1f)
             }
+            rawLevels[index] = normalized
             val previous = smoothedLevels[index]
             val factor = if (normalized > previous) .68f else .20f
             val smooth = previous + (normalized - previous) * factor
@@ -435,13 +452,16 @@ class PlaybackAnalyzerService : Service() {
         }
 
         val now = System.currentTimeMillis()
+        val features = detectFeatures(rawLevels, mode, now)
         if (signal > SIGNAL_THRESHOLD) lastSignalAt = now
-        if (now - lastPublishAt < PUBLISH_INTERVAL_MS) return signal
+        val forceBeatPublish = features.beat > 0f
+        if (!forceBeatPublish && now - lastPublishAt < PUBLISH_INTERVAL_MS) return signal
         lastPublishAt = now
 
         val message = when (mode) {
             AnalyzerMode.PLAYBACK_CAPTURE -> when {
-                signal > SIGNAL_THRESHOLD -> "LIVE · echter interner Medien-Equalizer"
+                signal > SIGNAL_THRESHOLD ->
+                    "BRUTAL REACTIVE LIVE · Bass ${percent(features.bass)} · Beat ${percent(features.beat)}"
                 now - lastSignalAt > 2_500L ->
                     "Capture aktiv, aber noch kein internes Audiosignal – SoundCloud kann Drittanbieter-Capture sperren"
                 else -> "Audioanalyse bereit · wartet auf Musik"
@@ -449,7 +469,7 @@ class PlaybackAnalyzerService : Service() {
 
             AnalyzerMode.MICROPHONE_FALLBACK -> when {
                 signal > SIGNAL_THRESHOLD ->
-                    "SoundCloud Mikrofon-Fallback LIVE · Handylautsprecher → FFT · nichts wird gespeichert"
+                    "SoundCloud Mikrofon-Fallback LIVE · Beat-FX ${percent(features.beat)} · nichts wird gespeichert"
                 else ->
                     "SoundCloud schützt internen Ton · Mikrofon-Fallback wartet auf hörbaren Handylautsprecher"
             }
@@ -458,6 +478,12 @@ class PlaybackAnalyzerService : Service() {
         CapsuleRuntime.updateLevels(
             levels = levels,
             signal = signal,
+            bass = features.bass,
+            mid = features.mid,
+            treble = features.treble,
+            beat = features.beat,
+            spectralFlux = features.spectralFlux,
+            beatSequence = features.beatSequence,
             message = message,
             source = if (mode == AnalyzerMode.PLAYBACK_CAPTURE) {
                 "playback-capture"
@@ -467,6 +493,90 @@ class PlaybackAnalyzerService : Service() {
         )
         return signal
     }
+
+    private fun detectFeatures(
+        rawLevels: FloatArray,
+        mode: AnalyzerMode,
+        now: Long,
+    ): AudioFeatures {
+        val bass = weightedAverage(rawLevels, 0, 4, lowBoost = 1.18f)
+        val mid = weightedAverage(rawLevels, 4, 10, lowBoost = 1f)
+        val treble = weightedAverage(rawLevels, 10, rawLevels.lastIndex, lowBoost = 1.06f)
+
+        var flux = 0f
+        for (index in rawLevels.indices) {
+            val delta = rawLevels[index] - previousRawLevels[index]
+            if (delta > 0f) flux += delta
+            previousRawLevels[index] = rawLevels[index]
+        }
+        flux = (flux / rawLevels.size).coerceIn(0f, 1f)
+
+        val oldFluxAverage = spectralFluxAverage
+        val oldBassAverage = bassAverage
+        val fluxRise = (flux - oldFluxAverage * 1.08f).coerceAtLeast(0f)
+        val bassRise = (bass - oldBassAverage * 1.045f).coerceAtLeast(0f)
+
+        spectralFluxAverage += (flux - spectralFluxAverage) * .075f
+        bassAverage += (bass - bassAverage) * .055f
+
+        val modeSensitivity = if (mode == AnalyzerMode.MICROPHONE_FALLBACK) .82f else 1f
+        val candidate = (
+            fluxRise * 6.4f +
+                bassRise * 4.4f +
+                max(0f, bass - .42f) * .42f +
+                max(0f, treble - .58f) * .12f
+            ) * modeSensitivity
+        val threshold = if (mode == AnalyzerMode.MICROPHONE_FALLBACK) .17f else .105f
+        val minimumGap = if (mode == AnalyzerMode.MICROPHONE_FALLBACK) 125L else 95L
+
+        var beat = 0f
+        if (candidate > threshold && now - lastBeatAt >= minimumGap) {
+            beat = ((candidate - threshold) / max(.01f, 1f - threshold))
+                .coerceIn(.08f, 1f)
+            lastBeatAt = now
+            beatSequence += 1L
+        }
+
+        return AudioFeatures(
+            bass = bass.coerceIn(0f, 1f),
+            mid = mid.coerceIn(0f, 1f),
+            treble = treble.coerceIn(0f, 1f),
+            beat = beat,
+            spectralFlux = (flux * 2.8f).coerceIn(0f, 1f),
+            beatSequence = beatSequence,
+        )
+    }
+
+    private fun weightedAverage(
+        values: FloatArray,
+        start: Int,
+        end: Int,
+        lowBoost: Float,
+    ): Float {
+        val safeStart = start.coerceIn(0, values.lastIndex)
+        val safeEnd = end.coerceIn(safeStart, values.lastIndex)
+        var total = 0f
+        var weightTotal = 0f
+        for (index in safeStart..safeEnd) {
+            val position = if (safeEnd == safeStart) 0f else
+                (index - safeStart) / (safeEnd - safeStart).toFloat()
+            val weight = 1f + (1f - position) * (lowBoost - 1f)
+            total += values[index] * weight
+            weightTotal += weight
+        }
+        return if (weightTotal <= 0f) 0f else (total / weightTotal).coerceIn(0f, 1f)
+    }
+
+    private fun resetFeatureDetector(resetSequence: Boolean) {
+        smoothedLevels.fill(0f)
+        previousRawLevels.fill(0f)
+        spectralFluxAverage = .018f
+        bassAverage = .03f
+        lastBeatAt = 0L
+        if (resetSequence) beatSequence = 0L
+    }
+
+    private fun percent(value: Float): Int = (value.coerceIn(0f, 1f) * 100f).toInt()
 
     private fun pcm16(bytes: ByteArray, offset: Int): Int {
         val low = bytes[offset].toInt() and 0xFF
@@ -542,8 +652,8 @@ class PlaybackAnalyzerService : Service() {
         )
         return NotificationCompat.Builder(this, CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_capsule)
-            .setContentTitle("Music Capsule Audioanalyse")
-            .setContentText("Internes Audio; bei SoundCloud automatisch Lautsprecher-Mikrofon-Fallback")
+            .setContentTitle("Music Capsule · Brutal Reactive")
+            .setContentText("Bass, Mitten, Höhen, Beat-Events und Sternenregen werden lokal analysiert")
             .setContentIntent(openPending)
             .setOngoing(true)
             .setOnlyAlertOnce(true)
@@ -560,7 +670,7 @@ class PlaybackAnalyzerService : Service() {
                 "Music Capsule Audioanalyse",
                 NotificationManager.IMPORTANCE_LOW,
             ).apply {
-                description = "Lokale Audioanalyse und SoundCloud-Mikrofon-Fallback"
+                description = "Lokale Multi-Band- und Beat-Analyse für Music Capsule"
                 setShowBadge(false)
             },
         )
@@ -573,7 +683,7 @@ class PlaybackAnalyzerService : Service() {
         releaseProjectionOnly()
         runCatching { if (wakeLock?.isHeld == true) wakeLock?.release() }
         wakeLock = null
-        smoothedLevels.fill(0f)
+        resetFeatureDetector(resetSequence = true)
         CapsuleRuntime.markAnalyzerStopped("Audioanalyse aus")
         super.onDestroy()
     }
@@ -588,7 +698,7 @@ class PlaybackAnalyzerService : Service() {
         private const val NOTIFICATION_ID = 6102
         private const val SAMPLE_RATE = 48_000
         private const val PCM_CHUNK_BYTES = 4_096
-        private const val PUBLISH_INTERVAL_MS = 45L
+        private const val PUBLISH_INTERVAL_MS = 30L
         private const val SIGNAL_THRESHOLD = .008f
         private const val SOUNDCLOUD_FALLBACK_DELAY_MS = 3_200L
         private const val RETURN_TO_PLAYBACK_DELAY_MS = 2_000L
