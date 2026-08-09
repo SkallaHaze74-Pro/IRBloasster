@@ -128,7 +128,7 @@ jobs:
           grep -F 'spawnStars' musiccapsule/src/main/java/com/skallahaze/musiccapsule/EdgePanelView.kt
           grep -F 'drawShockwaves' musiccapsule/src/main/java/com/skallahaze/musiccapsule/EdgePanelView.kt
           grep -F 'drawStarRain' musiccapsule/src/main/java/com/skallahaze/musiccapsule/EdgePanelView.kt
-          grep -F 'BRUTAL REACTIVE' musiccapsule/src/main/java/com/skallahaze/musiccapsule/MainActivity.kt
+          grep -F 'Brutal Reactive 1.3.0' musiccapsule/src/main/java/com/skallahaze/musiccapsule/MainActivity.kt
           grep -F 'MICROPHONE_FALLBACK' musiccapsule/src/main/java/com/skallahaze/musiccapsule/PlaybackAnalyzerService.kt
           grep -F 'FLAG_SHOW_WHEN_LOCKED' musiccapsule/src/main/java/com/skallahaze/musiccapsule/CapsuleOverlayService.kt
           grep -F 'registerDisplayListener' musiccapsule/src/main/java/com/skallahaze/musiccapsule/CapsuleOverlayService.kt
