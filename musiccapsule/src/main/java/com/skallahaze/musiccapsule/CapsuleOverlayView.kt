@@ -26,21 +26,26 @@ import kotlin.math.sin
 
 class CapsuleOverlayView(context: Context) : View(context) {
     var onExpandedChanged: ((Boolean) -> Unit)? = null
+    var onDisplayModeRequested: ((CapsuleDisplayMode) -> Unit)? = null
     var onMove: ((Float, Float) -> Unit)? = null
 
     private val density = resources.displayMetrics.density
     private val touchSlop = ViewConfiguration.get(context).scaledTouchSlop
     private val fillPaint = Paint(Paint.ANTI_ALIAS_FLAG)
-    private val strokePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.STROKE }
+    private val strokePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        style = Paint.Style.STROKE
+        strokeCap = Paint.Cap.ROUND
+        strokeJoin = Paint.Join.ROUND
+    }
     private val titlePaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
         color = Color.WHITE
         typeface = android.graphics.Typeface.create(android.graphics.Typeface.DEFAULT, android.graphics.Typeface.BOLD)
     }
     private val subtitlePaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = Color.argb(180, 214, 226, 244)
+        color = Color.argb(184, 214, 226, 244)
     }
     private val labelPaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = Color.argb(220, 255, 255, 255)
+        color = Color.argb(224, 255, 255, 255)
         typeface = android.graphics.Typeface.create(android.graphics.Typeface.DEFAULT, android.graphics.Typeface.BOLD)
     }
 
@@ -49,9 +54,15 @@ class CapsuleOverlayView(context: Context) : View(context) {
     ) ?: Path()
     private val transformedLeafPath = Path()
     private val transformMatrix = Matrix()
+    private val targetLevels = FloatArray(CapsuleRuntime.BAND_COUNT)
+    private val displayLevels = FloatArray(CapsuleRuntime.BAND_COUNT)
 
     private var snapshot = CapsuleRuntime.snapshot()
     private var expanded = false
+    private var displayMode = CapsuleDisplayMode.MINI
+    private var neonIntensity = 1.35f
+    private var displaySignal = 0f
+    private var lastFrameNanos = 0L
     private var downRawX = 0f
     private var downRawY = 0f
     private var lastRawX = 0f
@@ -60,11 +71,16 @@ class CapsuleOverlayView(context: Context) : View(context) {
 
     init {
         isClickable = true
+        setLayerType(LAYER_TYPE_HARDWARE, null)
     }
 
-    fun setSnapshot(value: CapsuleSnapshot) {
+    fun setSnapshot(value: CapsuleSnapshot, intensity: Float) {
         snapshot = value
         expanded = value.expanded
+        neonIntensity = intensity.coerceIn(.75f, 1.8f)
+        for (index in targetLevels.indices) {
+            targetLevels[index] = value.levels.getOrNull(index)?.coerceIn(0f, 1f) ?: 0f
+        }
         postInvalidateOnAnimation()
     }
 
@@ -73,129 +89,157 @@ class CapsuleOverlayView(context: Context) : View(context) {
         postInvalidateOnAnimation()
     }
 
-    override fun onDraw(canvas: Canvas) {
-        super.onDraw(canvas)
-        if (expanded) drawExpanded(canvas) else drawCompact(canvas)
+    fun setDisplayMode(value: CapsuleDisplayMode) {
+        displayMode = value
+        postInvalidateOnAnimation()
     }
 
-    private fun drawCompact(canvas: Canvas) {
+    override fun onDraw(canvas: Canvas) {
+        super.onDraw(canvas)
+        smoothLevels()
+        when {
+            expanded -> drawExpanded(canvas)
+            displayMode == CapsuleDisplayMode.RIM -> drawRim(canvas)
+            else -> drawMini(canvas)
+        }
+        if (
+            snapshot.signal > .003f ||
+            displaySignal > .004f ||
+            displayLevels.any { it > .006f }
+        ) {
+            postInvalidateOnAnimation()
+        }
+    }
+
+    private fun smoothLevels() {
+        val now = System.nanoTime()
+        val dt = if (lastFrameNanos == 0L) 1f / 60f else {
+            ((now - lastFrameNanos) / 1_000_000_000f).coerceIn(1f / 240f, .08f)
+        }
+        lastFrameNanos = now
+        val attack = 1f - kotlin.math.exp(-dt * 30f)
+        val release = 1f - kotlin.math.exp(-dt * 10f)
+        for (index in displayLevels.indices) {
+            val target = targetLevels[index]
+            val factor = if (target > displayLevels[index]) attack else release
+            displayLevels[index] += (target - displayLevels[index]) * factor
+        }
+        val signalTarget = snapshot.signal.coerceIn(0f, 1f)
+        val signalFactor = if (signalTarget > displaySignal) attack else release
+        displaySignal += (signalTarget - displaySignal) * signalFactor
+    }
+
+    private fun drawRim(canvas: Canvas) {
+        val inset = dp(2.2f)
+        val bounds = RectF(inset, inset, width - inset, height - inset)
+        val radius = height * .48f
+        fillPaint.color = Color.argb(28, 3, 6, 14)
+        canvas.drawRoundRect(bounds, radius, radius, fillPaint)
+        drawRainbowBorder(canvas, bounds, radius, strong = true)
+
+        val iconRadius = height * .22f
+        val iconCenterX = dp(17f)
+        val iconCenterY = height / 2f
+        fillPaint.color = hsv(135f + colorPhase(), .84f, 1f, .72f)
+        canvas.drawCircle(iconCenterX, iconCenterY, iconRadius, fillPaint)
+
+        val barRect = RectF(width - dp(76f), dp(6f), width - dp(10f), height - dp(6f))
+        drawLinearLevels(canvas, barRect, count = 9, floor = .035f)
+    }
+
+    private fun drawMini(canvas: Canvas) {
         val bounds = RectF(0f, 0f, width.toFloat(), height.toFloat())
-        val radius = height * 0.46f
+        val radius = height * .48f
         fillPaint.shader = LinearGradient(
             0f,
             0f,
             width.toFloat(),
             height.toFloat(),
-            intArrayOf(Color.rgb(6, 9, 21), Color.rgb(30, 10, 39), Color.rgb(3, 24, 28)),
+            intArrayOf(
+                Color.argb(244, 4, 7, 18),
+                Color.argb(238, 24, 7, 37),
+                Color.argb(240, 3, 22, 29),
+            ),
             null,
             Shader.TileMode.CLAMP,
         )
         canvas.drawRoundRect(bounds, radius, radius, fillPaint)
         fillPaint.shader = null
+        drawRainbowBorder(canvas, RectF(dp(1f), dp(1f), width - dp(1f), height - dp(1f)), radius, strong = false)
 
-        strokePaint.strokeWidth = dp(1.2f)
-        strokePaint.shader = LinearGradient(
-            0f,
-            0f,
-            width.toFloat(),
-            0f,
-            intArrayOf(Color.rgb(80, 255, 198), Color.rgb(56, 197, 255), Color.rgb(232, 70, 255)),
-            null,
-            Shader.TileMode.CLAMP,
-        )
-        canvas.drawRoundRect(
-            RectF(dp(1f), dp(1f), width - dp(1f), height - dp(1f)),
-            radius,
-            radius,
-            strokePaint,
-        )
-        strokePaint.shader = null
-
-        val padding = dp(7f)
+        val padding = dp(5.5f)
         val artSize = height - padding * 2f
         val artRect = RectF(padding, padding, padding + artSize, padding + artSize)
         drawArtworkOrLeaf(canvas, artRect, compact = true)
 
-        val barsWidth = min(dp(88f), width * 0.28f)
+        val barsWidth = min(dp(66f), width * .26f)
         val barsRect = RectF(
             width - padding - barsWidth,
             padding + dp(3f),
             width - padding,
             height - padding - dp(3f),
         )
-        drawLinearLevels(canvas, barsRect, compact = true)
+        drawLinearLevels(canvas, barsRect, count = 8, floor = .045f)
 
-        val textLeft = artRect.right + dp(10f)
-        val textRight = barsRect.left - dp(8f)
-        titlePaint.textSize = dp(13.5f)
-        subtitlePaint.textSize = dp(10.5f)
-        drawEllipsizedText(canvas, snapshot.title, textLeft, height * 0.45f, textRight - textLeft, titlePaint)
+        val textLeft = artRect.right + dp(8f)
+        val textRight = barsRect.left - dp(7f)
+        titlePaint.textSize = dp(12.2f)
+        subtitlePaint.textSize = dp(9.4f)
+        drawEllipsizedText(canvas, snapshot.title, textLeft, height * .44f, textRight - textLeft, titlePaint)
         val subtitle = snapshot.artist.ifBlank {
             when {
                 snapshot.analyzerRunning -> "Audioanalyse aktiv"
                 else -> "Antippen zum Öffnen"
             }
         }
-        drawEllipsizedText(canvas, subtitle, textLeft, height * 0.72f, textRight - textLeft, subtitlePaint)
+        drawEllipsizedText(canvas, subtitle, textLeft, height * .72f, textRight - textLeft, subtitlePaint)
 
         fillPaint.color = when {
-            snapshot.signal > 0.01f -> Color.rgb(75, 255, 176)
+            snapshot.signal > .01f -> Color.rgb(75, 255, 176)
             snapshot.analyzerRunning -> Color.rgb(255, 194, 76)
             else -> Color.rgb(122, 135, 158)
         }
-        canvas.drawCircle(width - dp(7f), dp(7f), dp(2.3f), fillPaint)
+        canvas.drawCircle(width - dp(5.5f), dp(5.5f), dp(2.0f), fillPaint)
     }
 
     private fun drawExpanded(canvas: Canvas) {
         val outer = RectF(0f, 0f, width.toFloat(), height.toFloat())
-        val corner = dp(28f)
+        val corner = dp(27f)
         fillPaint.shader = LinearGradient(
             0f,
             0f,
             width.toFloat(),
             height.toFloat(),
-            intArrayOf(Color.rgb(2, 4, 12), Color.rgb(10, 12, 34), Color.rgb(3, 24, 27)),
+            intArrayOf(
+                Color.rgb(2, 4, 12),
+                Color.rgb(18, 7, 33),
+                Color.rgb(3, 22, 29),
+                Color.rgb(12, 5, 31),
+            ),
             null,
             Shader.TileMode.CLAMP,
         )
         canvas.drawRoundRect(outer, corner, corner, fillPaint)
         fillPaint.shader = null
+        drawRainbowBorder(canvas, RectF(dp(1f), dp(1f), width - dp(1f), height - dp(1f)), corner, strong = true)
 
-        strokePaint.strokeWidth = dp(1.2f)
-        strokePaint.shader = LinearGradient(
-            0f,
-            0f,
-            width.toFloat(),
-            height.toFloat(),
-            intArrayOf(Color.rgb(72, 255, 183), Color.rgb(55, 195, 255), Color.rgb(232, 70, 255)),
-            null,
-            Shader.TileMode.CLAMP,
-        )
-        canvas.drawRoundRect(
-            RectF(dp(1f), dp(1f), width - dp(1f), height - dp(1f)),
-            corner,
-            corner,
-            strokePaint,
-        )
-        strokePaint.shader = null
-
-        drawCloseButton(canvas)
-        titlePaint.textSize = dp(18f)
-        subtitlePaint.textSize = dp(12f)
-        drawEllipsizedText(canvas, snapshot.title, dp(22f), dp(38f), width - dp(86f), titlePaint)
+        drawTopButtons(canvas)
+        titlePaint.textSize = dp(17f)
+        subtitlePaint.textSize = dp(11.5f)
+        drawEllipsizedText(canvas, snapshot.title, dp(52f), dp(36f), width - dp(108f), titlePaint)
         drawEllipsizedText(
             canvas,
             snapshot.artist.ifBlank { packageDisplayName() },
-            dp(22f),
-            dp(58f),
-            width - dp(86f),
+            dp(52f),
+            dp(56f),
+            width - dp(108f),
             subtitlePaint,
         )
 
-        val centerX = width * 0.5f
-        val centerY = height * 0.43f
-        val leafSize = min(width * 0.52f, height * 0.43f)
-        drawRadialLevels(canvas, centerX, centerY, leafSize * 0.57f)
+        val centerX = width * .5f
+        val centerY = height * .43f
+        val leafSize = min(width * .52f, height * .43f)
+        drawRadialLevels(canvas, centerX, centerY, leafSize * .57f)
         drawArtworkOrLeaf(
             canvas,
             RectF(
@@ -209,18 +253,60 @@ class CapsuleOverlayView(context: Context) : View(context) {
 
         drawLinearLevels(
             canvas,
-            RectF(dp(24f), height * 0.70f, width - dp(24f), height * 0.80f),
-            compact = false,
+            RectF(dp(24f), height * .70f, width - dp(24f), height * .80f),
+            count = 16,
+            floor = .025f,
         )
         drawTransportControls(canvas)
 
-        labelPaint.textSize = dp(10.5f)
+        labelPaint.textSize = dp(10.2f)
+        val sourceLock = CapsulePreferences.sourceLock(context)
         val status = when {
-            snapshot.signal > 0.01f -> "LIVE FFT · ${(snapshot.signal * 100).toInt()}% · ${snapshot.source}"
-            snapshot.analyzerRunning -> "Capture aktiv · wartet auf internes Audiosignal"
-            else -> "Audioanalyse aus · App öffnen und Audio starten"
+            snapshot.signal > .01f ->
+                "LIVE FFT · ${(displaySignal * 100).toInt()}% · ${sourceLock.label} · ${snapshot.source}"
+            snapshot.analyzerRunning ->
+                "Capture aktiv · ${sourceLock.label} · wartet auf internes Audiosignal"
+            else ->
+                "Audioanalyse aus · Quelle ${sourceLock.label}"
         }
-        canvas.drawText(status, dp(22f), height - dp(15f), labelPaint)
+        canvas.drawText(status, dp(22f), height - dp(14f), labelPaint)
+    }
+
+    private fun drawTopButtons(canvas: Canvas) {
+        val leftX = dp(26f)
+        val rightX = width - dp(26f)
+        val y = dp(26f)
+        fillPaint.color = Color.argb(82, 255, 255, 255)
+        canvas.drawCircle(leftX, y, dp(14f), fillPaint)
+        canvas.drawCircle(rightX, y, dp(14f), fillPaint)
+
+        strokePaint.color = Color.WHITE
+        strokePaint.strokeWidth = dp(1.8f)
+        canvas.drawLine(leftX - dp(6f), y, leftX + dp(6f), y, strokePaint)
+        canvas.drawLine(rightX - dp(5f), y - dp(5f), rightX + dp(5f), y + dp(5f), strokePaint)
+        canvas.drawLine(rightX + dp(5f), y - dp(5f), rightX - dp(5f), y + dp(5f), strokePaint)
+    }
+
+    private fun drawRainbowBorder(canvas: Canvas, rect: RectF, radius: Float, strong: Boolean) {
+        val phase = colorPhase()
+        val colors = intArrayOf(
+            hsv(phase + 0f, .90f, 1f, 1f),
+            hsv(phase + 52f, .92f, 1f, 1f),
+            hsv(phase + 112f, .90f, 1f, 1f),
+            hsv(phase + 174f, .88f, 1f, 1f),
+            hsv(phase + 236f, .90f, 1f, 1f),
+            hsv(phase + 300f, .92f, 1f, 1f),
+            hsv(phase + 360f, .90f, 1f, 1f),
+        )
+        strokePaint.shader = LinearGradient(rect.left, rect.top, rect.right, rect.bottom, colors, null, Shader.TileMode.CLAMP)
+        strokePaint.strokeWidth = if (strong) dp(5.5f) * neonIntensity else dp(3.8f) * neonIntensity
+        strokePaint.alpha = if (strong) 34 else 26
+        canvas.drawRoundRect(rect, radius, radius, strokePaint)
+        strokePaint.strokeWidth = if (strong) dp(2.2f) else dp(1.35f)
+        strokePaint.alpha = 235
+        canvas.drawRoundRect(rect, radius, radius, strokePaint)
+        strokePaint.shader = null
+        strokePaint.alpha = 255
     }
 
     private fun packageDisplayName(): String {
@@ -231,14 +317,14 @@ class CapsuleOverlayView(context: Context) : View(context) {
         val artwork = snapshot.artwork
         if (artwork != null && !artwork.isRecycled) {
             drawArtwork(canvas, artwork, rect)
-            return
+        } else {
+            drawLeaf(canvas, rect, compact)
         }
-        drawLeaf(canvas, rect, compact)
     }
 
     private fun drawArtwork(canvas: Canvas, bitmap: Bitmap, rect: RectF) {
         val save = canvas.save()
-        val radius = if (expanded) rect.width() * 0.5f else dp(15f)
+        val radius = if (expanded) rect.width() * .5f else rect.width() * .42f
         canvas.clipRounded(rect, radius, radius)
         val scale = max(rect.width() / bitmap.width, rect.height() / bitmap.height)
         val sourceWidth = rect.width() / scale
@@ -255,7 +341,7 @@ class CapsuleOverlayView(context: Context) : View(context) {
     }
 
     private fun drawLeaf(canvas: Canvas, rect: RectF, compact: Boolean) {
-        val pulse = 1f + snapshot.signal * if (compact) 0.035f else 0.065f
+        val pulse = 1f + displaySignal * if (compact) .035f else .065f
         val cx = rect.centerX()
         val cy = rect.centerY()
         val target = RectF(
@@ -269,66 +355,74 @@ class CapsuleOverlayView(context: Context) : View(context) {
         transformedLeafPath.reset()
         sourceLeafPath.transform(transformMatrix, transformedLeafPath)
 
-        val phase = (SystemClock.uptimeMillis() % 9000L) / 9000f
-        val colors = intArrayOf(
-            hsv(132f + phase * 35f, .84f, 1f),
-            hsv(188f + phase * 46f, .82f, 1f),
-            hsv(300f + phase * 30f, .72f, 1f),
-        )
+        val phase = colorPhase()
         fillPaint.shader = LinearGradient(
             target.left,
             target.top,
             target.right,
             target.bottom,
-            colors,
+            intArrayOf(
+                hsv(phase + 128f, .86f, 1f, 1f),
+                hsv(phase + 188f, .84f, 1f, 1f),
+                hsv(phase + 302f, .76f, 1f, 1f),
+            ),
             null,
             Shader.TileMode.CLAMP,
         )
-        fillPaint.color = Color.WHITE
         canvas.drawPath(transformedLeafPath, fillPaint)
         fillPaint.shader = null
 
-        strokePaint.style = Paint.Style.STROKE
-        strokePaint.strokeWidth = if (compact) dp(.7f) else dp(1.3f)
-        strokePaint.color = Color.argb(220, 235, 255, 249)
+        strokePaint.strokeWidth = if (compact) dp(.65f) else dp(1.15f)
+        strokePaint.color = Color.argb(224, 235, 255, 249)
         canvas.drawPath(transformedLeafPath, strokePaint)
     }
 
-    private fun drawLinearLevels(canvas: Canvas, rect: RectF, compact: Boolean) {
-        val levels = snapshot.levels
-        val count = if (compact) 7 else 16
-        val gap = if (compact) dp(3.1f) else dp(4f)
+    private fun drawLinearLevels(
+        canvas: Canvas,
+        rect: RectF,
+        count: Int,
+        floor: Float,
+    ) {
+        val gap = if (count <= 9) dp(2.5f) else dp(3.5f)
         val barWidth = (rect.width() - gap * (count - 1)) / count
         for (index in 0 until count) {
-            val sourceIndex = ((index.toFloat() / max(1, count - 1)) * levels.lastIndex).toInt()
-            val level = (levels.getOrNull(sourceIndex) ?: 0f).coerceIn(0f, 1f)
-            val floor = if (snapshot.analyzerRunning) 0.06f else 0.02f
-            val shaped = max(floor, level.pow(.64f))
+            val sourceIndex = ((index.toFloat() / max(1, count - 1)) * displayLevels.lastIndex).toInt()
+            val level = displayLevels.getOrNull(sourceIndex)?.coerceIn(0f, 1f) ?: 0f
+            val shaped = max(if (snapshot.analyzerRunning) floor else .012f, level.pow(.62f))
             val barHeight = rect.height() * shaped
             val left = rect.left + index * (barWidth + gap)
-            fillPaint.color = hsv(132f + index * (225f / count), .84f, 1f, if (snapshot.analyzerRunning) .94f else .35f)
+            fillPaint.color = hsv(
+                colorPhase() + index * (280f / count),
+                .90f,
+                1f,
+                if (snapshot.analyzerRunning) .96f else .34f,
+            )
             canvas.drawRoundRect(
                 RectF(left, rect.bottom - barHeight, left + barWidth, rect.bottom),
-                barWidth * .45f,
-                barWidth * .45f,
+                barWidth * .48f,
+                barWidth * .48f,
                 fillPaint,
             )
         }
     }
 
     private fun drawRadialLevels(canvas: Canvas, cx: Float, cy: Float, radius: Float) {
-        val levels = snapshot.levels
-        val count = 40
-        strokePaint.style = Paint.Style.STROKE
-        strokePaint.strokeCap = Paint.Cap.ROUND
+        val count = 44
         for (index in 0 until count) {
-            val levelIndex = ((index.toFloat() / count) * levels.size).toInt().coerceAtMost(levels.lastIndex)
-            val level = (levels.getOrNull(levelIndex) ?: 0f).coerceIn(0f, 1f)
-            val shaped = max(if (snapshot.analyzerRunning) .035f else .012f, level.pow(.66f))
+            val levelIndex = ((index.toFloat() / count) * displayLevels.size)
+                .toInt()
+                .coerceAtMost(displayLevels.lastIndex)
+            val level = displayLevels[levelIndex].coerceIn(0f, 1f)
+            val shaped = max(if (snapshot.analyzerRunning) .035f else .012f, level.pow(.64f))
             val angle = index.toDouble() / count * PI * 2.0 - PI / 2.0
             val outer = radius + dp(7f) + shaped * dp(35f)
-            strokePaint.color = hsv(125f + index * (235f / count), .84f, 1f, .28f + shaped * .68f)
-            strokePaint.strokeWidth = dp(1.1f) + shaped * dp(2.2f)
+            strokePaint.color = hsv(
+                colorPhase() + 125f + index * (245f / count),
+                .90f,
+                1f,
+                .26f + shaped * .72f,
+            )
+            strokePaint.strokeWidth = dp(1.0f) + shaped * dp(2.3f)
             canvas.drawLine(
                 cx + cos(angle).toFloat() * radius,
                 cy + sin(angle).toFloat() * radius,
@@ -339,22 +433,11 @@ class CapsuleOverlayView(context: Context) : View(context) {
         }
     }
 
-    private fun drawCloseButton(canvas: Canvas) {
-        val cx = width - dp(27f)
-        val cy = dp(27f)
-        fillPaint.color = Color.argb(92, 255, 255, 255)
-        canvas.drawCircle(cx, cy, dp(15f), fillPaint)
-        strokePaint.color = Color.WHITE
-        strokePaint.strokeWidth = dp(2f)
-        canvas.drawLine(cx - dp(5f), cy - dp(5f), cx + dp(5f), cy + dp(5f), strokePaint)
-        canvas.drawLine(cx + dp(5f), cy - dp(5f), cx - dp(5f), cy + dp(5f), strokePaint)
-    }
-
     private fun drawTransportControls(canvas: Canvas) {
         val y = height * .87f
         val xs = floatArrayOf(width * .32f, width * .50f, width * .68f)
         xs.forEachIndexed { index, x ->
-            fillPaint.color = Color.argb(if (index == 1) 96 else 72, 255, 255, 255)
+            fillPaint.color = Color.argb(if (index == 1) 104 else 76, 255, 255, 255)
             canvas.drawCircle(x, y, if (index == 1) dp(26f) else dp(23f), fillPaint)
         }
         fillPaint.color = Color.WHITE
@@ -458,7 +541,13 @@ class CapsuleOverlayView(context: Context) : View(context) {
             onExpandedChanged?.invoke(true)
             return
         }
-        if (x > width - dp(58f) && y < dp(58f)) {
+        if (x > width - dp(56f) && y < dp(56f)) {
+            onExpandedChanged?.invoke(false)
+            return
+        }
+        if (x < dp(56f) && y < dp(56f)) {
+            val next = displayMode.next()
+            onDisplayModeRequested?.invoke(next)
             onExpandedChanged?.invoke(false)
             return
         }
@@ -473,9 +562,13 @@ class CapsuleOverlayView(context: Context) : View(context) {
         onExpandedChanged?.invoke(false)
     }
 
+    private fun colorPhase(): Float {
+        return ((SystemClock.uptimeMillis() % 16_000L) / 16_000f) * 360f + displaySignal * 48f
+    }
+
     private fun dp(value: Float): Float = value * density
 
-    private fun hsv(hue: Float, saturation: Float, value: Float, alpha: Float = 1f): Int {
+    private fun hsv(hue: Float, saturation: Float, value: Float, alpha: Float): Int {
         val color = Color.HSVToColor(floatArrayOf((hue % 360f + 360f) % 360f, saturation, value))
         return Color.argb(
             (alpha.coerceIn(0f, 1f) * 255).toInt(),
