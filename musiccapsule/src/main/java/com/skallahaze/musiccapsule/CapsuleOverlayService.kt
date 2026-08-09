@@ -8,6 +8,7 @@ import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.graphics.PixelFormat
+import android.graphics.Rect
 import android.hardware.display.DisplayManager
 import android.os.Build
 import android.os.Handler
@@ -15,6 +16,7 @@ import android.os.IBinder
 import android.os.Looper
 import android.provider.Settings
 import android.service.notification.NotificationListenerService
+import android.util.DisplayMetrics
 import android.view.Display
 import android.view.Gravity
 import android.view.WindowManager
@@ -67,6 +69,7 @@ class CapsuleOverlayService : Service() {
         }
         if (capsuleView == null) attachCapsule()
         ensureEdgePanel(CapsulePreferences.edgePanelsEnabled(this))
+        updateEdgeLayout()
         if (intent?.action == ACTION_APPLY_SETTINGS) applyCurrentSettings()
 
         requestListenerRebind()
@@ -85,7 +88,7 @@ class CapsuleOverlayService : Service() {
             running = true,
             expanded = expanded,
             message = if (CapsuleRuntime.snapshot().analyzerRunning) {
-                "Music Capsule LIVE · Edge Neon + Audioanalyse"
+                "Music Capsule LIVE · 1280×2772 Vollbildrahmen"
             } else {
                 "Music Capsule sichtbar · Audioanalyse noch starten"
             },
@@ -151,14 +154,16 @@ class CapsuleOverlayService : Service() {
             x = 0
             y = capsuleTopPx(mode, expanded)
         }
+        configureInsets(params, fullScreen = false)
         requestHighestRefreshRate(params)
         return params
     }
 
     private fun createEdgeParams(): WindowManager.LayoutParams {
+        val bounds = screenBounds()
         val params = WindowManager.LayoutParams(
-            WindowManager.LayoutParams.MATCH_PARENT,
-            WindowManager.LayoutParams.MATCH_PARENT,
+            bounds.width(),
+            bounds.height(),
             overlayWindowType(),
             WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
                 WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE or
@@ -169,14 +174,67 @@ class CapsuleOverlayService : Service() {
             PixelFormat.TRANSLUCENT,
         ).apply {
             gravity = Gravity.TOP or Gravity.START
-            x = 0
-            y = 0
-            // Android 12+ only passes touches through an untrusted non-touchable
-            // overlay when its window opacity stays below the obscuring threshold.
+            x = bounds.left
+            y = bounds.top
+            // Android 12+ passes touches through an untrusted non-touchable
+            // overlay only below the obscuring-opacity threshold.
             alpha = 0.79f
         }
+        configureInsets(params, fullScreen = true)
         requestHighestRefreshRate(params)
         return params
+    }
+
+    private fun configureInsets(
+        params: WindowManager.LayoutParams,
+        fullScreen: Boolean,
+    ) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            params.setFitInsetsTypes(0)
+            params.setFitInsetsSides(0)
+            params.setFitInsetsIgnoringVisibility(true)
+            params.layoutInDisplayCutoutMode =
+                WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_ALWAYS
+        } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+            params.layoutInDisplayCutoutMode =
+                WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES
+        }
+
+        if (fullScreen) {
+            params.flags = params.flags or
+                WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
+                WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS
+        }
+    }
+
+    private fun updateEdgeLayout() {
+        val params = edgeParams ?: return
+        val bounds = screenBounds()
+        params.width = bounds.width()
+        params.height = bounds.height()
+        params.x = bounds.left
+        params.y = bounds.top
+        configureInsets(params, fullScreen = true)
+        requestHighestRefreshRate(params)
+        edgeView?.let { view ->
+            runCatching { windowManager.updateViewLayout(view, params) }
+        }
+    }
+
+    private fun screenBounds(): Rect {
+        if (!::windowManager.isInitialized) {
+            windowManager = getSystemService(WINDOW_SERVICE) as WindowManager
+        }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            return Rect(windowManager.maximumWindowMetrics.bounds)
+        }
+
+        @Suppress("DEPRECATION")
+        val display = windowManager.defaultDisplay
+        val metrics = DisplayMetrics()
+        @Suppress("DEPRECATION")
+        display.getRealMetrics(metrics)
+        return Rect(0, 0, metrics.widthPixels, metrics.heightPixels)
     }
 
     private fun requestHighestRefreshRate(params: WindowManager.LayoutParams) {
@@ -197,6 +255,7 @@ class CapsuleOverlayService : Service() {
         val mode = CapsulePreferences.displayMode(this)
         capsuleView?.setDisplayMode(mode)
         ensureEdgePanel(CapsulePreferences.edgePanelsEnabled(this))
+        updateEdgeLayout()
         updateCapsuleLayout(mode, expanded)
         requestListenerRebind()
         mediaSessionPoller?.kick()
@@ -217,6 +276,7 @@ class CapsuleOverlayService : Service() {
         params.height = capsuleHeightPx(mode, expanded)
         params.x = 0
         params.y = capsuleTopPx(mode, expanded)
+        configureInsets(params, fullScreen = false)
         requestHighestRefreshRate(params)
         capsuleView?.let { view ->
             runCatching { windowManager.updateViewLayout(view, params) }
@@ -226,12 +286,14 @@ class CapsuleOverlayService : Service() {
     private fun moveCapsule(dx: Float, dy: Float) {
         if (expanded) return
         val params = capsuleParams ?: return
-        val screenWidth = resources.displayMetrics.widthPixels
-        val screenHeight = resources.displayMetrics.heightPixels
-        val maxX = max(0, (screenWidth - params.width) / 2)
-        val maxY = max(0, screenHeight - params.height)
+        val bounds = screenBounds()
+        val maxX = max(0, (bounds.width() - params.width) / 2)
+        val maxY = max(0, bounds.height() - params.height)
+        // Allow the visual strip to sit over the clock/status bar while its
+        // lower chevron remains in a tappable area below the protected system UI.
+        val minY = -statusBarHeightPx() / 2
         params.x = (params.x + dx.toInt()).coerceIn(-maxX, maxX)
-        params.y = (params.y + dy.toInt()).coerceIn(0, maxY)
+        params.y = (params.y + dy.toInt()).coerceIn(minY, maxY)
         capsuleView?.let { view ->
             runCatching { windowManager.updateViewLayout(view, params) }
         }
@@ -260,8 +322,8 @@ class CapsuleOverlayService : Service() {
         )
         return NotificationCompat.Builder(this, CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_capsule)
-            .setContentTitle("Music Capsule · Edge Neon")
-            .setContentText("144-Hz-Paneele, Mini-Widget und Medien-Watchdog laufen")
+            .setContentTitle("Music Capsule · Full Neon")
+            .setContentText("Vollbildrahmen, Mini-Widget und SoundCloud-Watchdog laufen")
             .setContentIntent(openPending)
             .setOngoing(true)
             .setOnlyAlertOnce(true)
@@ -294,27 +356,35 @@ class CapsuleOverlayService : Service() {
     }
 
     private fun capsuleWidthPx(mode: CapsuleDisplayMode, expanded: Boolean): Int {
-        if (expanded) return min(dp(430f), resources.displayMetrics.widthPixels - dp(16f))
+        val screenWidth = screenBounds().width()
+        if (expanded) return min(dp(430f), screenWidth - dp(16f))
         return when (mode) {
-            CapsuleDisplayMode.MINI -> min(dp(294f), resources.displayMetrics.widthPixels - dp(18f))
-            CapsuleDisplayMode.RIM -> min(dp(228f), resources.displayMetrics.widthPixels - dp(24f))
+            CapsuleDisplayMode.MINI -> min(dp(270f), screenWidth - dp(24f))
+            CapsuleDisplayMode.RIM -> min(dp(205f), screenWidth - dp(34f))
         }
     }
 
     private fun capsuleHeightPx(mode: CapsuleDisplayMode, expanded: Boolean): Int {
-        if (expanded) return min(dp(560f), resources.displayMetrics.heightPixels - dp(110f))
+        if (expanded) return min(dp(560f), screenBounds().height() - dp(110f))
+        // 12 dp transparent/tappable chevron area is included underneath the
+        // visible bar. This fixes taps after the bar is moved over the clock.
         return when (mode) {
-            CapsuleDisplayMode.MINI -> dp(54f)
-            CapsuleDisplayMode.RIM -> dp(30f)
+            CapsuleDisplayMode.MINI -> dp(60f)
+            CapsuleDisplayMode.RIM -> dp(38f)
         }
     }
 
     private fun capsuleTopPx(mode: CapsuleDisplayMode, expanded: Boolean): Int {
-        if (expanded) return dp(48f)
+        if (expanded) return statusBarHeightPx() + dp(8f)
         return when (mode) {
-            CapsuleDisplayMode.MINI -> dp(32f)
-            CapsuleDisplayMode.RIM -> dp(40f)
+            CapsuleDisplayMode.MINI -> statusBarHeightPx() + dp(2f)
+            CapsuleDisplayMode.RIM -> max(0, statusBarHeightPx() - dp(9f))
         }
+    }
+
+    private fun statusBarHeightPx(): Int {
+        val resourceId = resources.getIdentifier("status_bar_height", "dimen", "android")
+        return if (resourceId > 0) resources.getDimensionPixelSize(resourceId) else dp(28f)
     }
 
     private fun dp(value: Float): Int = (value * resources.displayMetrics.density).toInt()
