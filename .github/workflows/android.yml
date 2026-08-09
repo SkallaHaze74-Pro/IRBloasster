@@ -120,13 +120,20 @@ jobs:
           grep -F 'AutoTuneMode.BALANCED' musiccapsule/src/main/java/com/skallahaze/musiccapsule/CapsulePreferences.kt
           grep -F 'StarMode.BEAT_PLUS' musiccapsule/src/main/java/com/skallahaze/musiccapsule/CapsulePreferences.kt
           grep -F 'StageStyle.NEON_AURA' musiccapsule/src/main/java/com/skallahaze/musiccapsule/CapsulePreferences.kt
+          grep -F 'BeatPatternMode.INFINITY' musiccapsule/src/main/java/com/skallahaze/musiccapsule/VisualTuningPreferences.kt
+          grep -F 'nextOpacity' musiccapsule/src/main/java/com/skallahaze/musiccapsule/VisualTuningPreferences.kt
           grep -F 'resolveAutoTune' musiccapsule/src/main/java/com/skallahaze/musiccapsule/EdgePanelView.kt
           grep -F 'spawnBeatStars' musiccapsule/src/main/java/com/skallahaze/musiccapsule/EdgePanelView.kt
           grep -F 'spawnStarRain' musiccapsule/src/main/java/com/skallahaze/musiccapsule/EdgePanelView.kt
+          grep -F 'alpha = VisualTuningPreferences.opacity' musiccapsule/src/main/java/com/skallahaze/musiccapsule/EdgePanelView.kt
           grep -F 'object AutoTuneRuntime' musiccapsule/src/main/java/com/skallahaze/musiccapsule/AutoTuneRuntime.kt
           grep -F 'class StageActivity' musiccapsule/src/main/java/com/skallahaze/musiccapsule/StageActivity.kt
           grep -F 'class StageBackgroundView' musiccapsule/src/main/java/com/skallahaze/musiccapsule/StageBackgroundView.kt
-          grep -F 'AMOLED Stage' musiccapsule/src/main/java/com/skallahaze/musiccapsule/MainActivity.kt
+          grep -F 'choosePattern' musiccapsule/src/main/java/com/skallahaze/musiccapsule/StageBackgroundView.kt
+          grep -F 'drawInfinityPattern' musiccapsule/src/main/java/com/skallahaze/musiccapsule/StageBackgroundView.kt
+          grep -F 'MIN_PATTERN_GAP_MS' musiccapsule/src/main/java/com/skallahaze/musiccapsule/StageBackgroundView.kt
+          grep -F 'Farbhelligkeit' musiccapsule/src/main/java/com/skallahaze/musiccapsule/MainActivity.kt
+          grep -F 'Transparenz' musiccapsule/src/main/java/com/skallahaze/musiccapsule/MainActivity.kt
           grep -F 'android:name=".StageActivity"' musiccapsule/src/main/AndroidManifest.xml
           grep -F 'MICROPHONE_FALLBACK' musiccapsule/src/main/java/com/skallahaze/musiccapsule/PlaybackAnalyzerService.kt
           grep -F 'FLAG_SHOW_WHEN_LOCKED' musiccapsule/src/main/java/com/skallahaze/musiccapsule/CapsuleOverlayService.kt
