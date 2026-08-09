@@ -1,12 +1,16 @@
 package com.skallahaze.musiccapsule
 
+import android.app.KeyguardManager
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
 import android.app.Service
+import android.content.BroadcastReceiver
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
+import android.content.res.Configuration
 import android.graphics.PixelFormat
 import android.graphics.Rect
 import android.hardware.display.DisplayManager
@@ -19,6 +23,7 @@ import android.service.notification.NotificationListenerService
 import android.util.DisplayMetrics
 import android.view.Display
 import android.view.Gravity
+import android.view.View
 import android.view.WindowManager
 import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
@@ -28,12 +33,15 @@ import kotlin.math.min
 class CapsuleOverlayService : Service() {
     private val mainHandler = Handler(Looper.getMainLooper())
     private lateinit var windowManager: WindowManager
+    private lateinit var displayManager: DisplayManager
+    private lateinit var keyguardManager: KeyguardManager
     private var capsuleView: CapsuleOverlayView? = null
     private var capsuleParams: WindowManager.LayoutParams? = null
     private var edgeView: EdgePanelView? = null
     private var edgeParams: WindowManager.LayoutParams? = null
     private var mediaSessionPoller: CapsuleMediaSessionPoller? = null
     private var expanded = false
+    private var screenReceiverRegistered = false
 
     private val refreshRunnable = object : Runnable {
         override fun run() {
@@ -47,7 +55,80 @@ class CapsuleOverlayService : Service() {
         }
     }
 
+    private val displayRelayoutRunnable = Runnable {
+        if (!::windowManager.isInitialized) return@Runnable
+        val mode = CapsulePreferences.displayMode(this)
+        ensureEdgePanel(CapsulePreferences.edgePanelsEnabled(this))
+        updateEdgeLayout()
+        updateCapsuleLayout(mode, expanded, resetPosition = true)
+        edgeView?.requestLayout()
+        edgeView?.invalidate()
+        capsuleView?.requestLayout()
+        capsuleView?.invalidate()
+        applyLockScreenVisibility()
+        CapsuleRuntime.updateOverlay(
+            running = true,
+            expanded = expanded,
+            message = "Display neu angepasst · ${screenBounds().width()}×${screenBounds().height()}",
+        )
+    }
+
+    private val displayListener = object : DisplayManager.DisplayListener {
+        override fun onDisplayAdded(displayId: Int) {
+            if (displayId == Display.DEFAULT_DISPLAY) scheduleDisplayRelayout()
+        }
+
+        override fun onDisplayChanged(displayId: Int) {
+            if (displayId == Display.DEFAULT_DISPLAY) scheduleDisplayRelayout()
+        }
+
+        override fun onDisplayRemoved(displayId: Int) = Unit
+    }
+
+    private val screenReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context?, intent: Intent?) {
+            when (intent?.action) {
+                Intent.ACTION_SCREEN_ON -> {
+                    scheduleDisplayRelayout(delayMs = 180L)
+                    mainHandler.postDelayed({ applyLockScreenVisibility() }, 220L)
+                }
+
+                Intent.ACTION_SCREEN_OFF -> applyLockScreenVisibility(forceLocked = true)
+                Intent.ACTION_USER_PRESENT,
+                Intent.ACTION_USER_UNLOCKED,
+                -> applyLockScreenVisibility(forceLocked = false)
+            }
+        }
+    }
+
+    override fun onCreate() {
+        super.onCreate()
+        windowManager = getSystemService(WINDOW_SERVICE) as WindowManager
+        displayManager = getSystemService(DisplayManager::class.java)
+        keyguardManager = getSystemService(KeyguardManager::class.java)
+        displayManager.registerDisplayListener(displayListener, mainHandler)
+
+        val filter = IntentFilter().apply {
+            addAction(Intent.ACTION_SCREEN_ON)
+            addAction(Intent.ACTION_SCREEN_OFF)
+            addAction(Intent.ACTION_USER_PRESENT)
+            addAction(Intent.ACTION_USER_UNLOCKED)
+        }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            registerReceiver(screenReceiver, filter, Context.RECEIVER_NOT_EXPORTED)
+        } else {
+            @Suppress("DEPRECATION")
+            registerReceiver(screenReceiver, filter)
+        }
+        screenReceiverRegistered = true
+    }
+
     override fun onBind(intent: Intent?): IBinder? = null
+
+    override fun onConfigurationChanged(newConfig: Configuration) {
+        super.onConfigurationChanged(newConfig)
+        scheduleDisplayRelayout(delayMs = 160L)
+    }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         if (intent?.action == ACTION_STOP) {
@@ -64,9 +145,6 @@ class CapsuleOverlayService : Service() {
             return START_NOT_STICKY
         }
 
-        if (!::windowManager.isInitialized) {
-            windowManager = getSystemService(WINDOW_SERVICE) as WindowManager
-        }
         if (capsuleView == null) attachCapsule()
         ensureEdgePanel(CapsulePreferences.edgePanelsEnabled(this))
         updateEdgeLayout()
@@ -84,11 +162,12 @@ class CapsuleOverlayService : Service() {
 
         mainHandler.removeCallbacks(refreshRunnable)
         mainHandler.post(refreshRunnable)
+        applyLockScreenVisibility()
         CapsuleRuntime.updateOverlay(
             running = true,
             expanded = expanded,
             message = if (CapsuleRuntime.snapshot().analyzerRunning) {
-                "Music Capsule LIVE · 1280×2772 Vollbildrahmen"
+                "Music Capsule LIVE · Rotation + Sperrbildschirm"
             } else {
                 "Music Capsule sichtbar · Audioanalyse noch starten"
             },
@@ -144,10 +223,7 @@ class CapsuleOverlayService : Service() {
             capsuleWidthPx(mode, expanded),
             capsuleHeightPx(mode, expanded),
             overlayWindowType(),
-            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
-                WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
-                WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS or
-                WindowManager.LayoutParams.FLAG_HARDWARE_ACCELERATED,
+            baseOverlayFlags(touchable = true),
             PixelFormat.TRANSLUCENT,
         ).apply {
             gravity = Gravity.TOP or Gravity.CENTER_HORIZONTAL
@@ -165,12 +241,7 @@ class CapsuleOverlayService : Service() {
             bounds.width(),
             bounds.height(),
             overlayWindowType(),
-            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
-                WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE or
-                WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or
-                WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
-                WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS or
-                WindowManager.LayoutParams.FLAG_HARDWARE_ACCELERATED,
+            baseOverlayFlags(touchable = false),
             PixelFormat.TRANSLUCENT,
         ).apply {
             gravity = Gravity.TOP or Gravity.START
@@ -183,6 +254,25 @@ class CapsuleOverlayService : Service() {
         configureInsets(params, fullScreen = true)
         requestHighestRefreshRate(params)
         return params
+    }
+
+    private fun baseOverlayFlags(touchable: Boolean): Int {
+        var flags = WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
+            WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
+            WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS or
+            WindowManager.LayoutParams.FLAG_HARDWARE_ACCELERATED or
+            WindowManager.LayoutParams.FLAG_ALLOW_LOCK_WHILE_SCREEN_ON
+
+        if (!touchable) {
+            flags = flags or
+                WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE or
+                WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL
+        }
+
+        // FLAG_SHOW_WHEN_LOCKED is deprecated for Activity lifecycle reasons,
+        // but remains the only LayoutParams hint available to an overlay window.
+        @Suppress("DEPRECATION")
+        return flags or WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED
     }
 
     private fun configureInsets(
@@ -207,6 +297,11 @@ class CapsuleOverlayService : Service() {
         }
     }
 
+    private fun scheduleDisplayRelayout(delayMs: Long = 220L) {
+        mainHandler.removeCallbacks(displayRelayoutRunnable)
+        mainHandler.postDelayed(displayRelayoutRunnable, delayMs)
+    }
+
     private fun updateEdgeLayout() {
         val params = edgeParams ?: return
         val bounds = screenBounds()
@@ -222,24 +317,33 @@ class CapsuleOverlayService : Service() {
     }
 
     private fun screenBounds(): Rect {
-        if (!::windowManager.isInitialized) {
-            windowManager = getSystemService(WINDOW_SERVICE) as WindowManager
+        if (!::displayManager.isInitialized) {
+            displayManager = getSystemService(DisplayManager::class.java)
         }
+        val display = displayManager.getDisplay(Display.DEFAULT_DISPLAY)
+        if (display != null) {
+            val metrics = DisplayMetrics()
+            @Suppress("DEPRECATION")
+            display.getRealMetrics(metrics)
+            if (metrics.widthPixels > 0 && metrics.heightPixels > 0) {
+                return Rect(0, 0, metrics.widthPixels, metrics.heightPixels)
+            }
+        }
+
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-            return Rect(windowManager.maximumWindowMetrics.bounds)
+            return Rect(windowManager.currentWindowMetrics.bounds)
         }
 
         @Suppress("DEPRECATION")
-        val display = windowManager.defaultDisplay
-        val metrics = DisplayMetrics()
+        val fallbackDisplay = windowManager.defaultDisplay
+        val fallbackMetrics = DisplayMetrics()
         @Suppress("DEPRECATION")
-        display.getRealMetrics(metrics)
-        return Rect(0, 0, metrics.widthPixels, metrics.heightPixels)
+        fallbackDisplay.getRealMetrics(fallbackMetrics)
+        return Rect(0, 0, fallbackMetrics.widthPixels, fallbackMetrics.heightPixels)
     }
 
     private fun requestHighestRefreshRate(params: WindowManager.LayoutParams) {
         runCatching {
-            val displayManager = getSystemService(DisplayManager::class.java)
             val display = displayManager.getDisplay(Display.DEFAULT_DISPLAY) ?: return@runCatching
             val best = display.supportedModes.maxWithOrNull(
                 compareBy<Display.Mode> { it.refreshRate }
@@ -256,7 +360,8 @@ class CapsuleOverlayService : Service() {
         capsuleView?.setDisplayMode(mode)
         ensureEdgePanel(CapsulePreferences.edgePanelsEnabled(this))
         updateEdgeLayout()
-        updateCapsuleLayout(mode, expanded)
+        updateCapsuleLayout(mode, expanded, resetPosition = false)
+        applyLockScreenVisibility()
         requestListenerRebind()
         mediaSessionPoller?.kick()
     }
@@ -266,16 +371,26 @@ class CapsuleOverlayService : Service() {
         expanded = value
         val mode = CapsulePreferences.displayMode(this)
         capsuleView?.setExpanded(value)
-        updateCapsuleLayout(mode, value)
+        updateCapsuleLayout(mode, value, resetPosition = true)
         CapsuleRuntime.updateExpanded(value)
     }
 
-    private fun updateCapsuleLayout(mode: CapsuleDisplayMode, expanded: Boolean) {
+    private fun updateCapsuleLayout(
+        mode: CapsuleDisplayMode,
+        expanded: Boolean,
+        resetPosition: Boolean,
+    ) {
         val params = capsuleParams ?: return
         params.width = capsuleWidthPx(mode, expanded)
         params.height = capsuleHeightPx(mode, expanded)
-        params.x = 0
-        params.y = capsuleTopPx(mode, expanded)
+        if (resetPosition) {
+            // A rotation swaps the screen axes. Re-centering prevents the old
+            // portrait X offset from leaving the widget stuck at the landscape edge.
+            params.x = 0
+            params.y = capsuleTopPx(mode, expanded)
+        } else {
+            clampCapsulePosition(params)
+        }
         configureInsets(params, fullScreen = false)
         requestHighestRefreshRate(params)
         capsuleView?.let { view ->
@@ -283,19 +398,37 @@ class CapsuleOverlayService : Service() {
         }
     }
 
-    private fun moveCapsule(dx: Float, dy: Float) {
-        if (expanded) return
-        val params = capsuleParams ?: return
+    private fun clampCapsulePosition(params: WindowManager.LayoutParams) {
         val bounds = screenBounds()
         val maxX = max(0, (bounds.width() - params.width) / 2)
         val maxY = max(0, bounds.height() - params.height)
-        // Allow the visual strip to sit over the clock/status bar while its
-        // lower chevron remains in a tappable area below the protected system UI.
         val minY = -statusBarHeightPx() / 2
-        params.x = (params.x + dx.toInt()).coerceIn(-maxX, maxX)
-        params.y = (params.y + dy.toInt()).coerceIn(minY, maxY)
+        params.x = params.x.coerceIn(-maxX, maxX)
+        params.y = params.y.coerceIn(minY, maxY)
+    }
+
+    private fun moveCapsule(dx: Float, dy: Float) {
+        if (expanded) return
+        val params = capsuleParams ?: return
+        params.x += dx.toInt()
+        params.y += dy.toInt()
+        clampCapsulePosition(params)
         capsuleView?.let { view ->
             runCatching { windowManager.updateViewLayout(view, params) }
+        }
+    }
+
+    private fun applyLockScreenVisibility(forceLocked: Boolean? = null) {
+        if (!::keyguardManager.isInitialized) {
+            keyguardManager = getSystemService(KeyguardManager::class.java)
+        }
+        val locked = forceLocked ?: runCatching { keyguardManager.isKeyguardLocked }.getOrDefault(false)
+        val allowed = !locked || CapsulePreferences.lockScreenEnabled(this)
+        capsuleView?.visibility = if (allowed) View.VISIBLE else View.INVISIBLE
+        edgeView?.visibility = if (allowed && CapsulePreferences.edgePanelsEnabled(this)) {
+            View.VISIBLE
+        } else {
+            View.INVISIBLE
         }
     }
 
@@ -322,11 +455,13 @@ class CapsuleOverlayService : Service() {
         )
         return NotificationCompat.Builder(this, CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_capsule)
-            .setContentTitle("Music Capsule · Full Neon")
-            .setContentText("Vollbildrahmen, Mini-Widget und SoundCloud-Watchdog laufen")
+            .setContentTitle("Music Capsule · Lock + Rotate")
+            .setContentText("Neonrahmen folgt der Drehung und bleibt auf dem Sperrbildschirm aktiv")
             .setContentIntent(openPending)
             .setOngoing(true)
             .setOnlyAlertOnce(true)
+            .setCategory(NotificationCompat.CATEGORY_SERVICE)
+            .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
             .addAction(android.R.drawable.ic_menu_close_clear_cancel, "Stop", stopPending)
             .build()
     }
@@ -340,7 +475,8 @@ class CapsuleOverlayService : Service() {
                 "Music Capsule Overlay",
                 NotificationManager.IMPORTANCE_LOW,
             ).apply {
-                description = "Dauerhafte Anzeige für Music Capsule und Neon-Seitenpaneele"
+                description = "Dauerhafte Anzeige für Music Capsule, Rotation und Sperrbildschirm"
+                lockscreenVisibility = android.app.Notification.VISIBILITY_PUBLIC
                 setShowBadge(false)
             },
         )
@@ -391,8 +527,14 @@ class CapsuleOverlayService : Service() {
 
     override fun onDestroy() {
         mainHandler.removeCallbacks(refreshRunnable)
+        mainHandler.removeCallbacks(displayRelayoutRunnable)
         mediaSessionPoller?.stop()
         mediaSessionPoller = null
+        runCatching { displayManager.unregisterDisplayListener(displayListener) }
+        if (screenReceiverRegistered) {
+            runCatching { unregisterReceiver(screenReceiver) }
+            screenReceiverRegistered = false
+        }
         capsuleView?.let { runCatching { windowManager.removeView(it) } }
         edgeView?.let { runCatching { windowManager.removeView(it) } }
         capsuleView = null
