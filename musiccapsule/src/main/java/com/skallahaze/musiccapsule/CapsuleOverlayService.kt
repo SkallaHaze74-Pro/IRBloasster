@@ -8,12 +8,14 @@ import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.graphics.PixelFormat
+import android.hardware.display.DisplayManager
 import android.os.Build
 import android.os.Handler
 import android.os.IBinder
 import android.os.Looper
 import android.provider.Settings
 import android.service.notification.NotificationListenerService
+import android.view.Display
 import android.view.Gravity
 import android.view.WindowManager
 import androidx.core.app.NotificationCompat
@@ -24,15 +26,21 @@ import kotlin.math.min
 class CapsuleOverlayService : Service() {
     private val mainHandler = Handler(Looper.getMainLooper())
     private lateinit var windowManager: WindowManager
-    private var overlayView: CapsuleOverlayView? = null
-    private var layoutParams: WindowManager.LayoutParams? = null
+    private var capsuleView: CapsuleOverlayView? = null
+    private var capsuleParams: WindowManager.LayoutParams? = null
+    private var edgeView: EdgePanelView? = null
+    private var edgeParams: WindowManager.LayoutParams? = null
     private var expanded = false
 
     private val refreshRunnable = object : Runnable {
         override fun run() {
             val snapshot = CapsuleRuntime.snapshot()
-            overlayView?.setSnapshot(snapshot)
-            mainHandler.postDelayed(this, if (snapshot.signal > 0.01f) 40L else 140L)
+            val intensity = CapsulePreferences.neonIntensity(this@CapsuleOverlayService)
+            val edgeEnabled = CapsulePreferences.edgePanelsEnabled(this@CapsuleOverlayService)
+            capsuleView?.setSnapshot(snapshot, intensity)
+            ensureEdgePanel(edgeEnabled)
+            edgeView?.setSnapshot(snapshot, intensity, edgeEnabled)
+            mainHandler.postDelayed(this, if (snapshot.signal > .01f) 28L else 120L)
         }
     }
 
@@ -53,7 +61,13 @@ class CapsuleOverlayService : Service() {
             return START_NOT_STICKY
         }
 
-        if (overlayView == null) attachOverlay()
+        if (!::windowManager.isInitialized) {
+            windowManager = getSystemService(WINDOW_SERVICE) as WindowManager
+        }
+        if (capsuleView == null) attachCapsule()
+        ensureEdgePanel(CapsulePreferences.edgePanelsEnabled(this))
+        if (intent?.action == ACTION_APPLY_SETTINGS) applyCurrentSettings()
+
         requestListenerRebind()
         mainHandler.removeCallbacks(refreshRunnable)
         mainHandler.post(refreshRunnable)
@@ -61,7 +75,7 @@ class CapsuleOverlayService : Service() {
             running = true,
             expanded = expanded,
             message = if (CapsuleRuntime.snapshot().analyzerRunning) {
-                "Music Capsule LIVE · Audioanalyse aktiv"
+                "Music Capsule LIVE · Edge Neon + Audioanalyse"
             } else {
                 "Music Capsule sichtbar · Audioanalyse noch starten"
             },
@@ -69,63 +83,142 @@ class CapsuleOverlayService : Service() {
         return START_STICKY
     }
 
-    private fun attachOverlay() {
-        windowManager = getSystemService(WINDOW_SERVICE) as WindowManager
-        val view = CapsuleOverlayView(this)
-        overlayView = view
-        layoutParams = createLayoutParams(expanded = false)
-
-        view.onExpandedChanged = { setExpanded(it) }
-        view.onMove = { dx, dy -> moveOverlay(dx, dy) }
-        windowManager.addView(view, layoutParams)
+    private fun attachCapsule() {
+        val mode = CapsulePreferences.displayMode(this)
+        val view = CapsuleOverlayView(this).apply {
+            setDisplayMode(mode)
+            onExpandedChanged = { setExpanded(it) }
+            onDisplayModeRequested = { requested ->
+                CapsulePreferences.setDisplayMode(this@CapsuleOverlayService, requested)
+                setDisplayMode(requested)
+                applyCurrentSettings()
+            }
+            onMove = { dx, dy -> moveCapsule(dx, dy) }
+        }
+        capsuleView = view
+        capsuleParams = createCapsuleParams(mode, expanded = false)
+        windowManager.addView(view, capsuleParams)
     }
 
-    private fun createLayoutParams(expanded: Boolean): WindowManager.LayoutParams {
-        val type = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
-        } else {
-            @Suppress("DEPRECATION")
-            WindowManager.LayoutParams.TYPE_PHONE
+    private fun ensureEdgePanel(enabled: Boolean) {
+        if (enabled && edgeView == null) {
+            val view = EdgePanelView(this)
+            val params = createEdgeParams()
+            edgeView = view
+            edgeParams = params
+            // Add behind the touchable capsule. It never intercepts screen touches.
+            windowManager.addView(view, params)
+            capsuleView?.let { capsule ->
+                capsuleParams?.let { paramsForCapsule ->
+                    runCatching {
+                        windowManager.removeView(capsule)
+                        windowManager.addView(capsule, paramsForCapsule)
+                    }
+                }
+            }
+        } else if (!enabled && edgeView != null) {
+            edgeView?.let { runCatching { windowManager.removeView(it) } }
+            edgeView = null
+            edgeParams = null
         }
-        return WindowManager.LayoutParams(
-            if (expanded) expandedWidthPx() else compactWidthPx(),
-            if (expanded) expandedHeightPx() else compactHeightPx(),
-            type,
+    }
+
+    private fun createCapsuleParams(
+        mode: CapsuleDisplayMode,
+        expanded: Boolean,
+    ): WindowManager.LayoutParams {
+        val params = WindowManager.LayoutParams(
+            capsuleWidthPx(mode, expanded),
+            capsuleHeightPx(mode, expanded),
+            overlayWindowType(),
             WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
                 WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
-                WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
+                WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS or
+                WindowManager.LayoutParams.FLAG_HARDWARE_ACCELERATED,
             PixelFormat.TRANSLUCENT,
         ).apply {
             gravity = Gravity.TOP or Gravity.CENTER_HORIZONTAL
             x = 0
-            y = dp(if (expanded) 48f else 30f)
+            y = capsuleTopPx(mode, expanded)
         }
+        requestHighestRefreshRate(params)
+        return params
+    }
+
+    private fun createEdgeParams(): WindowManager.LayoutParams {
+        val params = WindowManager.LayoutParams(
+            WindowManager.LayoutParams.MATCH_PARENT,
+            WindowManager.LayoutParams.MATCH_PARENT,
+            overlayWindowType(),
+            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
+                WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE or
+                WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or
+                WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
+                WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS or
+                WindowManager.LayoutParams.FLAG_HARDWARE_ACCELERATED,
+            PixelFormat.TRANSLUCENT,
+        ).apply {
+            gravity = Gravity.TOP or Gravity.START
+            x = 0
+            y = 0
+        }
+        requestHighestRefreshRate(params)
+        return params
+    }
+
+    private fun requestHighestRefreshRate(params: WindowManager.LayoutParams) {
+        runCatching {
+            val displayManager = getSystemService(DisplayManager::class.java)
+            val display = displayManager.getDisplay(Display.DEFAULT_DISPLAY) ?: return@runCatching
+            val best = display.supportedModes.maxWithOrNull(
+                compareBy<Display.Mode> { it.refreshRate }
+                    .thenBy { it.physicalWidth * it.physicalHeight },
+            ) ?: return@runCatching
+            params.preferredDisplayModeId = best.modeId
+            @Suppress("DEPRECATION")
+            params.preferredRefreshRate = best.refreshRate
+        }
+    }
+
+    private fun applyCurrentSettings() {
+        val mode = CapsulePreferences.displayMode(this)
+        capsuleView?.setDisplayMode(mode)
+        ensureEdgePanel(CapsulePreferences.edgePanelsEnabled(this))
+        updateCapsuleLayout(mode, expanded)
+        requestListenerRebind()
     }
 
     private fun setExpanded(value: Boolean) {
         if (expanded == value) return
         expanded = value
-        val params = layoutParams ?: return
-        params.width = if (value) expandedWidthPx() else compactWidthPx()
-        params.height = if (value) expandedHeightPx() else compactHeightPx()
-        params.x = 0
-        params.y = dp(if (value) 48f else 30f)
-        overlayView?.setExpanded(value)
-        overlayView?.let { view ->
-            runCatching { windowManager.updateViewLayout(view, params) }
-        }
+        val mode = CapsulePreferences.displayMode(this)
+        capsuleView?.setExpanded(value)
+        updateCapsuleLayout(mode, value)
         CapsuleRuntime.updateExpanded(value)
     }
 
-    private fun moveOverlay(dx: Float, dy: Float) {
-        val params = layoutParams ?: return
+    private fun updateCapsuleLayout(mode: CapsuleDisplayMode, expanded: Boolean) {
+        val params = capsuleParams ?: return
+        params.width = capsuleWidthPx(mode, expanded)
+        params.height = capsuleHeightPx(mode, expanded)
+        params.x = 0
+        params.y = capsuleTopPx(mode, expanded)
+        requestHighestRefreshRate(params)
+        capsuleView?.let { view ->
+            runCatching { windowManager.updateViewLayout(view, params) }
+        }
+    }
+
+    private fun moveCapsule(dx: Float, dy: Float) {
+        if (expanded) return
+        val params = capsuleParams ?: return
         val screenWidth = resources.displayMetrics.widthPixels
         val screenHeight = resources.displayMetrics.heightPixels
         val maxX = max(0, (screenWidth - params.width) / 2)
         val maxY = max(0, screenHeight - params.height)
         params.x = (params.x + dx.toInt()).coerceIn(-maxX, maxX)
         params.y = (params.y + dy.toInt()).coerceIn(0, maxY)
-        overlayView?.let { view ->
+        capsuleView?.let { view ->
             runCatching { windowManager.updateViewLayout(view, params) }
         }
     }
@@ -153,8 +246,8 @@ class CapsuleOverlayService : Service() {
         )
         return NotificationCompat.Builder(this, CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_capsule)
-            .setContentTitle("Music Capsule")
-            .setContentText("Schwebender SoundCloud-Equalizer läuft")
+            .setContentTitle("Music Capsule · Edge Neon")
+            .setContentText("144-Hz-Paneele und Mini-Widget laufen")
             .setContentIntent(openPending)
             .setOngoing(true)
             .setOnlyAlertOnce(true)
@@ -171,36 +264,55 @@ class CapsuleOverlayService : Service() {
                 "Music Capsule Overlay",
                 NotificationManager.IMPORTANCE_LOW,
             ).apply {
-                description = "Dauerhafte Anzeige für die schwebende Musik-Kapsel"
+                description = "Dauerhafte Anzeige für Music Capsule und Neon-Seitenpaneele"
                 setShowBadge(false)
             },
         )
     }
 
-    private fun compactWidthPx(): Int {
-        val screenWidth = resources.displayMetrics.widthPixels
-        return min(dp(340f), screenWidth - dp(18f))
+    private fun overlayWindowType(): Int {
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
+        } else {
+            @Suppress("DEPRECATION")
+            WindowManager.LayoutParams.TYPE_PHONE
+        }
     }
 
-    private fun compactHeightPx(): Int = dp(68f)
-
-    private fun expandedWidthPx(): Int {
-        val screenWidth = resources.displayMetrics.widthPixels
-        return min(dp(430f), screenWidth - dp(16f))
+    private fun capsuleWidthPx(mode: CapsuleDisplayMode, expanded: Boolean): Int {
+        if (expanded) return min(dp(430f), resources.displayMetrics.widthPixels - dp(16f))
+        return when (mode) {
+            CapsuleDisplayMode.MINI -> min(dp(294f), resources.displayMetrics.widthPixels - dp(18f))
+            CapsuleDisplayMode.RIM -> min(dp(228f), resources.displayMetrics.widthPixels - dp(24f))
+        }
     }
 
-    private fun expandedHeightPx(): Int {
-        val screenHeight = resources.displayMetrics.heightPixels
-        return min(dp(560f), screenHeight - dp(110f))
+    private fun capsuleHeightPx(mode: CapsuleDisplayMode, expanded: Boolean): Int {
+        if (expanded) return min(dp(560f), resources.displayMetrics.heightPixels - dp(110f))
+        return when (mode) {
+            CapsuleDisplayMode.MINI -> dp(54f)
+            CapsuleDisplayMode.RIM -> dp(30f)
+        }
+    }
+
+    private fun capsuleTopPx(mode: CapsuleDisplayMode, expanded: Boolean): Int {
+        if (expanded) return dp(48f)
+        return when (mode) {
+            CapsuleDisplayMode.MINI -> dp(32f)
+            CapsuleDisplayMode.RIM -> dp(40f)
+        }
     }
 
     private fun dp(value: Float): Int = (value * resources.displayMetrics.density).toInt()
 
     override fun onDestroy() {
         mainHandler.removeCallbacks(refreshRunnable)
-        overlayView?.let { runCatching { windowManager.removeView(it) } }
-        overlayView = null
-        layoutParams = null
+        capsuleView?.let { runCatching { windowManager.removeView(it) } }
+        edgeView?.let { runCatching { windowManager.removeView(it) } }
+        capsuleView = null
+        capsuleParams = null
+        edgeView = null
+        edgeParams = null
         expanded = false
         CapsuleRuntime.updateOverlay(false, expanded = false, message = "Music Capsule aus")
         super.onDestroy()
@@ -209,6 +321,7 @@ class CapsuleOverlayService : Service() {
     companion object {
         const val ACTION_START = "com.skallahaze.musiccapsule.action.START_OVERLAY"
         const val ACTION_STOP = "com.skallahaze.musiccapsule.action.STOP_OVERLAY"
+        const val ACTION_APPLY_SETTINGS = "com.skallahaze.musiccapsule.action.APPLY_SETTINGS"
 
         private const val CHANNEL_ID = "music_capsule_overlay"
         private const val NOTIFICATION_ID = 6101
@@ -217,6 +330,13 @@ class CapsuleOverlayService : Service() {
             ContextCompat.startForegroundService(
                 context,
                 Intent(context, CapsuleOverlayService::class.java).apply { action = ACTION_START },
+            )
+        }
+
+        fun applySettings(context: Context) {
+            ContextCompat.startForegroundService(
+                context,
+                Intent(context, CapsuleOverlayService::class.java).apply { action = ACTION_APPLY_SETTINGS },
             )
         }
 
