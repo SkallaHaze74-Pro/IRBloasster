@@ -13,6 +13,8 @@ data class CapsuleSnapshot(
     val artwork: Bitmap? = null,
     val isPlaying: Boolean = false,
     val signal: Float = 0f,
+    val audible: Boolean = false,
+    val silenceMs: Long = Long.MAX_VALUE,
     val levels: FloatArray = FloatArray(CapsuleRuntime.BAND_COUNT),
     val bass: Float = 0f,
     val mid: Float = 0f,
@@ -20,6 +22,7 @@ data class CapsuleSnapshot(
     val beat: Float = 0f,
     val spectralFlux: Float = 0f,
     val beatSequence: Long = 0L,
+    val audioSequence: Long = 0L,
     val source: String = "idle",
 )
 
@@ -90,12 +93,15 @@ object CapsuleRuntime {
     fun updateLevels(
         levels: FloatArray,
         signal: Float,
+        audible: Boolean = signal > 0f,
+        silenceMs: Long = 0L,
         bass: Float = 0f,
         mid: Float = 0f,
         treble: Float = 0f,
         beat: Float = 0f,
         spectralFlux: Float = 0f,
         beatSequence: Long = state.beatSequence,
+        audioSequence: Long = state.audioSequence + 1L,
         message: String,
         source: String = "playback-capture",
     ) = synchronized(lock) {
@@ -107,12 +113,15 @@ object CapsuleRuntime {
             analyzerRunning = true,
             levels = safe,
             signal = signal.coerceIn(0f, 1f),
+            audible = audible,
+            silenceMs = silenceMs.coerceAtLeast(0L),
             bass = bass.coerceIn(0f, 1f),
             mid = mid.coerceIn(0f, 1f),
             treble = treble.coerceIn(0f, 1f),
             beat = beat.coerceIn(0f, 1f),
             spectralFlux = spectralFlux.coerceIn(0f, 1f),
             beatSequence = beatSequence,
+            audioSequence = audioSequence,
             message = message,
             source = source,
         )
@@ -122,6 +131,8 @@ object CapsuleRuntime {
         state = state.copy(
             analyzerRunning = false,
             signal = 0f,
+            audible = false,
+            silenceMs = Long.MAX_VALUE,
             levels = FloatArray(BAND_COUNT),
             bass = 0f,
             mid = 0f,
