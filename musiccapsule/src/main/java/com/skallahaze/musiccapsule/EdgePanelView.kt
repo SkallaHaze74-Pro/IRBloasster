@@ -255,12 +255,14 @@ class EdgePanelView(context: Context) : View(context) {
         if (audioSequence > lastAudioBeatSequence) {
             val count = min(3L, audioSequence - lastAudioBeatSequence).toInt()
             repeat(count) {
-                registerBeat(
-                    strength = max(.36f, max(snapshot.beat, displayBass * .84f)),
-                    predicted = false,
-                    nowMs = nowMs,
-                    flowMode = flowMode,
-                )
+                if (nowMs - lastVisualBeatAt >= visualMinimumGap()) {
+                    registerBeat(
+                        strength = max(.36f, max(snapshot.beat, displayBass * .84f)),
+                        predicted = false,
+                        nowMs = nowMs,
+                        flowMode = flowMode,
+                    )
+                }
             }
             lastAudioBeatSequence = audioSequence
         } else {
@@ -279,17 +281,12 @@ class EdgePanelView(context: Context) : View(context) {
                 BeatFxMode.REACTIVE -> .145f
                 BeatFxMode.BRUTAL -> .085f
             }
-            val minimumGap = when (beatFxMode) {
-                BeatFxMode.SMOOTH -> 150L
-                BeatFxMode.REACTIVE -> 118L
-                BeatFxMode.BRUTAL -> 94L
-            }
 
             if (
                 silenceDuration(nowMs) < SILENCE_FAST_FADE_MS &&
                 snapshot.signal > SIGNAL_GATE &&
                 score >= threshold &&
-                nowMs - lastVisualBeatAt >= minimumGap
+                nowMs - lastVisualBeatAt >= visualMinimumGap()
             ) {
                 val strength = ((score - threshold) / max(.08f, .72f - threshold))
                     .coerceIn(.22f, 1f)
@@ -303,6 +300,12 @@ class EdgePanelView(context: Context) : View(context) {
         previousTreble = displayTreble
         localBassAverage += (displayBass - localBassAverage) * .035f
         localFluxAverage += (displayFlux - localFluxAverage) * .045f
+    }
+
+    private fun visualMinimumGap(): Long = when (beatFxMode) {
+        BeatFxMode.SMOOTH -> 250L
+        BeatFxMode.REACTIVE -> 185L
+        BeatFxMode.BRUTAL -> 145L
     }
 
     private fun maybePredictBeat(nowMs: Long, flowMode: ReactiveFlowMode) {
@@ -346,13 +349,16 @@ class EdgePanelView(context: Context) : View(context) {
         beatPulse = max(beatPulse, .56f + safeStrength * .44f)
         colorPhase = (colorPhase + 13f + safeStrength * 34f * beatFxMode.multiplier) % 360f
 
-        val dropStrength = if (predicted) safeStrength * .72f else safeStrength
+        val dropEnergy = max(snapshot.beat, displayBass * .92f).coerceIn(0f, 1f)
         val starsAllowed = visualLayerMode == VisualLayerMode.FULL ||
             visualLayerMode == VisualLayerMode.CLEAN ||
             visualLayerMode == VisualLayerMode.BORDER_DROP
-        if (starsAllowed && dropStrength >= starThreshold()) spawnStars(dropStrength)
-        if (visualLayerMode != VisualLayerMode.BORDER_ONLY && dropStrength >= shockwaveThreshold()) {
-            spawnShockwave(dropStrength, flowMode)
+        if (!predicted && starsAllowed && dropEnergy >= starThreshold()) {
+            spawnStars(dropEnergy)
+        }
+        val waveStrength = max(safeStrength, dropEnergy)
+        if (visualLayerMode != VisualLayerMode.BORDER_ONLY && waveStrength >= shockwaveThreshold()) {
+            spawnShockwave(waveStrength, flowMode)
         }
 
         VisualBeatRuntime.publish(
@@ -381,14 +387,14 @@ class EdgePanelView(context: Context) : View(context) {
 
     private fun starThreshold(): Float = when (beatFxMode) {
         BeatFxMode.SMOOTH -> 1.1f
-        BeatFxMode.REACTIVE -> .50f
-        BeatFxMode.BRUTAL -> .34f
+        BeatFxMode.REACTIVE -> .68f
+        BeatFxMode.BRUTAL -> .52f
     }
 
     private fun shockwaveThreshold(): Float = when (beatFxMode) {
-        BeatFxMode.SMOOTH -> .48f
-        BeatFxMode.REACTIVE -> .31f
-        BeatFxMode.BRUTAL -> .23f
+        BeatFxMode.SMOOTH -> .58f
+        BeatFxMode.REACTIVE -> .40f
+        BeatFxMode.BRUTAL -> .28f
     }
 
     private fun updateColorPhase(dt: Float) {
