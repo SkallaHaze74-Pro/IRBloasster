@@ -71,9 +71,8 @@ keytool -list -v -keystore "$KEYSTORE" -storepass "$STORE_PASS" -alias smartir 2
 ./gradlew --stop >/dev/null 2>&1 || true
 rm -rf .gradle app/build
 
-# Stable packages are real release APKs. The signing config explicitly enables
-# APK Signature Scheme v1 + v2 + v3; v2+ is required by modern Android targets.
-./gradlew --no-daemon clean assembleRelease
+# Build only SmartIR. The separate Music Capsule module has its own key and script.
+./gradlew --no-daemon :app:clean :app:assembleRelease
 
 VERSION="$(sed -n "s/.*versionName '\([^']*\)'.*/\1/p" app/build.gradle | head -n1)"
 SOURCE_APK="$ROOT/app/build/outputs/apk/release/app-release.apk"
@@ -86,11 +85,9 @@ fi
 
 cp "$SOURCE_APK" "$OUT"
 
-# Catch truncated/corrupt files before Android's package parser sees them.
 echo "[SmartIR] Prüfe APK-ZIP-Struktur …"
 unzip -t "$OUT" >/dev/null
 
-# If Android build-tools are available, verify the embedded APK signing schemes too.
 SDK_DIR=""
 if [ -f "$ROOT/local.properties" ]; then
   SDK_DIR="$(sed -n 's/^sdk\.dir=//p' "$ROOT/local.properties" | head -n1 | sed 's/\\:/:/g')"
