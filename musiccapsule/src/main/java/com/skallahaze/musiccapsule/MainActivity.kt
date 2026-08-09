@@ -37,6 +37,8 @@ class MainActivity : Activity() {
     private lateinit var edgeButton: Button
     private lateinit var intensityButton: Button
     private lateinit var lockScreenButton: Button
+    private lateinit var flowButton: Button
+    private lateinit var beatFxButton: Button
     private lateinit var previewView: NeonPreviewView
     private lateinit var projectionManager: MediaProjectionManager
     private val mainHandler = Handler(Looper.getMainLooper())
@@ -44,7 +46,7 @@ class MainActivity : Activity() {
     private val refreshRunnable = object : Runnable {
         override fun run() {
             refreshStatus()
-            mainHandler.postDelayed(this, 420L)
+            mainHandler.postDelayed(this, 360L)
         }
     }
 
@@ -70,42 +72,75 @@ class MainActivity : Activity() {
         val scroll = ScrollView(this).apply {
             background = GradientDrawable(
                 GradientDrawable.Orientation.TL_BR,
-                intArrayOf(Color.rgb(3, 5, 15), Color.rgb(20, 4, 34), Color.rgb(2, 23, 29)),
+                intArrayOf(Color.rgb(2, 4, 13), Color.rgb(23, 4, 37), Color.rgb(2, 25, 31)),
             )
             isFillViewport = true
+            overScrollMode = View.OVER_SCROLL_NEVER
         }
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(dp(16), dp(23), dp(16), dp(32))
+            setPadding(dp(16), dp(22), dp(16), dp(32))
         }
         scroll.addView(root)
 
         root.addView(text("MUSIC CAPSULE", 11f, Color.rgb(91, 255, 210), bold = true).apply {
             letterSpacing = .18f
         })
-        root.addView(text("Lock + Rotate 1.2.2", 31f, Color.WHITE, bold = true).apply {
+        root.addView(text("Brutal Reactive 1.3.0", 31f, Color.WHITE, bold = true).apply {
             setPadding(0, dp(3), 0, 0)
         })
         root.addView(text(
-            "Xiaomi 15T Pro · aktuell ${displaySizeLabel()} · höchste Display-Hz-Anfrage",
-            13f,
-            Color.rgb(177, 194, 222),
-        ).apply { setPadding(0, dp(4), 0, dp(14)) })
+            "${XiaomiDisplayProfile.diagnosticLabel(this)} · ${XiaomiDisplayProfile.TARGET_GPU} · ${XiaomiDisplayProfile.TARGET_GL}",
+            12.5f,
+            Color.rgb(170, 195, 226),
+        ).apply { setPadding(0, dp(4), 0, dp(13)) })
 
         previewView = NeonPreviewView(this).apply {
             layoutParams = LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT,
-                dp(280),
+                dp(282),
             ).also { it.bottomMargin = dp(15) }
         }
         root.addView(previewView)
 
-        root.addView(sectionCard("Medienquelle + SoundCloud Watchdog", Color.rgb(255, 91, 220)).apply {
+        root.addView(sectionCard("Beat Engine · echte Tonbereiche", Color.rgb(255, 79, 212)).apply {
             addView(text(
-                "AUTO bewertet PLAYING-Status, frische MediaSession und Medienbenachrichtigung. Der Watchdog hält den letzten bestätigten SoundCloud-Titel bei kurzen HyperOS-Unterbrechungen fest. Du kannst SoundCloud oder YouTube zusätzlich fest anheften.",
-                13.5f,
-                Color.rgb(210, 219, 237),
-            ).apply { setPadding(0, dp(6), 0, dp(11)) })
+                "Bass steuert Shockwaves, Paneel-Druck und Sternenregen. Mitten formen die großen Wellen. Höhen und Spectral Flux beschleunigen Farben, Funken und feine Balken. Neue Beat-Events werden separat erkannt und auf 144-Hz-VSync interpoliert.",
+                13.4f,
+                Color.rgb(212, 222, 240),
+            ).apply { setPadding(0, dp(6), 0, dp(10)) })
+
+            val row = horizontalRow()
+            flowButton = neonButton("Flow: Beat Auto", Color.rgb(66, 222, 255)) {
+                val next = CapsulePreferences.flowMode(this@MainActivity).next()
+                CapsulePreferences.setFlowMode(this@MainActivity, next)
+                applyLiveSettings()
+                refreshDesignButtons()
+            }
+            beatFxButton = neonButton("Beat FX: Brutal", Color.rgb(246, 78, 255)) {
+                val next = CapsulePreferences.beatFxMode(this@MainActivity).next()
+                CapsulePreferences.setBeatFxMode(this@MainActivity, next)
+                applyLiveSettings()
+                refreshDesignButtons()
+            }
+            row.addView(flowButton, weightedButtonParams())
+            row.addView(space(dp(9)))
+            row.addView(beatFxButton, weightedButtonParams())
+            addView(row)
+
+            addView(text(
+                "Beat Auto bleibt überwiegend ›Nach innen‹ und schaltet nach mehreren Beats kurz auf Oben, Unten oder Außen. Brutal aktiviert Sternenregen, Bass-Burst, Farb-Sprünge und Shockwaves.",
+                11.5f,
+                Color.rgb(173, 190, 218),
+            ).apply { setPadding(0, dp(9), 0, 0) })
+        })
+
+        root.addView(sectionCard("Medienquelle + SoundCloud", Color.rgb(255, 121, 71)).apply {
+            addView(text(
+                "YouTube und erlaubte Apps nutzen sauberes internes Audio. SoundCloud wechselt bei System-only-Capture automatisch zum Lautsprecher-Mikrofon-FFT-Fallback. Nach Root kommt der direkte Systemmix auch für Buds.",
+                13.4f,
+                Color.rgb(212, 222, 240),
+            ).apply { setPadding(0, dp(6), 0, dp(10)) })
             sourceButton = neonButton("Quelle: Automatisch", Color.rgb(91, 255, 210)) {
                 val next = CapsulePreferences.sourceLock(this@MainActivity).next()
                 CapsulePreferences.setSourceLock(this@MainActivity, next)
@@ -116,11 +151,11 @@ class MainActivity : Activity() {
             addView(sourceButton, fullButtonParams())
         })
 
-        root.addView(sectionCard("Variante 2 · Vollbild-Design", Color.rgb(81, 205, 255)).apply {
+        root.addView(sectionCard("Variante 2 · 393dp Vollbild-Profil", Color.rgb(81, 205, 255)).apply {
             addView(text(
-                "Der Neonrahmen nutzt immer die aktuellen Displayachsen. Beim Drehen werden 1280×2772 und 2772×1280 neu vermessen; Widget und Paneele werden passend neu aufgebaut und die Kapsel oben mittig ausgerichtet.",
-                13.5f,
-                Color.rgb(210, 219, 237),
+                "Die Paneele sind auf 393dp kleinste Breite, 1280×2772 AMOLED, 447 dpi und 144 Hz abgestimmt. Beim Drehen werden die Achsen neu vermessen; der Rahmen bleibt vollflächig und die Kapsel wird neu zentriert.",
+                13.4f,
+                Color.rgb(212, 222, 240),
             ).apply { setPadding(0, dp(6), 0, dp(10)) })
 
             val rowOne = horizontalRow()
@@ -156,20 +191,14 @@ class MainActivity : Activity() {
             }
             addView(lockScreenButton, fullButtonParams(topMargin = 9))
 
-            addView(text(
-                "Root-free versucht Music Capsule, Widget und Paneele auch über dem Sperrbildschirm einzublenden, ohne das Display wach zu halten. Falls HyperOS sie trotzdem versteckt: App-Info → Sonstige Berechtigungen → Anzeige auf Sperrbildschirm / Pop-up-Fenster im Hintergrund erlauben. AOD-Integration kommt später mit Root.",
-                11.5f,
-                Color.rgb(174, 188, 215),
-            ).apply { setPadding(0, dp(9), 0, dp(6)) })
-
-            addView(outlineButton("HyperOS App-Info öffnen") { openAppDetails() }, fullButtonParams(topMargin = 4))
+            addView(outlineButton("HyperOS App-Info öffnen") { openAppDetails() }, fullButtonParams(topMargin = 9))
         })
 
         root.addView(sectionCard("Einrichtung", Color.rgb(255, 195, 74)).apply {
             overlayStateView = stateText()
             addView(permissionRow(
                 title = "1 · Overlay",
-                body = "Kapsel, Vollbild-Paneele und Sperrbildschirm",
+                body = "Kapsel, Paneele, Rotation und Sperrbildschirm",
                 state = overlayStateView,
                 action = "Erlauben",
             ) { openOverlaySettings() })
@@ -184,8 +213,8 @@ class MainActivity : Activity() {
 
             audioStateView = stateText()
             addView(permissionRow(
-                title = "3 · Echter Equalizer",
-                body = "Internes Medienaudio analysieren; nichts wird gespeichert",
+                title = "3 · Multi-Band-Equalizer",
+                body = "Bass, Mitten, Höhen und Beat lokal analysieren",
                 state = audioStateView,
                 action = "Audio starten",
             ) { startEverything() })
@@ -197,10 +226,10 @@ class MainActivity : Activity() {
         controlRow.addView(outlineButton("STOP") { stopEverything() }, weightedButtonParams(height = 52))
         root.addView(controlRow)
 
-        statusView = text("Bereit", 13.5f, Color.rgb(101, 255, 208), bold = true).apply {
+        statusView = text("Bereit", 13.2f, Color.rgb(101, 255, 208), bold = true).apply {
             setPadding(dp(15), dp(14), dp(15), dp(14))
             background = gradientRounded(
-                intArrayOf(Color.rgb(15, 19, 32), Color.rgb(25, 10, 38), Color.rgb(5, 27, 29)),
+                intArrayOf(Color.rgb(15, 19, 32), Color.rgb(29, 8, 42), Color.rgb(5, 29, 31)),
                 dp(20).toFloat(),
                 Color.rgb(71, 83, 112),
                 dp(1).toFloat(),
@@ -211,11 +240,11 @@ class MainActivity : Activity() {
             LinearLayout.LayoutParams.WRAP_CONTENT,
         ).also { it.bottomMargin = dp(14) })
 
-        root.addView(sectionCard("Bedienung", Color.rgb(105, 255, 205)).apply {
+        root.addView(sectionCard("Effekt-Legende", Color.rgb(105, 255, 205)).apply {
             addView(text(
-                "Klein/Rand antippen oder den leuchtenden Pfeil darunter berühren → großer Hanf-Visualizer. Ziehen verschiebt das Widget; lang halten wechselt Klein/Rand. Nach jeder Hoch-/Querformat-Drehung wird das Widget automatisch neu zentriert, damit es nicht mehr links hängen bleibt.",
-                13.5f,
-                Color.rgb(210, 219, 237),
+                "BASS → Sternenregen + Shockwave + Paneele nach innen. MITTEN → große Seitenwellen. HÖHEN → schnelle Farben + Funken. DROP → Farbsprung, kräftiger Rahmen und Bass-Burst am unteren Rand.",
+                13.4f,
+                Color.rgb(212, 222, 240),
             ))
         })
 
@@ -246,7 +275,7 @@ class MainActivity : Activity() {
         CapsuleOverlayService.start(this)
         requestNotificationRebind()
         startActivityForResult(projectionManager.createScreenCaptureIntent(), REQUEST_MEDIA_PROJECTION)
-        statusView.text = "Systemfreigabe bestätigen – danach laufen Widget, Paneele, Drehung und Sperrbildschirm."
+        statusView.text = "Gesamter Bildschirm freigeben – danach läuft Brutal Reactive zur Musik."
     }
 
     private fun stopEverything() {
@@ -312,14 +341,17 @@ class MainActivity : Activity() {
 
         val snapshot = CapsuleRuntime.snapshot()
         val sourceLock = CapsulePreferences.sourceLock(this)
-        val lockEnabled = CapsulePreferences.lockScreenEnabled(this)
+        val flow = CapsulePreferences.flowMode(this)
+        val beatFx = CapsulePreferences.beatFxMode(this)
         statusView.text = buildString {
-            append(if (snapshot.overlayRunning) "FULL NEON LIVE" else "Overlay aus")
+            append(if (snapshot.overlayRunning) "BRUTAL NEON LIVE" else "Overlay aus")
             append(" · ")
             append(if (snapshot.analyzerRunning) "FFT LIVE" else "Audioanalyse aus")
             append(" · ${displaySizeLabel()}")
-            append(" · Lock ${if (lockEnabled) "AN" else "AUS"}")
-            append(" · Quelle ${sourceLock.label}\n")
+            append(" · ${XiaomiDisplayProfile.smallestWidthDp(this@MainActivity)}dp")
+            append("\nFlow ${flow.label} · FX ${beatFx.label} · Quelle ${sourceLock.label}")
+            append("\nB ${percent(snapshot.bass)}% · M ${percent(snapshot.mid)}% · H ${percent(snapshot.treble)}% · Beat ${percent(snapshot.beat)}%")
+            append("\n")
             append(snapshot.title)
             if (snapshot.artist.isNotBlank()) append(" — ${snapshot.artist}")
             append("\n")
@@ -335,11 +367,15 @@ class MainActivity : Activity() {
         val edge = CapsulePreferences.edgePanelsEnabled(this)
         val intensity = CapsulePreferences.neonIntensity(this)
         val lockEnabled = CapsulePreferences.lockScreenEnabled(this)
+        val flow = CapsulePreferences.flowMode(this)
+        val beatFx = CapsulePreferences.beatFxMode(this)
         sourceButton.text = "Quelle: ${source.label}"
         modeButton.text = "Widget: ${if (mode == CapsuleDisplayMode.RIM) "Nur Rand" else "Klein"}"
         edgeButton.text = "Paneele: ${if (edge) "AN" else "AUS"}"
         intensityButton.text = "Neon: ${(intensity * 100).toInt()}%"
         lockScreenButton.text = "Sperrbildschirm: ${if (lockEnabled) "AN" else "AUS"}"
+        flowButton.text = "Flow: ${flow.label}"
+        beatFxButton.text = "Beat FX: ${beatFx.label}"
         previewView.setConfig(mode, edge, intensity, source)
     }
 
@@ -377,7 +413,7 @@ class MainActivity : Activity() {
                 },
             )
             CapsuleOverlayService.start(this)
-            statusView.text = "LIVE – Musik starten. Rotation und Sperrbildschirm bleiben aktiv, solange der Dienst läuft."
+            statusView.text = "LIVE – Musik starten. Bass, Mitten, Höhen und Beats werden getrennt ausgewertet."
         } else {
             statusView.text = "Audiofreigabe abgebrochen."
         }
@@ -444,6 +480,8 @@ class MainActivity : Activity() {
         return Button(this).apply {
             text = label
             isAllCaps = false
+            minHeight = 0
+            minWidth = 0
             setTextColor(Color.rgb(4, 10, 16))
             textSize = 14f
             setTypeface(typeface, android.graphics.Typeface.BOLD)
@@ -459,8 +497,10 @@ class MainActivity : Activity() {
         return Button(this).apply {
             text = label
             isAllCaps = false
+            minHeight = 0
+            minWidth = 0
             setTextColor(Color.WHITE)
-            textSize = 13f
+            textSize = 12.4f
             background = rounded(
                 Color.rgb(18, 21, 34),
                 dp(20).toFloat(),
@@ -475,6 +515,8 @@ class MainActivity : Activity() {
         return Button(this).apply {
             text = label
             isAllCaps = false
+            minHeight = 0
+            minWidth = 0
             setTextColor(Color.rgb(205, 215, 255))
             textSize = 12.5f
             background = rounded(
@@ -547,6 +589,8 @@ class MainActivity : Activity() {
         val metrics = DisplayMetrics().also { manager.defaultDisplay.getRealMetrics(it) }
         return "${metrics.widthPixels}×${metrics.heightPixels}"
     }
+
+    private fun percent(value: Float): Int = (value.coerceIn(0f, 1f) * 100f).toInt()
 
     private fun dp(value: Int): Int = (value * resources.displayMetrics.density).toInt()
 
