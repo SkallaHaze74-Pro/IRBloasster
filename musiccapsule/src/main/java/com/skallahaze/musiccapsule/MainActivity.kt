@@ -28,23 +28,29 @@ import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
 
 class MainActivity : Activity() {
+    private lateinit var projectionManager: MediaProjectionManager
+    private val mainHandler = Handler(Looper.getMainLooper())
+
+    private lateinit var previewView: NeonPreviewView
     private lateinit var statusView: TextView
     private lateinit var overlayStateView: TextView
     private lateinit var notificationStateView: TextView
     private lateinit var audioStateView: TextView
-    private lateinit var sourceButton: Button
-    private lateinit var modeButton: Button
-    private lateinit var edgeButton: Button
-    private lateinit var intensityButton: Button
-    private lateinit var lockScreenButton: Button
-    private lateinit var flowButton: Button
-    private lateinit var beatFxButton: Button
-    private lateinit var visualButton: Button
+
+    private lateinit var autoTuneButton: Button
+    private lateinit var starButton: Button
     private lateinit var motionButton: Button
     private lateinit var trailButton: Button
-    private lateinit var previewView: NeonPreviewView
-    private lateinit var projectionManager: MediaProjectionManager
-    private val mainHandler = Handler(Looper.getMainLooper())
+    private lateinit var beatFxButton: Button
+    private lateinit var flowButton: Button
+    private lateinit var visualButton: Button
+    private lateinit var widgetButton: Button
+    private lateinit var edgeButton: Button
+    private lateinit var intensityButton: Button
+    private lateinit var sourceButton: Button
+    private lateinit var lockScreenButton: Button
+    private lateinit var stageStyleButton: Button
+    private lateinit var stageAwakeButton: Button
 
     private val refreshRunnable = object : Runnable {
         override fun run() {
@@ -73,12 +79,12 @@ class MainActivity : Activity() {
 
     private fun buildContent(): View {
         val scroll = ScrollView(this).apply {
-            background = GradientDrawable(
-                GradientDrawable.Orientation.TL_BR,
-                intArrayOf(Color.rgb(2, 4, 13), Color.rgb(23, 4, 37), Color.rgb(2, 25, 31)),
-            )
             isFillViewport = true
             overScrollMode = View.OVER_SCROLL_NEVER
+            background = GradientDrawable(
+                GradientDrawable.Orientation.TL_BR,
+                intArrayOf(Color.rgb(2, 4, 13), Color.rgb(24, 4, 39), Color.rgb(2, 26, 31)),
+            )
         }
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
@@ -89,12 +95,12 @@ class MainActivity : Activity() {
         root.addView(text("MUSIC CAPSULE", 11f, Color.rgb(91, 255, 210), bold = true).apply {
             letterSpacing = .18f
         })
-        root.addView(text("Final Smooth 1.4.0", 31f, Color.WHITE, bold = true).apply {
+        root.addView(text("Smart Auto Stage 1.5.0", 30f, Color.WHITE, bold = true).apply {
             setPadding(0, dp(3), 0, 0)
         })
         root.addView(text(
-            "${XiaomiDisplayProfile.diagnosticLabel(this)} · Adaptive Beat Memory",
-            12.5f,
+            "${XiaomiDisplayProfile.diagnosticLabel(this)} · Beat Sparks + Drop Rain",
+            12.3f,
             Color.rgb(170, 195, 226),
         ).apply { setPadding(0, dp(4), 0, dp(13)) })
 
@@ -106,163 +112,20 @@ class MainActivity : Activity() {
         }
         root.addView(previewView)
 
-        root.addView(sectionCard("Final Mix · Smooth + klarer Beat", Color.rgb(255, 79, 212)).apply {
-            addView(text(
-                "Die Grundbewegung ist jetzt weicher, der Beat bekommt aber einen eigenen gehaltenen Impuls. Beat Memory lernt das aktuelle Intervall und ergänzt gelegentlich einen übersehenen Kick. Bei Stille beruhigt sich der Rahmen deutlich schneller.",
-                13.3f,
-                Color.rgb(212, 222, 240),
-            ).apply { setPadding(0, dp(6), 0, dp(10)) })
-
-            val rowOne = horizontalRow()
-            motionButton = neonButton("Bewegung: Seidig", Color.rgb(74, 229, 255)) {
-                val next = CapsulePreferences.motionProfile(this@MainActivity).next()
-                CapsulePreferences.setMotionProfile(this@MainActivity, next)
-                applyLiveSettings()
-                refreshDesignButtons()
-            }
-            trailButton = neonButton("Nachlauf: Kurz", Color.rgb(255, 124, 80)) {
-                val next = CapsulePreferences.trailMode(this@MainActivity).next()
-                CapsulePreferences.setTrailMode(this@MainActivity, next)
-                applyLiveSettings()
-                refreshDesignButtons()
-            }
-            rowOne.addView(motionButton, weightedButtonParams())
-            rowOne.addView(space(dp(9)))
-            rowOne.addView(trailButton, weightedButtonParams())
-            addView(rowOne)
-
-            val rowTwo = horizontalRow().apply { setPadding(0, dp(9), 0, 0) }
-            flowButton = neonButton("Flow: Beat Auto", Color.rgb(66, 222, 255)) {
-                val next = CapsulePreferences.flowMode(this@MainActivity).next()
-                CapsulePreferences.setFlowMode(this@MainActivity, next)
-                applyLiveSettings()
-                refreshDesignButtons()
-            }
-            beatFxButton = neonButton("Beat FX: Brutal", Color.rgb(246, 78, 255)) {
-                val next = CapsulePreferences.beatFxMode(this@MainActivity).next()
-                CapsulePreferences.setBeatFxMode(this@MainActivity, next)
-                applyLiveSettings()
-                refreshDesignButtons()
-            }
-            rowTwo.addView(flowButton, weightedButtonParams())
-            rowTwo.addView(space(dp(9)))
-            rowTwo.addView(beatFxButton, weightedButtonParams())
-            addView(rowTwo)
-        })
-
-        root.addView(sectionCard("Ansicht · alles oder nur Rand", Color.rgb(102, 255, 196)).apply {
-            addView(text(
-                "Voll zeigt alle Paneele, Symbole und Sterne. Clean entfernt Kleinkram. Nur Rand animiert ausschließlich die Außenkontur. Die Überraschung ›Rand + Drop‹ bleibt ruhig und lässt nur bei einem kräftigen Beat Shockwave und Sternenregen erscheinen.",
-                13.3f,
-                Color.rgb(212, 222, 240),
-            ).apply { setPadding(0, dp(6), 0, dp(10)) })
-
-            visualButton = neonButton("Visual: Voll", Color.rgb(89, 255, 167)) {
-                val next = CapsulePreferences.visualLayerMode(this@MainActivity).next()
-                CapsulePreferences.setVisualLayerMode(this@MainActivity, next)
-                applyLiveSettings()
-                refreshDesignButtons()
-            }
-            addView(visualButton, fullButtonParams())
-
-            val row = horizontalRow().apply { setPadding(0, dp(9), 0, 0) }
-            edgeButton = neonButton("Paneele: AN", Color.rgb(71, 255, 166)) {
-                val next = !CapsulePreferences.edgePanelsEnabled(this@MainActivity)
-                CapsulePreferences.setEdgePanelsEnabled(this@MainActivity, next)
-                applyLiveSettings()
-                refreshDesignButtons()
-            }
-            modeButton = neonButton("Widget: Klein", Color.rgb(78, 198, 255)) {
-                val next = CapsulePreferences.displayMode(this@MainActivity).next()
-                CapsulePreferences.setDisplayMode(this@MainActivity, next)
-                applyLiveSettings()
-                refreshDesignButtons()
-            }
-            row.addView(edgeButton, weightedButtonParams())
-            row.addView(space(dp(9)))
-            row.addView(modeButton, weightedButtonParams())
-            addView(row)
-
-            intensityButton = neonButton("Neon: 135%", Color.rgb(238, 79, 255)) {
-                CapsulePreferences.nextIntensity(this@MainActivity)
-                applyLiveSettings()
-                refreshDesignButtons()
-            }
-            addView(intensityButton, fullButtonParams(topMargin = 9))
-
-            addView(text(
-                "Widget-Zyklus: Kleine Kapsel → Mini-Balken → Ausgeblendet. Wenn es ausgeblendet ist, kannst du es nur hier in der App wieder einschalten.",
-                11.4f,
-                Color.rgb(173, 190, 218),
-            ).apply { setPadding(0, dp(9), 0, 0) })
-        })
-
-        root.addView(sectionCard("Medienquelle + SoundCloud", Color.rgb(255, 121, 71)).apply {
-            addView(text(
-                "YouTube und erlaubte Apps nutzen sauberes internes Audio. SoundCloud wechselt rootfrei weiterhin zum Lautsprecher-Mikrofon-Fallback; nach Root kommt der direkte Systemmix auch für Buds.",
-                13.3f,
-                Color.rgb(212, 222, 240),
-            ).apply { setPadding(0, dp(6), 0, dp(10)) })
-            sourceButton = neonButton("Quelle: Automatisch", Color.rgb(91, 255, 210)) {
-                val next = CapsulePreferences.sourceLock(this@MainActivity).next()
-                CapsulePreferences.setSourceLock(this@MainActivity, next)
-                requestNotificationRebind()
-                applyLiveSettings()
-                refreshDesignButtons()
-            }
-            addView(sourceButton, fullButtonParams())
-        })
-
-        root.addView(sectionCard("Display + Sperrbildschirm", Color.rgb(81, 205, 255)).apply {
-            addView(text(
-                "Optimiert für 393dp, 1280×2772, 447 dpi und 144 Hz. Rotation wird neu vermessen und der Rahmen bleibt vollflächig.",
-                13.3f,
-                Color.rgb(212, 222, 240),
-            ).apply { setPadding(0, dp(6), 0, dp(10)) })
-
-            lockScreenButton = neonButton("Sperrbildschirm: AN", Color.rgb(255, 104, 196)) {
-                val next = !CapsulePreferences.lockScreenEnabled(this@MainActivity)
-                CapsulePreferences.setLockScreenEnabled(this@MainActivity, next)
-                applyLiveSettings()
-                refreshDesignButtons()
-            }
-            addView(lockScreenButton, fullButtonParams())
-            addView(outlineButton("HyperOS App-Info öffnen") { openAppDetails() }, fullButtonParams(topMargin = 9))
-        })
-
-        root.addView(sectionCard("Einrichtung", Color.rgb(255, 195, 74)).apply {
-            overlayStateView = stateText()
-            addView(permissionRow(
-                title = "1 · Overlay",
-                body = "Kapsel, Paneele, Rotation und Sperrbildschirm",
-                state = overlayStateView,
-                action = "Erlauben",
-            ) { openOverlaySettings() })
-
-            notificationStateView = stateText()
-            addView(permissionRow(
-                title = "2 · Titel / Cover",
-                body = "YouTube, SoundCloud, Spotify und Twitch erkennen",
-                state = notificationStateView,
-                action = "Zugriff",
-            ) { openNotificationAccess() })
-
-            audioStateView = stateText()
-            addView(permissionRow(
-                title = "3 · Multi-Band-Equalizer",
-                body = "Bass, Mitten, Höhen und Beat lokal analysieren",
-                state = audioStateView,
-                action = "Audio starten",
-            ) { startEverything() })
-        })
+        root.addView(autoCard())
+        root.addView(stageCard())
+        root.addView(visualCard())
+        root.addView(manualCard())
+        root.addView(sourceCard())
+        root.addView(permissionCard())
 
         val controlRow = horizontalRow().apply { setPadding(0, dp(2), 0, dp(12)) }
-        controlRow.addView(primaryButton("LIVE STARTEN") { startEverything() }, weightedButtonParams(height = 52))
+        controlRow.addView(primaryButton("LIVE STARTEN") { startEverything() }, weightedButtonParams(52))
         controlRow.addView(space(dp(10)))
-        controlRow.addView(outlineButton("STOP") { stopEverything() }, weightedButtonParams(height = 52))
+        controlRow.addView(outlineButton("STOP") { stopEverything() }, weightedButtonParams(52))
         root.addView(controlRow)
 
-        statusView = text("Bereit", 13.2f, Color.rgb(101, 255, 208), bold = true).apply {
+        statusView = text("Bereit", 12.8f, Color.rgb(101, 255, 208), bold = true).apply {
             setPadding(dp(15), dp(14), dp(15), dp(14))
             background = gradientRounded(
                 intArrayOf(Color.rgb(15, 19, 32), Color.rgb(29, 8, 42), Color.rgb(5, 29, 31)),
@@ -271,21 +134,214 @@ class MainActivity : Activity() {
                 dp(1).toFloat(),
             )
         }
-        root.addView(statusView, LinearLayout.LayoutParams(
-            LinearLayout.LayoutParams.MATCH_PARENT,
-            LinearLayout.LayoutParams.WRAP_CONTENT,
-        ).also { it.bottomMargin = dp(14) })
+        root.addView(
+            statusView,
+            LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT,
+            ).also { it.bottomMargin = dp(14) },
+        )
 
-        root.addView(sectionCard("Überraschung · Beat Memory", Color.rgb(105, 255, 205)).apply {
+        root.addView(sectionCard("Neu in 1.5 · Beat wirklich sichtbar", Color.rgb(105, 255, 205)).apply {
             addView(text(
-                "Nach einigen echten Kicks lernt Music Capsule das ungefähre Intervall. Wird ein einzelner Kick vom FFT übersehen, ergänzt die Visualisierung einen vorsichtigen vorhergesagten Impuls. Dadurch bleibt der Beat sichtbar, ohne die Grundbewegung hektisch zu machen.",
-                13.3f,
+                "Ein echter Beat startet jetzt sofort kleine Sterne direkt an den Seiten. Ein starker Bass/Drop startet zusätzlich den längeren Sternenregen von oben. Dadurch liegt der erste sichtbare Effekt direkt auf dem Schlag und nicht erst später beim Fallen.",
+                13.2f,
                 Color.rgb(212, 222, 240),
             ))
         })
 
-        refreshDesignButtons()
+        refreshButtons()
         return scroll
+    }
+
+    private fun autoCard(): View = sectionCard("Smart Auto Tune", Color.rgb(255, 82, 218)).apply {
+        addView(text(
+            "Auto Tune erkennt Energie, Bassanteil, Tempo und schnelle Höhen. Es wählt Bewegung, Nachlauf, Beat FX, Farbtempo und Sterne selbst. Deine manuellen Werte bleiben gespeichert und gelten wieder bei Auto AUS.",
+            13.3f,
+            Color.rgb(212, 222, 240),
+        ).apply { setPadding(0, dp(6), 0, dp(10)) })
+
+        autoTuneButton = neonButton("Auto Tune: Balance", Color.rgb(241, 79, 255)) {
+            val next = CapsulePreferences.autoTuneMode(this@MainActivity).next()
+            CapsulePreferences.setAutoTuneMode(this@MainActivity, next)
+            applyLiveSettings()
+            refreshButtons()
+        }
+        addView(autoTuneButton, fullButtonParams())
+
+        starButton = neonButton("Sterne: Mehr Beat", Color.rgb(255, 187, 68)) {
+            val next = CapsulePreferences.starMode(this@MainActivity).next()
+            CapsulePreferences.setStarMode(this@MainActivity, next)
+            applyLiveSettings()
+            refreshButtons()
+        }
+        addView(starButton, fullButtonParams(topMargin = 9))
+
+        addView(text(
+            "Stern-Modi: Aus · Wenig · Normal · Mehr Beat · Nur Drops. Bei Auto Tune wird die passende Stufe live gewählt.",
+            11.4f,
+            Color.rgb(174, 190, 218),
+        ).apply { setPadding(0, dp(8), 0, 0) })
+    }
+
+    private fun stageCard(): View = sectionCard("AMOLED Stage · schwarzer Musikbildschirm", Color.rgb(74, 224, 255)).apply {
+        addView(text(
+            "Ein eigener komplett schwarzer Vollbildmodus fürs Hinlegen. Der Handy-Hintergrund verschwindet; nur Aura, Hanfblatt, Rand, Beats und Sterne leuchten. Die Steuerung blendet sich automatisch aus.",
+            13.3f,
+            Color.rgb(212, 222, 240),
+        ).apply { setPadding(0, dp(6), 0, dp(10)) })
+
+        val row = horizontalRow()
+        stageStyleButton = neonButton("Stage: Neon Aura", Color.rgb(80, 210, 255)) {
+            val next = CapsulePreferences.stageStyle(this@MainActivity).next()
+            CapsulePreferences.setStageStyle(this@MainActivity, next)
+            refreshButtons()
+        }
+        stageAwakeButton = neonButton("Display wach: AN", Color.rgb(255, 103, 201)) {
+            val next = !CapsulePreferences.stageKeepAwake(this@MainActivity)
+            CapsulePreferences.setStageKeepAwake(this@MainActivity, next)
+            refreshButtons()
+        }
+        row.addView(stageStyleButton, weightedButtonParams())
+        row.addView(space(dp(9)))
+        row.addView(stageAwakeButton, weightedButtonParams())
+        addView(row)
+
+        addView(primaryButton("STAGE ÖFFNEN") { openStage() }, fullButtonParams(topMargin = 9))
+        addView(text(
+            "Im Stage-Modus: einmal tippen = Steuerung, doppelt tippen = Style wechseln, lange halten = Display wach AN/AUS.",
+            11.4f,
+            Color.rgb(174, 190, 218),
+        ).apply { setPadding(0, dp(8), 0, 0) })
+    }
+
+    private fun visualCard(): View = sectionCard("Ansicht", Color.rgb(98, 255, 189)).apply {
+        visualButton = neonButton("Visual: Voll", Color.rgb(89, 255, 167)) {
+            val next = CapsulePreferences.visualLayerMode(this@MainActivity).next()
+            CapsulePreferences.setVisualLayerMode(this@MainActivity, next)
+            applyLiveSettings()
+            refreshButtons()
+        }
+        addView(visualButton, fullButtonParams())
+
+        val row = horizontalRow().apply { setPadding(0, dp(9), 0, 0) }
+        edgeButton = neonButton("Paneele: AN", Color.rgb(71, 255, 166)) {
+            val next = !CapsulePreferences.edgePanelsEnabled(this@MainActivity)
+            CapsulePreferences.setEdgePanelsEnabled(this@MainActivity, next)
+            applyLiveSettings()
+            refreshButtons()
+        }
+        widgetButton = neonButton("Widget: Kleine Kapsel", Color.rgb(78, 198, 255)) {
+            val next = CapsulePreferences.displayMode(this@MainActivity).next()
+            CapsulePreferences.setDisplayMode(this@MainActivity, next)
+            applyLiveSettings()
+            refreshButtons()
+        }
+        row.addView(edgeButton, weightedButtonParams())
+        row.addView(space(dp(9)))
+        row.addView(widgetButton, weightedButtonParams())
+        addView(row)
+
+        intensityButton = neonButton("Neon: 135%", Color.rgb(238, 79, 255)) {
+            CapsulePreferences.nextIntensity(this@MainActivity)
+            applyLiveSettings()
+            refreshButtons()
+        }
+        addView(intensityButton, fullButtonParams(topMargin = 9))
+
+        lockScreenButton = neonButton("Sperrbildschirm: AN", Color.rgb(255, 104, 196)) {
+            val next = !CapsulePreferences.lockScreenEnabled(this@MainActivity)
+            CapsulePreferences.setLockScreenEnabled(this@MainActivity, next)
+            applyLiveSettings()
+            refreshButtons()
+        }
+        addView(lockScreenButton, fullButtonParams(topMargin = 9))
+    }
+
+    private fun manualCard(): View = sectionCard("Manuelles Feintuning", Color.rgb(177, 143, 255)).apply {
+        addView(text(
+            "Nur aktiv, wenn Auto Tune auf AUS steht. So kannst du weiter selbst experimentieren, musst es aber nicht mehr.",
+            12.5f,
+            Color.rgb(190, 201, 225),
+        ).apply { setPadding(0, dp(5), 0, dp(9)) })
+
+        val rowOne = horizontalRow()
+        motionButton = neonButton("Bewegung: Seidig", Color.rgb(74, 229, 255)) {
+            val next = CapsulePreferences.motionProfile(this@MainActivity).next()
+            CapsulePreferences.setMotionProfile(this@MainActivity, next)
+            applyLiveSettings()
+            refreshButtons()
+        }
+        trailButton = neonButton("Nachlauf: Kurz", Color.rgb(255, 124, 80)) {
+            val next = CapsulePreferences.trailMode(this@MainActivity).next()
+            CapsulePreferences.setTrailMode(this@MainActivity, next)
+            applyLiveSettings()
+            refreshButtons()
+        }
+        rowOne.addView(motionButton, weightedButtonParams())
+        rowOne.addView(space(dp(9)))
+        rowOne.addView(trailButton, weightedButtonParams())
+        addView(rowOne)
+
+        val rowTwo = horizontalRow().apply { setPadding(0, dp(9), 0, 0) }
+        flowButton = neonButton("Flow: Beat Auto", Color.rgb(66, 222, 255)) {
+            val next = CapsulePreferences.flowMode(this@MainActivity).next()
+            CapsulePreferences.setFlowMode(this@MainActivity, next)
+            applyLiveSettings()
+            refreshButtons()
+        }
+        beatFxButton = neonButton("Beat FX: Brutal", Color.rgb(246, 78, 255)) {
+            val next = CapsulePreferences.beatFxMode(this@MainActivity).next()
+            CapsulePreferences.setBeatFxMode(this@MainActivity, next)
+            applyLiveSettings()
+            refreshButtons()
+        }
+        rowTwo.addView(flowButton, weightedButtonParams())
+        rowTwo.addView(space(dp(9)))
+        rowTwo.addView(beatFxButton, weightedButtonParams())
+        addView(rowTwo)
+    }
+
+    private fun sourceCard(): View = sectionCard("Medienquelle", Color.rgb(255, 128, 72)).apply {
+        addView(text(
+            "YouTube nutzt sauberes internes Audio. SoundCloud wechselt rootfrei weiter auf den Mikrofon-Fallback; nach Root kommt der direkte Systemmix auch mit Buds.",
+            13.2f,
+            Color.rgb(212, 222, 240),
+        ).apply { setPadding(0, dp(6), 0, dp(9)) })
+        sourceButton = neonButton("Quelle: Automatisch", Color.rgb(91, 255, 210)) {
+            val next = CapsulePreferences.sourceLock(this@MainActivity).next()
+            CapsulePreferences.setSourceLock(this@MainActivity, next)
+            requestNotificationRebind()
+            applyLiveSettings()
+            refreshButtons()
+        }
+        addView(sourceButton, fullButtonParams())
+    }
+
+    private fun permissionCard(): View = sectionCard("Einrichtung", Color.rgb(255, 195, 74)).apply {
+        overlayStateView = stateText()
+        addView(permissionRow(
+            title = "1 · Overlay",
+            body = "Rand, Paneele, Widget und Stage",
+            state = overlayStateView,
+            action = "Erlauben",
+        ) { openOverlaySettings() })
+
+        notificationStateView = stateText()
+        addView(permissionRow(
+            title = "2 · Titel / Cover",
+            body = "Medienquelle zuverlässig erkennen",
+            state = notificationStateView,
+            action = "Zugriff",
+        ) { openNotificationAccess() })
+
+        audioStateView = stateText()
+        addView(permissionRow(
+            title = "3 · Multi-Band-Audio",
+            body = "Bass, Mitten, Höhen und Beats analysieren",
+            state = audioStateView,
+            action = "Audio starten",
+        ) { startEverything() })
     }
 
     private fun startEverything() {
@@ -295,7 +351,7 @@ class MainActivity : Activity() {
             return
         }
         if (!notificationAccessEnabled()) {
-            statusView.text = "Für die richtige Medienanzeige zuerst Benachrichtigungszugriff aktivieren."
+            statusView.text = "Für Titel und die richtige Quelle zuerst Benachrichtigungszugriff aktivieren."
             openNotificationAccess()
             return
         }
@@ -311,7 +367,7 @@ class MainActivity : Activity() {
         CapsuleOverlayService.start(this)
         requestNotificationRebind()
         startActivityForResult(projectionManager.createScreenCaptureIntent(), REQUEST_MEDIA_PROJECTION)
-        statusView.text = "Gesamter Bildschirm freigeben – danach läuft Final Smooth zur Musik."
+        statusView.text = "Gesamter Bildschirm freigeben – Smart Auto lernt danach den Track."
     }
 
     private fun stopEverything() {
@@ -320,7 +376,18 @@ class MainActivity : Activity() {
             action = PlaybackAnalyzerService.ACTION_STOP
         })
         VisualBeatRuntime.clear()
+        AutoTuneRuntime.clear()
         statusView.text = "Music Capsule, Paneele und Audioanalyse werden gestoppt."
+    }
+
+    private fun openStage() {
+        if (!Settings.canDrawOverlays(this)) {
+            statusView.text = "Für Stage zuerst Overlay erlauben."
+            openOverlaySettings()
+            return
+        }
+        CapsuleOverlayService.start(this)
+        startActivity(Intent(this, StageActivity::class.java))
     }
 
     private fun applyLiveSettings() {
@@ -329,19 +396,77 @@ class MainActivity : Activity() {
         }
     }
 
+    private fun refreshStatus() {
+        val overlay = Settings.canDrawOverlays(this)
+        val notification = notificationAccessEnabled()
+        val audio = recordAudioAllowed()
+        overlayStateView.text = if (overlay) "✓" else "!"
+        overlayStateView.setTextColor(if (overlay) Color.rgb(85, 255, 208) else Color.rgb(255, 195, 74))
+        notificationStateView.text = if (notification) "✓" else "!"
+        notificationStateView.setTextColor(if (notification) Color.rgb(85, 255, 208) else Color.rgb(255, 195, 74))
+        audioStateView.text = if (audio) "✓" else "!"
+        audioStateView.setTextColor(if (audio) Color.rgb(85, 255, 208) else Color.rgb(255, 195, 74))
+
+        val snapshot = CapsuleRuntime.snapshot()
+        val visualBeat = VisualBeatRuntime.snapshot()
+        val auto = AutoTuneRuntime.snapshot()
+        val bpm = if (visualBeat.bpm > 0f) "${visualBeat.bpm.toInt()} BPM" else "BPM lernt"
+        statusView.text = buildString {
+            append(if (snapshot.overlayRunning) "SMART AUTO LIVE" else "Overlay aus")
+            append(" · ")
+            append(if (snapshot.analyzerRunning) "FFT LIVE" else "Audioanalyse aus")
+            append(" · ${displaySizeLabel()}")
+            append("\n${auto.autoMode.label} · ${auto.label}")
+            append("\nAuto: ${auto.motion.label} · ${auto.trail.label} · ${auto.beatFx.label} · Sterne ${auto.stars.label}")
+            append("\nB ${percent(snapshot.bass)}% · M ${percent(snapshot.mid)}% · H ${percent(snapshot.treble)}%")
+            append(" · Beat ${percent(visualBeat.pulse)}% · $bpm")
+            append("\n")
+            append(snapshot.title)
+            if (snapshot.artist.isNotBlank()) append(" — ${snapshot.artist}")
+            append("\n")
+            append(snapshot.message)
+        }
+        refreshButtons()
+    }
+
+    private fun refreshButtons() {
+        if (!::autoTuneButton.isInitialized) return
+        val autoMode = CapsulePreferences.autoTuneMode(this)
+        autoTuneButton.text = "Auto Tune: ${autoMode.label}"
+        starButton.text = "Sterne: ${CapsulePreferences.starMode(this).label}"
+        visualButton.text = "Visual: ${CapsulePreferences.visualLayerMode(this).label}"
+        widgetButton.text = "Widget: ${CapsulePreferences.displayMode(this).label}"
+        edgeButton.text = "Paneele: ${if (CapsulePreferences.edgePanelsEnabled(this)) "AN" else "AUS"}"
+        intensityButton.text = "Neon: ${(CapsulePreferences.neonIntensity(this) * 100).toInt()}%"
+        sourceButton.text = "Quelle: ${CapsulePreferences.sourceLock(this).label}"
+        lockScreenButton.text = "Sperrbildschirm: ${if (CapsulePreferences.lockScreenEnabled(this)) "AN" else "AUS"}"
+        stageStyleButton.text = "Stage: ${CapsulePreferences.stageStyle(this).label}"
+        stageAwakeButton.text = "Display wach: ${if (CapsulePreferences.stageKeepAwake(this)) "AN" else "AUS"}"
+        motionButton.text = "Bewegung: ${CapsulePreferences.motionProfile(this).label}"
+        trailButton.text = "Nachlauf: ${CapsulePreferences.trailMode(this).label}"
+        beatFxButton.text = "Beat FX: ${CapsulePreferences.beatFxMode(this).label}"
+        flowButton.text = "Flow: ${CapsulePreferences.flowMode(this).label}"
+
+        val manual = autoMode == AutoTuneMode.OFF
+        listOf(motionButton, trailButton, beatFxButton, starButton).forEach { button ->
+            button.isEnabled = manual
+            button.alpha = if (manual) 1f else .48f
+        }
+        flowButton.isEnabled = true
+        flowButton.alpha = 1f
+
+        previewView.setConfig(
+            CapsulePreferences.displayMode(this),
+            CapsulePreferences.edgePanelsEnabled(this),
+            CapsulePreferences.neonIntensity(this),
+            CapsulePreferences.sourceLock(this),
+        )
+    }
+
     private fun openOverlaySettings() {
         startActivity(
             Intent(
                 Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
-                Uri.parse("package:$packageName"),
-            ),
-        )
-    }
-
-    private fun openAppDetails() {
-        startActivity(
-            Intent(
-                Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
                 Uri.parse("package:$packageName"),
             ),
         )
@@ -363,60 +488,6 @@ class MainActivity : Activity() {
                 ComponentName(this, CapsuleNotificationListener::class.java),
             )
         }
-    }
-
-    private fun refreshStatus() {
-        val overlay = Settings.canDrawOverlays(this)
-        val notification = notificationAccessEnabled()
-        val audio = recordAudioAllowed()
-        overlayStateView.text = if (overlay) "✓" else "!"
-        overlayStateView.setTextColor(if (overlay) Color.rgb(85, 255, 208) else Color.rgb(255, 195, 74))
-        notificationStateView.text = if (notification) "✓" else "!"
-        notificationStateView.setTextColor(if (notification) Color.rgb(85, 255, 208) else Color.rgb(255, 195, 74))
-        audioStateView.text = if (audio) "✓" else "!"
-        audioStateView.setTextColor(if (audio) Color.rgb(85, 255, 208) else Color.rgb(255, 195, 74))
-
-        val snapshot = CapsuleRuntime.snapshot()
-        val visualBeat = VisualBeatRuntime.snapshot()
-        val bpmText = if (visualBeat.bpm > 0f) "${visualBeat.bpm.toInt()} BPM" else "lernt …"
-        statusView.text = buildString {
-            append(if (snapshot.overlayRunning) "FINAL SMOOTH LIVE" else "Overlay aus")
-            append(" · ")
-            append(if (snapshot.analyzerRunning) "FFT LIVE" else "Audioanalyse aus")
-            append(" · ${displaySizeLabel()} · ${XiaomiDisplayProfile.smallestWidthDp(this@MainActivity)}dp")
-            append("\nVisual ${CapsulePreferences.visualLayerMode(this@MainActivity).label}")
-            append(" · Bewegung ${CapsulePreferences.motionProfile(this@MainActivity).label}")
-            append(" · Nachlauf ${CapsulePreferences.trailMode(this@MainActivity).label}")
-            append("\nB ${percent(snapshot.bass)}% · M ${percent(snapshot.mid)}% · H ${percent(snapshot.treble)}%")
-            append(" · Beat ${percent(visualBeat.pulse)}% · $bpmText")
-            if (visualBeat.predicted) append(" · Memory")
-            append("\n")
-            append(snapshot.title)
-            if (snapshot.artist.isNotBlank()) append(" — ${snapshot.artist}")
-            append("\n")
-            append(snapshot.message)
-        }
-        refreshDesignButtons()
-    }
-
-    private fun refreshDesignButtons() {
-        if (!::sourceButton.isInitialized) return
-        sourceButton.text = "Quelle: ${CapsulePreferences.sourceLock(this).label}"
-        modeButton.text = "Widget: ${CapsulePreferences.displayMode(this).label}"
-        edgeButton.text = "Paneele: ${if (CapsulePreferences.edgePanelsEnabled(this)) "AN" else "AUS"}"
-        intensityButton.text = "Neon: ${(CapsulePreferences.neonIntensity(this) * 100).toInt()}%"
-        lockScreenButton.text = "Sperrbildschirm: ${if (CapsulePreferences.lockScreenEnabled(this)) "AN" else "AUS"}"
-        flowButton.text = "Flow: ${CapsulePreferences.flowMode(this).label}"
-        beatFxButton.text = "Beat FX: ${CapsulePreferences.beatFxMode(this).label}"
-        visualButton.text = "Visual: ${CapsulePreferences.visualLayerMode(this).label}"
-        motionButton.text = "Bewegung: ${CapsulePreferences.motionProfile(this).label}"
-        trailButton.text = "Nachlauf: ${CapsulePreferences.trailMode(this).label}"
-        previewView.setConfig(
-            CapsulePreferences.displayMode(this),
-            CapsulePreferences.edgePanelsEnabled(this),
-            CapsulePreferences.neonIntensity(this),
-            CapsulePreferences.sourceLock(this),
-        )
     }
 
     private fun notificationAccessEnabled(): Boolean =
@@ -451,7 +522,7 @@ class MainActivity : Activity() {
                 },
             )
             CapsuleOverlayService.start(this)
-            statusView.text = "LIVE – Musik starten. Smoothes Grundsignal und Beat Memory laufen getrennt."
+            statusView.text = "LIVE – Musik starten. Smart Auto passt sich nach wenigen Sekunden an."
         } else {
             statusView.text = "Audiofreigabe abgebrochen."
         }
@@ -463,42 +534,38 @@ class MainActivity : Activity() {
         state: TextView,
         action: String,
         onClick: () -> Unit,
-    ): View {
-        return LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
+    ): View = LinearLayout(this).apply {
+        orientation = LinearLayout.HORIZONTAL
+        gravity = Gravity.CENTER_VERTICAL
+        setPadding(0, dp(8), 0, dp(8))
+        addView(state, LinearLayout.LayoutParams(dp(28), dp(28)).apply {
             gravity = Gravity.CENTER_VERTICAL
-            setPadding(0, dp(8), 0, dp(8))
-            addView(state, LinearLayout.LayoutParams(dp(28), dp(28)).apply {
-                gravity = Gravity.CENTER_VERTICAL
-                marginEnd = dp(9)
-            })
-            addView(LinearLayout(this@MainActivity).apply {
-                orientation = LinearLayout.VERTICAL
-                addView(text(title, 14.5f, Color.WHITE, bold = true))
-                addView(text(body, 11.5f, Color.rgb(171, 187, 213)))
-            }, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
-            addView(outlineButton(action, onClick), LinearLayout.LayoutParams(dp(96), dp(42)).apply {
-                marginStart = dp(8)
-            })
-        }
+            marginEnd = dp(9)
+        })
+        addView(LinearLayout(this@MainActivity).apply {
+            orientation = LinearLayout.VERTICAL
+            addView(text(title, 14.5f, Color.WHITE, bold = true))
+            addView(text(body, 11.5f, Color.rgb(171, 187, 213)))
+        }, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
+        addView(outlineButton(action, onClick), LinearLayout.LayoutParams(dp(96), dp(42)).apply {
+            marginStart = dp(8)
+        })
     }
 
-    private fun sectionCard(title: String, accent: Int): LinearLayout {
-        return LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            setPadding(dp(16), dp(15), dp(16), dp(15))
-            background = gradientRounded(
-                intArrayOf(Color.rgb(20, 23, 36), Color.rgb(28, 10, 40), Color.rgb(6, 29, 31)),
-                dp(23).toFloat(),
-                Color.argb(120, Color.red(accent), Color.green(accent), Color.blue(accent)),
-                dp(1).toFloat(),
-            )
-            addView(text(title, 18f, accent, bold = true))
-            layoutParams = LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT,
-                LinearLayout.LayoutParams.WRAP_CONTENT,
-            ).also { it.bottomMargin = dp(14) }
-        }
+    private fun sectionCard(title: String, accent: Int): LinearLayout = LinearLayout(this).apply {
+        orientation = LinearLayout.VERTICAL
+        setPadding(dp(16), dp(15), dp(16), dp(15))
+        background = gradientRounded(
+            intArrayOf(Color.rgb(20, 23, 36), Color.rgb(28, 10, 40), Color.rgb(6, 29, 31)),
+            dp(23).toFloat(),
+            Color.argb(120, Color.red(accent), Color.green(accent), Color.blue(accent)),
+            dp(1).toFloat(),
+        )
+        addView(text(title, 18f, accent, bold = true))
+        layoutParams = LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT,
+            LinearLayout.LayoutParams.WRAP_CONTENT,
+        ).also { it.bottomMargin = dp(14) }
     }
 
     private fun horizontalRow(): LinearLayout = LinearLayout(this).apply {
@@ -511,80 +578,71 @@ class MainActivity : Activity() {
         background = rounded(Color.rgb(37, 40, 55), dp(14).toFloat())
     }
 
-    private fun primaryButton(label: String, onClick: () -> Unit): Button {
-        return Button(this).apply {
-            text = label
-            isAllCaps = false
-            minHeight = 0
-            minWidth = 0
-            setTextColor(Color.rgb(4, 10, 16))
-            textSize = 14f
-            setTypeface(typeface, android.graphics.Typeface.BOLD)
-            background = gradientRounded(
-                intArrayOf(Color.rgb(74, 255, 187), Color.rgb(71, 202, 255), Color.rgb(219, 77, 255)),
-                dp(23).toFloat(),
-            )
-            setOnClickListener { onClick() }
-        }
+    private fun primaryButton(label: String, onClick: () -> Unit): Button = Button(this).apply {
+        text = label
+        isAllCaps = false
+        minHeight = 0
+        minWidth = 0
+        setTextColor(Color.rgb(4, 10, 16))
+        textSize = 14f
+        setTypeface(typeface, android.graphics.Typeface.BOLD)
+        background = gradientRounded(
+            intArrayOf(Color.rgb(74, 255, 187), Color.rgb(71, 202, 255), Color.rgb(219, 77, 255)),
+            dp(23).toFloat(),
+        )
+        setOnClickListener { onClick() }
     }
 
-    private fun neonButton(label: String, accent: Int, onClick: () -> Unit): Button {
-        return Button(this).apply {
-            text = label
-            isAllCaps = false
-            minHeight = 0
-            minWidth = 0
-            setTextColor(Color.WHITE)
-            textSize = 12.3f
-            background = rounded(
-                Color.rgb(18, 21, 34),
-                dp(20).toFloat(),
-                Color.argb(210, Color.red(accent), Color.green(accent), Color.blue(accent)),
-                dp(1).toFloat(),
-            )
-            setOnClickListener { onClick() }
-        }
+    private fun neonButton(label: String, accent: Int, onClick: () -> Unit): Button = Button(this).apply {
+        text = label
+        isAllCaps = false
+        minHeight = 0
+        minWidth = 0
+        setTextColor(Color.WHITE)
+        textSize = 12.2f
+        background = rounded(
+            Color.rgb(18, 21, 34),
+            dp(20).toFloat(),
+            Color.argb(210, Color.red(accent), Color.green(accent), Color.blue(accent)),
+            dp(1).toFloat(),
+        )
+        setOnClickListener { onClick() }
     }
 
-    private fun outlineButton(label: String, onClick: () -> Unit): Button {
-        return Button(this).apply {
-            text = label
-            isAllCaps = false
-            minHeight = 0
-            minWidth = 0
-            setTextColor(Color.rgb(205, 215, 255))
-            textSize = 12.5f
-            background = rounded(
-                Color.rgb(20, 23, 35),
-                dp(20).toFloat(),
-                Color.rgb(104, 118, 155),
-                dp(1).toFloat(),
-            )
-            setOnClickListener { onClick() }
-        }
+    private fun outlineButton(label: String, onClick: () -> Unit): Button = Button(this).apply {
+        text = label
+        isAllCaps = false
+        minHeight = 0
+        minWidth = 0
+        setTextColor(Color.rgb(205, 215, 255))
+        textSize = 12.5f
+        background = rounded(
+            Color.rgb(20, 23, 35),
+            dp(20).toFloat(),
+            Color.rgb(104, 118, 155),
+            dp(1).toFloat(),
+        )
+        setOnClickListener { onClick() }
     }
 
-    private fun text(value: String, sizeSp: Float, color: Int, bold: Boolean = false): TextView {
-        return TextView(this).apply {
+    private fun text(value: String, sizeSp: Float, color: Int, bold: Boolean = false): TextView =
+        TextView(this).apply {
             text = value
             textSize = sizeSp
             setTextColor(color)
             if (bold) setTypeface(typeface, android.graphics.Typeface.BOLD)
         }
-    }
 
     private fun rounded(
         fill: Int,
         radius: Float,
         stroke: Int? = null,
         strokeWidth: Float = 0f,
-    ): GradientDrawable {
-        return GradientDrawable().apply {
-            shape = GradientDrawable.RECTANGLE
-            cornerRadius = radius
-            setColor(fill)
-            if (stroke != null && strokeWidth > 0f) setStroke(strokeWidth.toInt(), stroke)
-        }
+    ): GradientDrawable = GradientDrawable().apply {
+        shape = GradientDrawable.RECTANGLE
+        cornerRadius = radius
+        setColor(fill)
+        if (stroke != null && strokeWidth > 0f) setStroke(strokeWidth.toInt(), stroke)
     }
 
     private fun gradientRounded(
@@ -592,12 +650,10 @@ class MainActivity : Activity() {
         radius: Float,
         stroke: Int? = null,
         strokeWidth: Float = 0f,
-    ): GradientDrawable {
-        return GradientDrawable(GradientDrawable.Orientation.TL_BR, colors).apply {
-            shape = GradientDrawable.RECTANGLE
-            cornerRadius = radius
-            if (stroke != null && strokeWidth > 0f) setStroke(strokeWidth.toInt(), stroke)
-        }
+    ): GradientDrawable = GradientDrawable(GradientDrawable.Orientation.TL_BR, colors).apply {
+        shape = GradientDrawable.RECTANGLE
+        cornerRadius = radius
+        if (stroke != null && strokeWidth > 0f) setStroke(strokeWidth.toInt(), stroke)
     }
 
     private fun weightedButtonParams(height: Int = 48): LinearLayout.LayoutParams =
