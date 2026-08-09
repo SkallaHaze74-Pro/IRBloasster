@@ -161,6 +161,9 @@ class CapsuleOverlayService : Service() {
             gravity = Gravity.TOP or Gravity.START
             x = 0
             y = 0
+            // Android 12+ only passes touches through an untrusted non-touchable
+            // overlay when its window opacity stays below the obscuring threshold.
+            alpha = 0.79f
         }
         requestHighestRefreshRate(params)
         return params
