@@ -284,8 +284,15 @@ class CapsuleNotificationListener : NotificationListenerService() {
     }
 
     private fun notificationArtwork(notification: Notification): Bitmap? {
-        val largeIcon = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) notification.largeIcon else null
-        iconToBitmap(largeIcon)?.let { return it }
+        @Suppress("DEPRECATION")
+        notification.largeIcon?.let { return it }
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            runCatching { notification.getLargeIcon() }
+                .getOrNull()
+                ?.let(::iconToBitmap)
+                ?.let { return it }
+        }
 
         val extras = notification.extras ?: Bundle.EMPTY
         val big = bundleParcelable(extras, Notification.EXTRA_LARGE_ICON_BIG)
