@@ -12,35 +12,41 @@ import android.graphics.RectF
 import android.graphics.Shader
 import android.os.SystemClock
 import android.text.TextPaint
+import android.view.Choreographer
 import android.view.MotionEvent
 import android.view.View
 import android.view.ViewConfiguration
 import androidx.core.graphics.PathParser
 import kotlin.math.PI
 import kotlin.math.cos
+import kotlin.math.exp
 import kotlin.math.hypot
 import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.pow
 import kotlin.math.sin
 
-class CapsuleOverlayView(context: Context) : View(context) {
-    var onExpandedChanged: ((Boolean) -> Unit)? = null
+class CapsuleOverlayView(context: Context) : View(context), Choreographer.FrameCallback {
+    var onModeChanged: ((CapsuleMode) -> Unit)? = null
     var onMove: ((Float, Float) -> Unit)? = null
 
     private val density = resources.displayMetrics.density
     private val touchSlop = ViewConfiguration.get(context).scaledTouchSlop
     private val fillPaint = Paint(Paint.ANTI_ALIAS_FLAG)
-    private val strokePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.STROKE }
+    private val strokePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        style = Paint.Style.STROKE
+        strokeCap = Paint.Cap.ROUND
+        strokeJoin = Paint.Join.ROUND
+    }
     private val titlePaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
         color = Color.WHITE
         typeface = android.graphics.Typeface.create(android.graphics.Typeface.DEFAULT, android.graphics.Typeface.BOLD)
     }
     private val subtitlePaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = Color.argb(180, 214, 226, 244)
+        color = Color.argb(186, 214, 226, 244)
     }
     private val labelPaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = Color.argb(220, 255, 255, 255)
+        color = Color.argb(224, 255, 255, 255)
         typeface = android.graphics.Typeface.create(android.graphics.Typeface.DEFAULT, android.graphics.Typeface.BOLD)
     }
 
@@ -49,101 +55,181 @@ class CapsuleOverlayView(context: Context) : View(context) {
     ) ?: Path()
     private val transformedLeafPath = Path()
     private val transformMatrix = Matrix()
+    private val smoothedLevels = FloatArray(CapsuleRuntime.BAND_COUNT)
 
     private var snapshot = CapsuleRuntime.snapshot()
-    private var expanded = false
+    private var mode = snapshot.mode
     private var downRawX = 0f
     private var downRawY = 0f
     private var lastRawX = 0f
     private var lastRawY = 0f
+    private var downAt = 0L
     private var moved = false
+    private var attached = false
+    private var lastFrameNanos = 0L
+    private var colorPhase = 0f
 
     init {
         isClickable = true
+        setLayerType(LAYER_TYPE_HARDWARE, null)
+    }
+
+    override fun onAttachedToWindow() {
+        super.onAttachedToWindow()
+        attached = true
+        Choreographer.getInstance().postFrameCallback(this)
+    }
+
+    override fun onDetachedFromWindow() {
+        attached = false
+        Choreographer.getInstance().removeFrameCallback(this)
+        super.onDetachedFromWindow()
+    }
+
+    override fun doFrame(frameTimeNanos: Long) {
+        if (!attached) return
+        val delta = if (lastFrameNanos == 0L) {
+            1f / 60f
+        } else {
+            ((frameTimeNanos - lastFrameNanos).coerceAtLeast(1L) / 1_000_000_000f)
+                .coerceIn(1f / 240f, 1f / 20f)
+        }
+        lastFrameNanos = frameTimeNanos
+
+        val response = 1f - exp(-delta * 14f)
+        for (index in smoothedLevels.indices) {
+            val target = snapshot.levels.getOrNull(index) ?: 0f
+            val factor = if (target > smoothedLevels[index]) response * 1.34f else response * .55f
+            smoothedLevels[index] += (target - smoothedLevels[index]) * factor.coerceIn(0f, 1f)
+        }
+        val speed = if (snapshot.signal > .008f) 21f + snapshot.signal * 54f else 2.2f
+        colorPhase = (colorPhase + delta * speed) % 360f
+        invalidate()
+        Choreographer.getInstance().postFrameCallback(this)
     }
 
     fun setSnapshot(value: CapsuleSnapshot) {
         snapshot = value
-        expanded = value.expanded
-        postInvalidateOnAnimation()
+        mode = value.mode
     }
 
-    fun setExpanded(value: Boolean) {
-        expanded = value
-        postInvalidateOnAnimation()
+    fun setMode(value: CapsuleMode) {
+        mode = value
+        invalidate()
     }
 
     override fun onDraw(canvas: Canvas) {
         super.onDraw(canvas)
-        if (expanded) drawExpanded(canvas) else drawCompact(canvas)
+        when (mode) {
+            CapsuleMode.RIM -> drawRim(canvas)
+            CapsuleMode.COMPACT -> drawCompact(canvas)
+            CapsuleMode.EXPANDED -> drawExpanded(canvas)
+        }
+    }
+
+    private fun drawRim(canvas: Canvas) {
+        val outer = RectF(dp(1f), dp(1f), width - dp(1f), height - dp(1f))
+        val radius = height * .48f
+        fillPaint.color = Color.argb(50, 4, 7, 15)
+        canvas.drawRoundRect(outer, radius, radius, fillPaint)
+        drawNeonBorder(canvas, outer, radius, glow = 1.22f)
+
+        val bars = 10
+        val totalWidth = width * .42f
+        val startX = width / 2f - totalWidth / 2f
+        val gap = dp(3f)
+        val barWidth = (totalWidth - gap * (bars - 1)) / bars
+        val baseline = height * .61f
+        for (index in 0 until bars) {
+            val sourceIndex = ((index.toFloat() / max(1, bars - 1)) * smoothedLevels.lastIndex).toInt()
+            val level = max(.04f, smoothedLevels[sourceIndex].pow(.66f))
+            val barHeight = dp(1.2f) + level * height * .42f
+            fillPaint.color = hsv(colorPhase + index * 25f, .88f, 1f, .52f + level * .45f)
+            canvas.drawRoundRect(
+                RectF(
+                    startX + index * (barWidth + gap),
+                    baseline - barHeight,
+                    startX + index * (barWidth + gap) + barWidth,
+                    baseline,
+                ),
+                barWidth,
+                barWidth,
+                fillPaint,
+            )
+        }
     }
 
     private fun drawCompact(canvas: Canvas) {
         val bounds = RectF(0f, 0f, width.toFloat(), height.toFloat())
-        val radius = height * 0.46f
+        val radius = height * .46f
         fillPaint.shader = LinearGradient(
             0f,
             0f,
             width.toFloat(),
             height.toFloat(),
-            intArrayOf(Color.rgb(6, 9, 21), Color.rgb(30, 10, 39), Color.rgb(3, 24, 28)),
+            intArrayOf(
+                Color.rgb(4, 8, 18),
+                Color.rgb(15, 8, 31),
+                Color.rgb(2, 24, 30),
+            ),
             null,
             Shader.TileMode.CLAMP,
         )
         canvas.drawRoundRect(bounds, radius, radius, fillPaint)
         fillPaint.shader = null
-
-        strokePaint.strokeWidth = dp(1.2f)
-        strokePaint.shader = LinearGradient(
-            0f,
-            0f,
-            width.toFloat(),
-            0f,
-            intArrayOf(Color.rgb(80, 255, 198), Color.rgb(56, 197, 255), Color.rgb(232, 70, 255)),
-            null,
-            Shader.TileMode.CLAMP,
-        )
-        canvas.drawRoundRect(
+        drawNeonBorder(
+            canvas,
             RectF(dp(1f), dp(1f), width - dp(1f), height - dp(1f)),
             radius,
-            radius,
-            strokePaint,
+            glow = 1f + snapshot.signal * .6f,
         )
-        strokePaint.shader = null
 
-        val padding = dp(7f)
+        val padding = dp(6f)
         val artSize = height - padding * 2f
         val artRect = RectF(padding, padding, padding + artSize, padding + artSize)
         drawArtworkOrLeaf(canvas, artRect, compact = true)
 
-        val barsWidth = min(dp(88f), width * 0.28f)
+        val minimizeWidth = dp(19f)
+        val barsWidth = min(dp(70f), width * .23f)
         val barsRect = RectF(
-            width - padding - barsWidth,
-            padding + dp(3f),
-            width - padding,
-            height - padding - dp(3f),
+            width - padding - minimizeWidth - barsWidth,
+            padding + dp(5f),
+            width - padding - minimizeWidth - dp(3f),
+            height - padding - dp(5f),
         )
-        drawLinearLevels(canvas, barsRect, compact = true)
+        drawLinearLevels(canvas, barsRect, count = 7, compact = true)
 
-        val textLeft = artRect.right + dp(10f)
-        val textRight = barsRect.left - dp(8f)
-        titlePaint.textSize = dp(13.5f)
-        subtitlePaint.textSize = dp(10.5f)
-        drawEllipsizedText(canvas, snapshot.title, textLeft, height * 0.45f, textRight - textLeft, titlePaint)
+        val textLeft = artRect.right + dp(9f)
+        val textRight = barsRect.left - dp(7f)
+        titlePaint.textSize = dp(12.8f)
+        subtitlePaint.textSize = dp(9.8f)
+        drawEllipsizedText(canvas, snapshot.title, textLeft, height * .43f, textRight - textLeft, titlePaint)
         val subtitle = snapshot.artist.ifBlank {
             when {
                 snapshot.analyzerRunning -> "Audioanalyse aktiv"
                 else -> "Antippen zum Öffnen"
             }
         }
-        drawEllipsizedText(canvas, subtitle, textLeft, height * 0.72f, textRight - textLeft, subtitlePaint)
+        drawEllipsizedText(canvas, subtitle, textLeft, height * .71f, textRight - textLeft, subtitlePaint)
+
+        val dashCenterX = width - padding - minimizeWidth / 2f
+        strokePaint.shader = null
+        strokePaint.color = Color.argb(205, 223, 232, 246)
+        strokePaint.strokeWidth = dp(1.5f)
+        canvas.drawLine(
+            dashCenterX - dp(4f),
+            height * .50f,
+            dashCenterX + dp(4f),
+            height * .50f,
+            strokePaint,
+        )
 
         fillPaint.color = when {
-            snapshot.signal > 0.01f -> Color.rgb(75, 255, 176)
-            snapshot.analyzerRunning -> Color.rgb(255, 194, 76)
-            else -> Color.rgb(122, 135, 158)
+            snapshot.signal > .01f -> Color.rgb(70, 255, 179)
+            snapshot.analyzerRunning -> Color.rgb(255, 194, 74)
+            else -> Color.rgb(114, 126, 151)
         }
-        canvas.drawCircle(width - dp(7f), dp(7f), dp(2.3f), fillPaint)
+        canvas.drawCircle(width - dp(7f), dp(7f), dp(2f), fillPaint)
     }
 
     private fun drawExpanded(canvas: Canvas) {
@@ -154,30 +240,22 @@ class CapsuleOverlayView(context: Context) : View(context) {
             0f,
             width.toFloat(),
             height.toFloat(),
-            intArrayOf(Color.rgb(2, 4, 12), Color.rgb(10, 12, 34), Color.rgb(3, 24, 27)),
+            intArrayOf(
+                Color.rgb(1, 4, 12),
+                Color.rgb(13, 9, 34),
+                Color.rgb(2, 25, 29),
+            ),
             null,
             Shader.TileMode.CLAMP,
         )
         canvas.drawRoundRect(outer, corner, corner, fillPaint)
         fillPaint.shader = null
-
-        strokePaint.strokeWidth = dp(1.2f)
-        strokePaint.shader = LinearGradient(
-            0f,
-            0f,
-            width.toFloat(),
-            height.toFloat(),
-            intArrayOf(Color.rgb(72, 255, 183), Color.rgb(55, 195, 255), Color.rgb(232, 70, 255)),
-            null,
-            Shader.TileMode.CLAMP,
-        )
-        canvas.drawRoundRect(
+        drawNeonBorder(
+            canvas,
             RectF(dp(1f), dp(1f), width - dp(1f), height - dp(1f)),
             corner,
-            corner,
-            strokePaint,
+            glow = 1.18f,
         )
-        strokePaint.shader = null
 
         drawCloseButton(canvas)
         titlePaint.textSize = dp(18f)
@@ -187,15 +265,15 @@ class CapsuleOverlayView(context: Context) : View(context) {
             canvas,
             snapshot.artist.ifBlank { packageDisplayName() },
             dp(22f),
-            dp(58f),
+            dp(59f),
             width - dp(86f),
             subtitlePaint,
         )
 
-        val centerX = width * 0.5f
-        val centerY = height * 0.43f
-        val leafSize = min(width * 0.52f, height * 0.43f)
-        drawRadialLevels(canvas, centerX, centerY, leafSize * 0.57f)
+        val centerX = width * .5f
+        val centerY = height * .42f
+        val leafSize = min(width * .52f, height * .42f)
+        drawRadialLevels(canvas, centerX, centerY, leafSize * .58f)
         drawArtworkOrLeaf(
             canvas,
             RectF(
@@ -209,36 +287,70 @@ class CapsuleOverlayView(context: Context) : View(context) {
 
         drawLinearLevels(
             canvas,
-            RectF(dp(24f), height * 0.70f, width - dp(24f), height * 0.80f),
+            RectF(dp(24f), height * .69f, width - dp(24f), height * .79f),
+            count = 16,
             compact = false,
         )
         drawTransportControls(canvas)
 
         labelPaint.textSize = dp(10.5f)
         val status = when {
-            snapshot.signal > 0.01f -> "LIVE FFT · ${(snapshot.signal * 100).toInt()}% · ${snapshot.source}"
+            snapshot.signal > .01f -> "LIVE FFT · ${(snapshot.signal * 100).toInt()}% · ${snapshot.source}"
             snapshot.analyzerRunning -> "Capture aktiv · wartet auf internes Audiosignal"
-            else -> "Audioanalyse aus · App öffnen und Audio starten"
+            else -> "Audioanalyse aus · Music Capsule öffnen und starten"
         }
         canvas.drawText(status, dp(22f), height - dp(15f), labelPaint)
     }
 
-    private fun packageDisplayName(): String {
-        return snapshot.packageName.substringAfterLast('.').ifBlank { "Music Capsule" }
+    private fun drawNeonBorder(canvas: Canvas, rect: RectF, radius: Float, glow: Float) {
+        val shader = LinearGradient(
+            rect.left,
+            rect.top,
+            rect.right,
+            rect.bottom,
+            intArrayOf(
+                hsv(colorPhase + 150f, .94f, 1f),
+                hsv(colorPhase + 218f, .92f, 1f),
+                hsv(colorPhase + 303f, .90f, 1f),
+                hsv(colorPhase + 28f, .94f, 1f),
+                hsv(colorPhase + 105f, .90f, 1f),
+            ),
+            null,
+            Shader.TileMode.MIRROR,
+        )
+        strokePaint.shader = shader
+
+        strokePaint.alpha = 48
+        strokePaint.strokeWidth = dp(8f) * glow.coerceIn(.8f, 1.45f)
+        canvas.drawRoundRect(rect, radius, radius, strokePaint)
+
+        strokePaint.alpha = 120
+        strokePaint.strokeWidth = dp(3.2f)
+        canvas.drawRoundRect(rect, radius, radius, strokePaint)
+
+        strokePaint.alpha = 245
+        strokePaint.strokeWidth = dp(1.15f)
+        canvas.drawRoundRect(rect, radius, radius, strokePaint)
+
+        strokePaint.shader = null
+        strokePaint.alpha = 255
     }
+
+    private fun packageDisplayName(): String =
+        snapshot.packageName.substringAfterLast('.').ifBlank { "Music Capsule" }
 
     private fun drawArtworkOrLeaf(canvas: Canvas, rect: RectF, compact: Boolean) {
         val artwork = snapshot.artwork
         if (artwork != null && !artwork.isRecycled) {
             drawArtwork(canvas, artwork, rect)
-            return
+        } else {
+            drawLeaf(canvas, rect, compact)
         }
-        drawLeaf(canvas, rect, compact)
     }
 
     private fun drawArtwork(canvas: Canvas, bitmap: Bitmap, rect: RectF) {
         val save = canvas.save()
-        val radius = if (expanded) rect.width() * 0.5f else dp(15f)
+        val radius = if (mode == CapsuleMode.EXPANDED) rect.width() * .5f else dp(13f)
         canvas.clipRounded(rect, radius, radius)
         val scale = max(rect.width() / bitmap.width, rect.height() / bitmap.height)
         val sourceWidth = rect.width() / scale
@@ -255,7 +367,7 @@ class CapsuleOverlayView(context: Context) : View(context) {
     }
 
     private fun drawLeaf(canvas: Canvas, rect: RectF, compact: Boolean) {
-        val pulse = 1f + snapshot.signal * if (compact) 0.035f else 0.065f
+        val pulse = 1f + snapshot.signal * if (compact) .028f else .058f
         val cx = rect.centerX()
         val cy = rect.centerY()
         val target = RectF(
@@ -269,44 +381,48 @@ class CapsuleOverlayView(context: Context) : View(context) {
         transformedLeafPath.reset()
         sourceLeafPath.transform(transformMatrix, transformedLeafPath)
 
-        val phase = (SystemClock.uptimeMillis() % 9000L) / 9000f
-        val colors = intArrayOf(
-            hsv(132f + phase * 35f, .84f, 1f),
-            hsv(188f + phase * 46f, .82f, 1f),
-            hsv(300f + phase * 30f, .72f, 1f),
-        )
         fillPaint.shader = LinearGradient(
             target.left,
             target.top,
             target.right,
             target.bottom,
-            colors,
+            intArrayOf(
+                hsv(colorPhase + 118f, .78f, 1f),
+                hsv(colorPhase + 188f, .84f, 1f),
+                hsv(colorPhase + 286f, .78f, 1f),
+            ),
             null,
             Shader.TileMode.CLAMP,
         )
-        fillPaint.color = Color.WHITE
         canvas.drawPath(transformedLeafPath, fillPaint)
         fillPaint.shader = null
 
-        strokePaint.style = Paint.Style.STROKE
-        strokePaint.strokeWidth = if (compact) dp(.7f) else dp(1.3f)
-        strokePaint.color = Color.argb(220, 235, 255, 249)
+        strokePaint.color = Color.argb(224, 238, 255, 250)
+        strokePaint.strokeWidth = if (compact) dp(.65f) else dp(1.2f)
         canvas.drawPath(transformedLeafPath, strokePaint)
     }
 
-    private fun drawLinearLevels(canvas: Canvas, rect: RectF, compact: Boolean) {
-        val levels = snapshot.levels
-        val count = if (compact) 7 else 16
-        val gap = if (compact) dp(3.1f) else dp(4f)
+    private fun drawLinearLevels(
+        canvas: Canvas,
+        rect: RectF,
+        count: Int,
+        compact: Boolean,
+    ) {
+        val gap = if (compact) dp(2.8f) else dp(4f)
         val barWidth = (rect.width() - gap * (count - 1)) / count
         for (index in 0 until count) {
-            val sourceIndex = ((index.toFloat() / max(1, count - 1)) * levels.lastIndex).toInt()
-            val level = (levels.getOrNull(sourceIndex) ?: 0f).coerceIn(0f, 1f)
-            val floor = if (snapshot.analyzerRunning) 0.06f else 0.02f
+            val sourceIndex = ((index.toFloat() / max(1, count - 1)) * smoothedLevels.lastIndex).toInt()
+            val level = smoothedLevels.getOrNull(sourceIndex)?.coerceIn(0f, 1f) ?: 0f
+            val floor = if (snapshot.analyzerRunning) .055f else .016f
             val shaped = max(floor, level.pow(.64f))
             val barHeight = rect.height() * shaped
             val left = rect.left + index * (barWidth + gap)
-            fillPaint.color = hsv(132f + index * (225f / count), .84f, 1f, if (snapshot.analyzerRunning) .94f else .35f)
+            fillPaint.color = hsv(
+                colorPhase + 118f + index * (235f / count),
+                .88f,
+                1f,
+                if (snapshot.analyzerRunning) .95f else .34f,
+            )
             canvas.drawRoundRect(
                 RectF(left, rect.bottom - barHeight, left + barWidth, rect.bottom),
                 barWidth * .45f,
@@ -317,18 +433,22 @@ class CapsuleOverlayView(context: Context) : View(context) {
     }
 
     private fun drawRadialLevels(canvas: Canvas, cx: Float, cy: Float, radius: Float) {
-        val levels = snapshot.levels
         val count = 40
-        strokePaint.style = Paint.Style.STROKE
-        strokePaint.strokeCap = Paint.Cap.ROUND
         for (index in 0 until count) {
-            val levelIndex = ((index.toFloat() / count) * levels.size).toInt().coerceAtMost(levels.lastIndex)
-            val level = (levels.getOrNull(levelIndex) ?: 0f).coerceIn(0f, 1f)
-            val shaped = max(if (snapshot.analyzerRunning) .035f else .012f, level.pow(.66f))
+            val levelIndex = ((index.toFloat() / count) * smoothedLevels.size)
+                .toInt()
+                .coerceAtMost(smoothedLevels.lastIndex)
+            val level = smoothedLevels.getOrNull(levelIndex)?.coerceIn(0f, 1f) ?: 0f
+            val shaped = max(if (snapshot.analyzerRunning) .032f else .01f, level.pow(.66f))
             val angle = index.toDouble() / count * PI * 2.0 - PI / 2.0
             val outer = radius + dp(7f) + shaped * dp(35f)
-            strokePaint.color = hsv(125f + index * (235f / count), .84f, 1f, .28f + shaped * .68f)
-            strokePaint.strokeWidth = dp(1.1f) + shaped * dp(2.2f)
+            strokePaint.color = hsv(
+                colorPhase + 118f + index * (235f / count),
+                .88f,
+                1f,
+                .26f + shaped * .70f,
+            )
+            strokePaint.strokeWidth = dp(1.05f) + shaped * dp(2.15f)
             canvas.drawLine(
                 cx + cos(angle).toFloat() * radius,
                 cy + sin(angle).toFloat() * radius,
@@ -354,7 +474,7 @@ class CapsuleOverlayView(context: Context) : View(context) {
         val y = height * .87f
         val xs = floatArrayOf(width * .32f, width * .50f, width * .68f)
         xs.forEachIndexed { index, x ->
-            fillPaint.color = Color.argb(if (index == 1) 96 else 72, 255, 255, 255)
+            fillPaint.color = Color.argb(if (index == 1) 104 else 72, 255, 255, 255)
             canvas.drawCircle(x, y, if (index == 1) dp(26f) else dp(23f), fillPaint)
         }
         fillPaint.color = Color.WHITE
@@ -426,9 +546,11 @@ class CapsuleOverlayView(context: Context) : View(context) {
                 downRawY = event.rawY
                 lastRawX = event.rawX
                 lastRawY = event.rawY
+                downAt = SystemClock.uptimeMillis()
                 moved = false
                 return true
             }
+
             MotionEvent.ACTION_MOVE -> {
                 if (hypot(event.rawX - downRawX, event.rawY - downRawY) > touchSlop) moved = true
                 if (moved) {
@@ -438,11 +560,16 @@ class CapsuleOverlayView(context: Context) : View(context) {
                 }
                 return true
             }
+
             MotionEvent.ACTION_UP -> {
-                if (!moved) handleTap(event.x, event.y)
+                if (!moved) {
+                    val heldFor = SystemClock.uptimeMillis() - downAt
+                    if (heldFor >= 520L) handleLongPress() else handleTap(event.x, event.y)
+                }
                 performClick()
                 return true
             }
+
             MotionEvent.ACTION_CANCEL -> return true
         }
         return super.onTouchEvent(event)
@@ -453,30 +580,52 @@ class CapsuleOverlayView(context: Context) : View(context) {
         return true
     }
 
+    private fun handleLongPress() {
+        val next = when (mode) {
+            CapsuleMode.RIM -> CapsuleMode.COMPACT
+            CapsuleMode.COMPACT -> CapsuleMode.RIM
+            CapsuleMode.EXPANDED -> CapsuleMode.COMPACT
+        }
+        onModeChanged?.invoke(next)
+    }
+
     private fun handleTap(x: Float, y: Float) {
-        if (!expanded) {
-            onExpandedChanged?.invoke(true)
-            return
-        }
-        if (x > width - dp(58f) && y < dp(58f)) {
-            onExpandedChanged?.invoke(false)
-            return
-        }
-        if (y >= height * .80f && y <= height * .95f) {
-            when {
-                x < width * .41f -> MediaControllerBridge.skipPrevious()
-                x > width * .59f -> MediaControllerBridge.skipNext()
-                else -> MediaControllerBridge.togglePlayPause()
+        when (mode) {
+            CapsuleMode.RIM -> onModeChanged?.invoke(CapsuleMode.COMPACT)
+            CapsuleMode.COMPACT -> {
+                if (x > width - dp(30f)) onModeChanged?.invoke(CapsuleMode.RIM)
+                else onModeChanged?.invoke(CapsuleMode.EXPANDED)
             }
-            return
+
+            CapsuleMode.EXPANDED -> {
+                if (x > width - dp(58f) && y < dp(58f)) {
+                    onModeChanged?.invoke(CapsuleMode.COMPACT)
+                    return
+                }
+                if (y >= height * .80f && y <= height * .95f) {
+                    when {
+                        x < width * .41f -> MediaControllerBridge.skipPrevious()
+                        x > width * .59f -> MediaControllerBridge.skipNext()
+                        else -> MediaControllerBridge.togglePlayPause()
+                    }
+                    return
+                }
+                onModeChanged?.invoke(CapsuleMode.COMPACT)
+            }
         }
-        onExpandedChanged?.invoke(false)
     }
 
     private fun dp(value: Float): Float = value * density
 
-    private fun hsv(hue: Float, saturation: Float, value: Float, alpha: Float = 1f): Int {
-        val color = Color.HSVToColor(floatArrayOf((hue % 360f + 360f) % 360f, saturation, value))
+    private fun hsv(
+        hue: Float,
+        saturation: Float,
+        value: Float,
+        alpha: Float = 1f,
+    ): Int {
+        val color = Color.HSVToColor(
+            floatArrayOf((hue % 360f + 360f) % 360f, saturation.coerceIn(0f, 1f), value.coerceIn(0f, 1f)),
+        )
         return Color.argb(
             (alpha.coerceIn(0f, 1f) * 255).toInt(),
             Color.red(color),
