@@ -16,6 +16,7 @@ import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.os.Parcelable
+import android.os.SystemClock
 import android.service.notification.NotificationListenerService
 import android.service.notification.StatusBarNotification
 import kotlin.math.max
@@ -26,6 +27,8 @@ class CapsuleNotificationListener : NotificationListenerService() {
     private lateinit var listenerComponent: ComponentName
     private var activeController: MediaController? = null
     private var listenerRegistered = false
+    private var lastPostedPackage = ""
+    private var lastPostedAtElapsed = 0L
 
     private val controllerCallback = object : MediaController.Callback() {
         override fun onMetadataChanged(metadata: MediaMetadata?) {
@@ -33,16 +36,16 @@ class CapsuleNotificationListener : NotificationListenerService() {
         }
 
         override fun onPlaybackStateChanged(state: PlaybackState?) {
-            publishController(activeController, activeController?.metadata, state)
+            scheduleRefresh(25L)
         }
 
         override fun onSessionDestroyed() {
-            scheduleRefresh(80L)
+            scheduleRefresh(60L)
         }
     }
 
     private val sessionsChangedListener = MediaSessionManager.OnActiveSessionsChangedListener {
-        scheduleRefresh(40L)
+        scheduleRefresh(25L)
     }
 
     override fun onCreate() {
@@ -72,11 +75,15 @@ class CapsuleNotificationListener : NotificationListenerService() {
     }
 
     override fun onNotificationPosted(sbn: StatusBarNotification?) {
-        if (sbn != null && sbn.packageName != packageName) scheduleRefresh(90L)
+        if (sbn != null && sbn.packageName != packageName) {
+            lastPostedPackage = sbn.packageName
+            lastPostedAtElapsed = SystemClock.elapsedRealtime()
+            scheduleRefresh(35L)
+        }
     }
 
     override fun onNotificationRemoved(sbn: StatusBarNotification?) {
-        if (sbn != null && sbn.packageName != packageName) scheduleRefresh(90L)
+        if (sbn != null && sbn.packageName != packageName) scheduleRefresh(60L)
     }
 
     private fun scheduleRefresh(delayMs: Long) {
@@ -87,22 +94,28 @@ class CapsuleNotificationListener : NotificationListenerService() {
     private val refreshRunnable = Runnable { refreshMedia() }
 
     private fun refreshMedia() {
-        val notifications = runCatching { activeNotifications?.toList().orEmpty() }
+        val sourceLock = CapsulePreferences.sourceLock(this)
+        val allNotifications = runCatching { activeNotifications?.toList().orEmpty() }
             .getOrDefault(emptyList())
             .filter { it.packageName != packageName }
 
+        val notifications = allNotifications.filter { sourceLock.matches(it.packageName) }
         val controllers = runCatching {
             sessionManager.getActiveSessions(listenerComponent)
         }.getOrDefault(emptyList()).toMutableList()
 
-        notifications.forEach { sbn ->
+        allNotifications.forEach { sbn ->
+            if (!sourceLock.matches(sbn.packageName)) return@forEach
             val token = mediaSessionToken(sbn.notification) ?: return@forEach
             if (controllers.none { it.sessionToken == token }) {
                 runCatching { MediaController(this, token) }.getOrNull()?.let(controllers::add)
             }
         }
 
-        val selectedController = controllers.maxByOrNull { controllerScore(it, notifications) }
+        val eligibleControllers = controllers.filter { sourceLock.matches(it.packageName) }
+        val activelyPlaying = eligibleControllers.filter { isActivelyPlaying(it.playbackState) }
+        val controllerPool = if (activelyPlaying.isNotEmpty()) activelyPlaying else eligibleControllers
+        val selectedController = controllerPool.maxByOrNull { controllerScore(it, notifications) }
         val selectedNotification = notifications
             .filter(::looksLikeMediaNotification)
             .maxByOrNull(::notificationScore)
@@ -124,42 +137,121 @@ class CapsuleNotificationListener : NotificationListenerService() {
         clearController(removeListener = false)
         if (selectedNotification != null) {
             publishNotification(selectedNotification)
+        } else if (sourceLock != MediaSourceLock.AUTO) {
+            CapsuleRuntime.updateMedia(
+                title = "${sourceLock.label} wartet",
+                artist = "Quelle ist fest angeheftet",
+                packageName = sourceLock.packageNames.firstOrNull().orEmpty(),
+                artwork = null,
+                isPlaying = false,
+            )
         } else {
             CapsuleRuntime.clearMedia()
+        }
+    }
+
+    private fun isActivelyPlaying(state: PlaybackState?): Boolean {
+        return when (state?.state) {
+            PlaybackState.STATE_PLAYING,
+            PlaybackState.STATE_BUFFERING,
+            PlaybackState.STATE_CONNECTING,
+            PlaybackState.STATE_FAST_FORWARDING,
+            PlaybackState.STATE_REWINDING,
+            -> true
+
+            else -> false
         }
     }
 
     private fun controllerScore(
         controller: MediaController,
         notifications: List<StatusBarNotification>,
-    ): Int {
-        var score = when (controller.playbackState?.state) {
-            PlaybackState.STATE_PLAYING -> 240
-            PlaybackState.STATE_BUFFERING -> 220
-            PlaybackState.STATE_CONNECTING -> 190
-            PlaybackState.STATE_PAUSED -> 120
-            PlaybackState.STATE_STOPPED -> 40
-            else -> 20
+    ): Long {
+        val state = controller.playbackState
+        var score = when (state?.state) {
+            PlaybackState.STATE_PLAYING -> 1_200L
+            PlaybackState.STATE_BUFFERING -> 1_080L
+            PlaybackState.STATE_CONNECTING -> 980L
+            PlaybackState.STATE_FAST_FORWARDING,
+            PlaybackState.STATE_REWINDING,
+            -> 900L
+
+            PlaybackState.STATE_PAUSED -> 180L
+            PlaybackState.STATE_STOPPED -> 35L
+            else -> 20L
         }
+
+        val nowElapsed = SystemClock.elapsedRealtime()
+        val updateAge = state?.lastPositionUpdateTime
+            ?.takeIf { it > 0L }
+            ?.let { (nowElapsed - it).coerceAtLeast(0L) }
+            ?: Long.MAX_VALUE
+        score += when {
+            updateAge <= 2_500L -> 520L
+            updateAge <= 8_000L -> 330L
+            updateAge <= 25_000L -> 150L
+            updateAge <= 90_000L -> 55L
+            else -> 0L
+        }
+
         val metadata = controller.metadata
-        if (metadataTitle(metadata).isNotBlank()) score += 55
-        if (metadataArtwork(metadata) != null) score += 20
-        if (controller.packageName.contains("soundcloud", ignoreCase = true)) score += 25
-        if (notifications.any { it.packageName == controller.packageName && looksLikeMediaNotification(it) }) {
-            score += 35
+        if (metadataTitle(metadata).isNotBlank()) score += 80L
+        if (metadataArtwork(metadata) != null) score += 28L
+
+        val matchingNotification = notifications
+            .filter { it.packageName == controller.packageName && looksLikeMediaNotification(it) }
+            .maxByOrNull { it.postTime }
+        if (matchingNotification != null) {
+            score += 100L
+            val age = (System.currentTimeMillis() - matchingNotification.postTime).coerceAtLeast(0L)
+            score += when {
+                age <= 5_000L -> 340L
+                age <= 20_000L -> 190L
+                age <= 90_000L -> 80L
+                else -> 0L
+            }
+        }
+
+        if (
+            controller.packageName == lastPostedPackage &&
+            nowElapsed - lastPostedAtElapsed <= 15_000L
+        ) {
+            score += 360L
+        }
+
+        // A stale Twitch session used to outrank newly started YouTube. In AUTO mode,
+        // only give Twitch the lead when it is truly the freshest active source.
+        if (
+            CapsulePreferences.sourceLock(this) == MediaSourceLock.AUTO &&
+            controller.packageName.startsWith("tv.twitch") &&
+            updateAge > 8_000L
+        ) {
+            score -= 260L
         }
         return score
     }
 
-    private fun notificationScore(sbn: StatusBarNotification): Int {
-        var score = 0
+    private fun notificationScore(sbn: StatusBarNotification): Long {
+        var score = 0L
         val notification = sbn.notification
-        if (mediaSessionToken(notification) != null) score += 180
-        if (notification.category == Notification.CATEGORY_TRANSPORT) score += 120
-        if (sbn.isOngoing) score += 45
-        if (sbn.packageName.contains("soundcloud", ignoreCase = true)) score += 35
-        if (notificationTitle(notification).isNotBlank()) score += 30
-        if (notificationArtwork(notification) != null) score += 10
+        if (mediaSessionToken(notification) != null) score += 380L
+        if (notification.category == Notification.CATEGORY_TRANSPORT) score += 260L
+        if (sbn.isOngoing) score += 100L
+        if (notificationTitle(notification).isNotBlank()) score += 75L
+        if (notificationArtwork(notification) != null) score += 25L
+        val age = (System.currentTimeMillis() - sbn.postTime).coerceAtLeast(0L)
+        score += when {
+            age <= 5_000L -> 400L
+            age <= 20_000L -> 220L
+            age <= 90_000L -> 90L
+            else -> 0L
+        }
+        if (
+            sbn.packageName == lastPostedPackage &&
+            SystemClock.elapsedRealtime() - lastPostedAtElapsed <= 15_000L
+        ) {
+            score += 320L
+        }
         return score
     }
 
@@ -167,7 +259,6 @@ class CapsuleNotificationListener : NotificationListenerService() {
         val notification = sbn.notification
         if (mediaSessionToken(notification) != null) return true
         if (notification.category == Notification.CATEGORY_TRANSPORT) return true
-        if (sbn.packageName.contains("soundcloud", ignoreCase = true) && sbn.isOngoing) return true
         val title = notificationTitle(notification)
         val text = notificationArtist(notification)
         return sbn.isOngoing && title.isNotBlank() && text.isNotBlank()
@@ -201,21 +292,13 @@ class CapsuleNotificationListener : NotificationListenerService() {
             .ifBlank { packageLabel(controller.packageName) }
         val artwork = metadataArtwork(metadata)
             ?: fallback?.let(::notificationArtwork)
-        val playing = when (playbackState?.state) {
-            PlaybackState.STATE_PLAYING,
-            PlaybackState.STATE_BUFFERING,
-            PlaybackState.STATE_CONNECTING,
-            -> true
-
-            else -> false
-        }
 
         CapsuleRuntime.updateMedia(
             title = title,
             artist = artist,
             packageName = controller.packageName,
             artwork = artwork,
-            isPlaying = playing,
+            isPlaying = isActivelyPlaying(playbackState),
         )
     }
 
