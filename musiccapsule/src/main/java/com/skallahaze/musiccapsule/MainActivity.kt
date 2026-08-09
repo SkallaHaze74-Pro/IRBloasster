@@ -30,13 +30,18 @@ class MainActivity : Activity() {
     private lateinit var overlayStateView: TextView
     private lateinit var notificationStateView: TextView
     private lateinit var audioStateView: TextView
+    private lateinit var sourceButton: Button
+    private lateinit var modeButton: Button
+    private lateinit var edgeButton: Button
+    private lateinit var intensityButton: Button
+    private lateinit var previewView: NeonPreviewView
     private lateinit var projectionManager: MediaProjectionManager
     private val mainHandler = Handler(Looper.getMainLooper())
 
     private val refreshRunnable = object : Runnable {
         override fun run() {
             refreshStatus()
-            mainHandler.postDelayed(this, 450L)
+            mainHandler.postDelayed(this, 420L)
         }
     }
 
@@ -60,84 +65,151 @@ class MainActivity : Activity() {
 
     private fun buildContent(): View {
         val scroll = ScrollView(this).apply {
-            setBackgroundColor(Color.rgb(5, 7, 17))
+            background = GradientDrawable(
+                GradientDrawable.Orientation.TL_BR,
+                intArrayOf(Color.rgb(3, 5, 15), Color.rgb(19, 4, 32), Color.rgb(2, 21, 27)),
+            )
             isFillViewport = true
         }
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(dp(18), dp(26), dp(18), dp(30))
+            setPadding(dp(16), dp(23), dp(16), dp(32))
         }
         scroll.addView(root)
 
-        root.addView(text("Music Capsule", 30f, Color.WHITE, bold = true))
-        root.addView(text("Eigenständige Xiaomi-App · nicht mehr an SmartIR gekoppelt", 14f, Color.rgb(173, 192, 219)).apply {
-            setPadding(0, dp(4), 0, dp(18))
+        root.addView(text("MUSIC CAPSULE", 11f, Color.rgb(91, 255, 210), bold = true).apply {
+            letterSpacing = .18f
+        })
+        root.addView(text("Edge Neon 1.1", 31f, Color.WHITE, bold = true).apply {
+            setPadding(0, dp(3), 0, 0)
+        })
+        root.addView(text("Variante 2 · eigenständige Xiaomi-App · 144-Hz-Anfrage", 13f, Color.rgb(177, 194, 222)).apply {
+            setPadding(0, dp(4), 0, dp(14))
         })
 
-        root.addView(infoCard(
-            title = "Warum im Video nichts reagiert hat",
-            body = "HyperOS hat den globalen Android-Visualizer zwar öffnen lassen, aber nur Nullen geliefert. Diese App benutzt deshalb echtes internes Playback-Capture. Außerdem war im Video Schritt 3 noch gelb: Ohne Benachrichtigungszugriff kann SoundCloud weder Titel noch Cover liefern.",
-            accent = Color.rgb(255, 196, 79),
-        ))
-
-        overlayStateView = stateText()
-        root.addView(actionCard(
-            title = "1 · Über anderen Apps anzeigen",
-            body = "Damit die Kapsel über SoundCloud, YouTube Music, Spotify und dem Startbildschirm sichtbar bleibt.",
-            state = overlayStateView,
-            buttonText = "Overlay erlauben",
-        ) { openOverlaySettings() })
-
-        notificationStateView = stateText()
-        root.addView(actionCard(
-            title = "2 · SoundCloud: Cover, Titel und Steuerung",
-            body = "Benachrichtigungszugriff ist zwingend für SoundCloud-Metadaten und MediaSession-Steuerung. Die neue Version liest zusätzlich direkt die Medienbenachrichtigung als Fallback.",
-            state = notificationStateView,
-            buttonText = "Benachrichtigungszugriff öffnen",
-        ) { openNotificationAccess() })
-
-        audioStateView = stateText()
-        root.addView(actionCard(
-            title = "3 · Echter musikgesteuerter Equalizer",
-            body = "Einmal Androids Audio-/Bildschirmfreigabe bestätigen. Es wird nur internes Medienaudio analysiert; nichts wird gespeichert, übertragen oder aufgenommen.",
-            state = audioStateView,
-            buttonText = "Audio + Kapsel starten",
-        ) { startEverything() })
-
-        val controls = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER_VERTICAL
-            setPadding(0, dp(8), 0, dp(12))
+        previewView = NeonPreviewView(this).apply {
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                dp(280),
+            ).also { it.bottomMargin = dp(15) }
         }
-        controls.addView(primaryButton("Nur Kapsel") {
-            if (!Settings.canDrawOverlays(this)) openOverlaySettings() else CapsuleOverlayService.start(this)
-        }, weightedParams())
-        controls.addView(space(dp(10)))
-        controls.addView(outlineButton("Alles stoppen") { stopEverything() }, weightedParams())
-        root.addView(controls)
+        root.addView(previewView)
 
-        statusView = text("Bereit", 14f, Color.rgb(101, 255, 208), bold = true).apply {
-            setPadding(dp(4), dp(8), dp(4), dp(8))
+        root.addView(sectionCard("Medienquelle", Color.rgb(255, 91, 220)).apply {
+            addView(text(
+                "Der AUTO-Modus bewertet jetzt PLAYING-Status, letzte MediaSession-Aktivität und die frischeste Medienbenachrichtigung. Für absolute Sicherheit kannst du YouTube fest anheften – dann darf eine alte Twitch-Session nicht mehr übernehmen.",
+                13.5f,
+                Color.rgb(210, 219, 237),
+            ).apply { setPadding(0, dp(6), 0, dp(11)) })
+            sourceButton = neonButton("Quelle: Automatisch", Color.rgb(91, 255, 210)) {
+                val next = CapsulePreferences.sourceLock(this@MainActivity).next()
+                CapsulePreferences.setSourceLock(this@MainActivity, next)
+                requestNotificationRebind()
+                applyLiveSettings()
+                refreshDesignButtons()
+            }
+            addView(sourceButton, fullButtonParams())
+        })
+
+        root.addView(sectionCard("Variante 2 · Design", Color.rgb(81, 205, 255)).apply {
+            addView(text(
+                "Mehrfarbige Neon-Paneele laufen berührungsfrei am kompletten Displayrand. Das obere Widget ist kleiner; im Randmodus bleiben fast nur die leuchtende Kontur und Mini-Balken sichtbar.",
+                13.5f,
+                Color.rgb(210, 219, 237),
+            ).apply { setPadding(0, dp(6), 0, dp(10)) })
+
+            val rowOne = horizontalRow()
+            edgeButton = neonButton("Paneele: AN", Color.rgb(71, 255, 166)) {
+                val next = !CapsulePreferences.edgePanelsEnabled(this@MainActivity)
+                CapsulePreferences.setEdgePanelsEnabled(this@MainActivity, next)
+                applyLiveSettings()
+                refreshDesignButtons()
+            }
+            modeButton = neonButton("Widget: Klein", Color.rgb(78, 198, 255)) {
+                val next = CapsulePreferences.displayMode(this@MainActivity).next()
+                CapsulePreferences.setDisplayMode(this@MainActivity, next)
+                applyLiveSettings()
+                refreshDesignButtons()
+            }
+            rowOne.addView(edgeButton, weightedButtonParams())
+            rowOne.addView(space(dp(9)))
+            rowOne.addView(modeButton, weightedButtonParams())
+            addView(rowOne)
+
+            intensityButton = neonButton("Neon: 135%", Color.rgb(238, 79, 255)) {
+                CapsulePreferences.nextIntensity(this@MainActivity)
+                applyLiveSettings()
+                refreshDesignButtons()
+            }
+            addView(intensityButton, fullButtonParams(topMargin = 9))
+        })
+
+        root.addView(sectionCard("Einrichtung", Color.rgb(255, 195, 74)).apply {
+            overlayStateView = stateText()
+            addView(permissionRow(
+                title = "1 · Overlay",
+                body = "Kapsel und Seiten-Paneele über anderen Apps",
+                state = overlayStateView,
+                action = "Erlauben",
+            ) { openOverlaySettings() })
+
+            notificationStateView = stateText()
+            addView(permissionRow(
+                title = "2 · Titel / Cover",
+                body = "YouTube, SoundCloud, Spotify und Twitch erkennen",
+                state = notificationStateView,
+                action = "Zugriff",
+            ) { openNotificationAccess() })
+
+            audioStateView = stateText()
+            addView(permissionRow(
+                title = "3 · Echter Equalizer",
+                body = "Internes Medienaudio analysieren; nichts wird gespeichert",
+                state = audioStateView,
+                action = "Audio starten",
+            ) { startEverything() })
+        })
+
+        val controlRow = horizontalRow().apply { setPadding(0, dp(2), 0, dp(12)) }
+        controlRow.addView(primaryButton("LIVE STARTEN") { startEverything() }, weightedButtonParams(height = 52))
+        controlRow.addView(space(dp(10)))
+        controlRow.addView(outlineButton("STOP") { stopEverything() }, weightedButtonParams(height = 52))
+        root.addView(controlRow)
+
+        statusView = text("Bereit", 13.5f, Color.rgb(101, 255, 208), bold = true).apply {
+            setPadding(dp(15), dp(14), dp(15), dp(14))
+            background = gradientRounded(
+                intArrayOf(Color.rgb(15, 19, 32), Color.rgb(25, 10, 38), Color.rgb(5, 27, 29)),
+                dp(20).toFloat(),
+                Color.rgb(71, 83, 112),
+                dp(1).toFloat(),
+            )
         }
-        root.addView(statusView)
+        root.addView(statusView, LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT,
+            LinearLayout.LayoutParams.WRAP_CONTENT,
+        ).also { it.bottomMargin = dp(14) })
 
-        root.addView(infoCard(
-            title = "Bedienung",
-            body = "Kleine Kapsel antippen → großer Hanf-/Neon-Visualizer. Ziehen → Position ändern. Im großen Modus: Vorheriger, Play/Pause und Nächster. Die Balken bleiben ohne echtes Audiosignal bewusst ruhig.",
-            accent = Color.rgb(100, 208, 255),
-        ))
+        root.addView(sectionCard("Bedienung", Color.rgb(105, 255, 205)).apply {
+            addView(text(
+                "Klein/Rand antippen → großer Hanf-Visualizer. Ziehen → Widget verschieben. Im großen Modus: links oben zwischen Klein und Rand wechseln, rechts oben schließen; unten Vorheriger, Play/Pause und Nächster.",
+                13.5f,
+                Color.rgb(210, 219, 237),
+            ))
+        })
 
+        refreshDesignButtons()
         return scroll
     }
 
     private fun startEverything() {
         if (!Settings.canDrawOverlays(this)) {
-            statusView.text = "Zuerst Overlay erlauben und danach erneut Start drücken."
+            statusView.text = "Zuerst Overlay erlauben und danach erneut LIVE STARTEN drücken."
             openOverlaySettings()
             return
         }
         if (!notificationAccessEnabled()) {
-            statusView.text = "Für SoundCloud zuerst Benachrichtigungszugriff aktivieren."
+            statusView.text = "Für die richtige YouTube-/SoundCloud-Anzeige zuerst Benachrichtigungszugriff aktivieren."
             openNotificationAccess()
             return
         }
@@ -153,7 +225,7 @@ class MainActivity : Activity() {
         CapsuleOverlayService.start(this)
         requestNotificationRebind()
         startActivityForResult(projectionManager.createScreenCaptureIntent(), REQUEST_MEDIA_PROJECTION)
-        statusView.text = "Systemfreigabe bestätigen – danach reagiert der Equalizer auf SoundCloud."
+        statusView.text = "Systemfreigabe bestätigen – danach laufen Widget und Edge-Paneele zum echten Medienaudio."
     }
 
     private fun stopEverything() {
@@ -161,7 +233,13 @@ class MainActivity : Activity() {
         startService(Intent(this, PlaybackAnalyzerService::class.java).apply {
             action = PlaybackAnalyzerService.ACTION_STOP
         })
-        statusView.text = "Music Capsule und Audioanalyse werden gestoppt."
+        statusView.text = "Music Capsule, Paneele und Audioanalyse werden gestoppt."
+    }
+
+    private fun applyLiveSettings() {
+        if (CapsuleRuntime.snapshot().overlayRunning) {
+            CapsuleOverlayService.applySettings(this)
+        }
     }
 
     private fun openOverlaySettings() {
@@ -195,24 +273,39 @@ class MainActivity : Activity() {
         val overlay = Settings.canDrawOverlays(this)
         val notification = notificationAccessEnabled()
         val audio = recordAudioAllowed()
-        overlayStateView.text = if (overlay) "✓ Erlaubt" else "! Fehlt"
+        overlayStateView.text = if (overlay) "✓" else "!"
         overlayStateView.setTextColor(if (overlay) Color.rgb(85, 255, 208) else Color.rgb(255, 195, 74))
-        notificationStateView.text = if (notification) "✓ Aktiv – SoundCloud kann gelesen werden" else "! Fehlt – deshalb ‚Keine Wiedergabe‘"
+        notificationStateView.text = if (notification) "✓" else "!"
         notificationStateView.setTextColor(if (notification) Color.rgb(85, 255, 208) else Color.rgb(255, 195, 74))
-        audioStateView.text = if (audio) "✓ RECORD_AUDIO erlaubt" else "! Audiofreigabe fehlt"
+        audioStateView.text = if (audio) "✓" else "!"
         audioStateView.setTextColor(if (audio) Color.rgb(85, 255, 208) else Color.rgb(255, 195, 74))
 
         val snapshot = CapsuleRuntime.snapshot()
+        val sourceLock = CapsulePreferences.sourceLock(this)
         statusView.text = buildString {
-            append(if (snapshot.overlayRunning) "Kapsel LIVE" else "Kapsel aus")
+            append(if (snapshot.overlayRunning) "EDGE NEON LIVE" else "Overlay aus")
             append(" · ")
-            append(if (snapshot.analyzerRunning) "Audioanalyse LIVE" else "Audioanalyse aus")
-            append("\n")
+            append(if (snapshot.analyzerRunning) "FFT LIVE" else "Audioanalyse aus")
+            append(" · Quelle ${sourceLock.label}\n")
             append(snapshot.title)
             if (snapshot.artist.isNotBlank()) append(" — ${snapshot.artist}")
             append("\n")
             append(snapshot.message)
         }
+        refreshDesignButtons()
+    }
+
+    private fun refreshDesignButtons() {
+        if (!::sourceButton.isInitialized) return
+        val source = CapsulePreferences.sourceLock(this)
+        val mode = CapsulePreferences.displayMode(this)
+        val edge = CapsulePreferences.edgePanelsEnabled(this)
+        val intensity = CapsulePreferences.neonIntensity(this)
+        sourceButton.text = "Quelle: ${source.label}"
+        modeButton.text = "Widget: ${if (mode == CapsuleDisplayMode.RIM) "Nur Rand" else "Klein"}"
+        edgeButton.text = "Paneele: ${if (edge) "AN" else "AUS"}"
+        intensityButton.text = "Neon: ${(intensity * 100).toInt()}%"
+        previewView.setConfig(mode, edge, intensity, source)
     }
 
     private fun notificationAccessEnabled(): Boolean {
@@ -249,58 +342,96 @@ class MainActivity : Activity() {
                 },
             )
             CapsuleOverlayService.start(this)
-            statusView.text = "LIVE – SoundCloud starten. Titel/Cover kommen über Schritt 2, FFT über Playback-Capture."
+            statusView.text = "LIVE – Musik starten. In AUTO gewinnt jetzt die frischeste aktive Session; YouTube kann zusätzlich fest angeheftet werden."
         } else {
             statusView.text = "Audiofreigabe abgebrochen."
         }
     }
 
-    private fun actionCard(
+    private fun permissionRow(
         title: String,
         body: String,
         state: TextView,
-        buttonText: String,
+        action: String,
         onClick: () -> Unit,
     ): View {
-        val card = cardContainer()
-        card.addView(text(title, 19f, Color.WHITE, bold = true))
-        card.addView(text(body, 14f, Color.rgb(205, 216, 235)).apply { setPadding(0, dp(7), 0, dp(8)) })
-        card.addView(state)
-        card.addView(primaryButton(buttonText, onClick).apply {
-            val params = LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, dp(48))
-            params.topMargin = dp(10)
-            layoutParams = params
-        })
-        return card
-    }
-
-    private fun infoCard(title: String, body: String, accent: Int): View {
-        val card = cardContainer()
-        card.addView(text(title, 18f, accent, bold = true))
-        card.addView(text(body, 14f, Color.rgb(205, 216, 235)).apply { setPadding(0, dp(7), 0, 0) })
-        return card
-    }
-
-    private fun cardContainer(): LinearLayout {
         return LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            setPadding(dp(17), dp(16), dp(17), dp(16))
-            background = rounded(Color.rgb(29, 31, 41), dp(24).toFloat(), Color.rgb(54, 60, 76), dp(1).toFloat())
-            val params = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT)
-            params.bottomMargin = dp(14)
-            layoutParams = params
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding(0, dp(8), 0, dp(8))
+
+            addView(state, LinearLayout.LayoutParams(dp(28), dp(28)).apply {
+                gravity = Gravity.CENTER_VERTICAL
+                marginEnd = dp(9)
+            })
+
+            addView(LinearLayout(this@MainActivity).apply {
+                orientation = LinearLayout.VERTICAL
+                addView(text(title, 14.5f, Color.WHITE, bold = true))
+                addView(text(body, 11.5f, Color.rgb(171, 187, 213)))
+            }, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
+
+            addView(outlineButton(action, onClick), LinearLayout.LayoutParams(dp(96), dp(42)).apply {
+                marginStart = dp(8)
+            })
         }
     }
 
-    private fun stateText(): TextView = text("Prüfe …", 13f, Color.rgb(255, 195, 74), bold = true)
+    private fun sectionCard(title: String, accent: Int): LinearLayout {
+        return LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(16), dp(15), dp(16), dp(15))
+            background = gradientRounded(
+                intArrayOf(Color.rgb(20, 23, 36), Color.rgb(28, 10, 40), Color.rgb(6, 29, 31)),
+                dp(23).toFloat(),
+                Color.argb(120, Color.red(accent), Color.green(accent), Color.blue(accent)),
+                dp(1).toFloat(),
+            )
+            addView(text(title, 18f, accent, bold = true))
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT,
+            ).also { it.bottomMargin = dp(14) }
+        }
+    }
+
+    private fun horizontalRow(): LinearLayout = LinearLayout(this).apply {
+        orientation = LinearLayout.HORIZONTAL
+        gravity = Gravity.CENTER_VERTICAL
+    }
+
+    private fun stateText(): TextView = text("!", 17f, Color.rgb(255, 195, 74), bold = true).apply {
+        gravity = Gravity.CENTER
+        background = rounded(Color.rgb(37, 40, 55), dp(14).toFloat())
+    }
 
     private fun primaryButton(label: String, onClick: () -> Unit): Button {
         return Button(this).apply {
             text = label
             isAllCaps = false
-            setTextColor(Color.rgb(7, 11, 21))
+            setTextColor(Color.rgb(4, 10, 16))
             textSize = 14f
-            background = rounded(Color.rgb(112, 130, 255), dp(22).toFloat())
+            setTypeface(typeface, android.graphics.Typeface.BOLD)
+            background = gradientRounded(
+                intArrayOf(Color.rgb(74, 255, 187), Color.rgb(71, 202, 255), Color.rgb(219, 77, 255)),
+                dp(23).toFloat(),
+            )
+            setOnClickListener { onClick() }
+        }
+    }
+
+    private fun neonButton(label: String, accent: Int, onClick: () -> Unit): Button {
+        return Button(this).apply {
+            text = label
+            isAllCaps = false
+            setTextColor(Color.WHITE)
+            textSize = 13f
+            background = rounded(
+                Color.rgb(18, 21, 34),
+                dp(20).toFloat(),
+                Color.argb(210, Color.red(accent), Color.green(accent), Color.blue(accent)),
+                dp(1).toFloat(),
+            )
             setOnClickListener { onClick() }
         }
     }
@@ -309,9 +440,14 @@ class MainActivity : Activity() {
         return Button(this).apply {
             text = label
             isAllCaps = false
-            setTextColor(Color.rgb(190, 202, 255))
-            textSize = 14f
-            background = rounded(Color.rgb(23, 26, 38), dp(22).toFloat(), Color.rgb(105, 116, 150), dp(1).toFloat())
+            setTextColor(Color.rgb(205, 215, 255))
+            textSize = 12.5f
+            background = rounded(
+                Color.rgb(20, 23, 35),
+                dp(20).toFloat(),
+                Color.rgb(104, 118, 155),
+                dp(1).toFloat(),
+            )
             setOnClickListener { onClick() }
         }
     }
@@ -325,7 +461,12 @@ class MainActivity : Activity() {
         }
     }
 
-    private fun rounded(fill: Int, radius: Float, stroke: Int? = null, strokeWidth: Float = 0f): GradientDrawable {
+    private fun rounded(
+        fill: Int,
+        radius: Float,
+        stroke: Int? = null,
+        strokeWidth: Float = 0f,
+    ): GradientDrawable {
         return GradientDrawable().apply {
             shape = GradientDrawable.RECTANGLE
             cornerRadius = radius
@@ -334,8 +475,27 @@ class MainActivity : Activity() {
         }
     }
 
-    private fun weightedParams(): LinearLayout.LayoutParams {
-        return LinearLayout.LayoutParams(0, dp(48), 1f)
+    private fun gradientRounded(
+        colors: IntArray,
+        radius: Float,
+        stroke: Int? = null,
+        strokeWidth: Float = 0f,
+    ): GradientDrawable {
+        return GradientDrawable(GradientDrawable.Orientation.TL_BR, colors).apply {
+            shape = GradientDrawable.RECTANGLE
+            cornerRadius = radius
+            if (stroke != null && strokeWidth > 0f) setStroke(strokeWidth.toInt(), stroke)
+        }
+    }
+
+    private fun weightedButtonParams(height: Int = 48): LinearLayout.LayoutParams {
+        return LinearLayout.LayoutParams(0, dp(height), 1f)
+    }
+
+    private fun fullButtonParams(topMargin: Int = 0): LinearLayout.LayoutParams {
+        return LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(48)).apply {
+            this.topMargin = dp(topMargin)
+        }
     }
 
     private fun space(width: Int): View = View(this).apply {
