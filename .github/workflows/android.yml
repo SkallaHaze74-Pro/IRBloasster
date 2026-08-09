@@ -111,11 +111,11 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6
 
-      - name: Validate Music Capsule 1.5.0 Smart Auto Stage
+      - name: Validate Music Capsule 1.5.1 Pattern Sync
         run: |
           grep -F 'include(":musiccapsule")' settings.gradle
           grep -F "applicationId 'com.skallahaze.musiccapsule'" musiccapsule/build.gradle
-          grep -F "versionName '1.5.0'" musiccapsule/build.gradle
+          grep -F "versionName '1.5.1'" musiccapsule/build.gradle
           grep -F 'TARGET_SMALLEST_WIDTH_DP = 393' musiccapsule/src/main/java/com/skallahaze/musiccapsule/XiaomiDisplayProfile.kt
           grep -F 'AutoTuneMode.BALANCED' musiccapsule/src/main/java/com/skallahaze/musiccapsule/CapsulePreferences.kt
           grep -F 'StarMode.BEAT_PLUS' musiccapsule/src/main/java/com/skallahaze/musiccapsule/CapsulePreferences.kt
@@ -156,7 +156,7 @@ jobs:
       - name: Create ephemeral Music Capsule signing key
         run: |
           mkdir -p "$HOME/.musiccapsule"
-          PASS="ci-music-capsule-1.5.0-only"
+          PASS="ci-music-capsule-1.5.1-only"
           keytool -genkeypair \
             -keystore "$HOME/.musiccapsule/music-capsule-release.jks" \
             -storetype PKCS12 \
@@ -189,16 +189,16 @@ jobs:
 
       - name: Prepare Music Capsule artifact
         run: |
-          cp musiccapsule/build/outputs/apk/release/musiccapsule-release.apk MusicCapsule-v1.5.0-CI-ephemeral-signature.apk
-          sha256sum MusicCapsule-v1.5.0-CI-ephemeral-signature.apk > MusicCapsule-v1.5.0-CI-ephemeral-signature.apk.sha256
+          cp musiccapsule/build/outputs/apk/release/musiccapsule-release.apk MusicCapsule-v1.5.1-CI-ephemeral-signature.apk
+          sha256sum MusicCapsule-v1.5.1-CI-ephemeral-signature.apk > MusicCapsule-v1.5.1-CI-ephemeral-signature.apk.sha256
 
       - name: Upload standalone Music Capsule CI APK
         uses: actions/upload-artifact@v7
         with:
-          name: MusicCapsule-v1.5.0-CI-ephemeral-signature-DO-NOT-USE-FOR-UPDATES
+          name: MusicCapsule-v1.5.1-CI-ephemeral-signature-DO-NOT-USE-FOR-UPDATES
           path: |
-            MusicCapsule-v1.5.0-CI-ephemeral-signature.apk
-            MusicCapsule-v1.5.0-CI-ephemeral-signature.apk.sha256
+            MusicCapsule-v1.5.1-CI-ephemeral-signature.apk
+            MusicCapsule-v1.5.1-CI-ephemeral-signature.apk.sha256
             musiccapsule-apksigner-verify.txt
           if-no-files-found: error
           retention-days: 30
@@ -207,7 +207,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: MusicCapsule-v1.5.0-lint
+          name: MusicCapsule-v1.5.1-lint
           path: musiccapsule/build/reports/lint-results-release.html
           if-no-files-found: ignore
           retention-days: 30
