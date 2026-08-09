@@ -4,16 +4,18 @@ import android.content.Context
 
 enum class CapsuleDisplayMode(val storedValue: String, val label: String) {
     MINI("mini", "Kleine Kapsel"),
-    RIM("rim", "Nur Neon-Rand"),
+    RIM("rim", "Mini-Balken"),
+    HIDDEN("hidden", "Ausgeblendet"),
     ;
 
-    fun next(): CapsuleDisplayMode = when (this) {
-        MINI -> RIM
-        RIM -> MINI
+    fun next(): CapsuleDisplayMode {
+        val values = entries
+        return values[(ordinal + 1) % values.size]
     }
 
     companion object {
-        fun from(value: String?): CapsuleDisplayMode = entries.firstOrNull { it.storedValue == value } ?: MINI
+        fun from(value: String?): CapsuleDisplayMode =
+            entries.firstOrNull { it.storedValue == value } ?: MINI
     }
 }
 
@@ -23,26 +25,14 @@ enum class MediaSourceLock(
     val packageNames: Set<String>,
 ) {
     AUTO("auto", "Automatisch", emptySet()),
-    YOUTUBE(
-        "youtube",
-        "YouTube",
-        setOf("com.google.android.youtube"),
-    ),
+    YOUTUBE("youtube", "YouTube", setOf("com.google.android.youtube")),
     YOUTUBE_MUSIC(
         "youtube_music",
         "YouTube Music",
         setOf("com.google.android.apps.youtube.music"),
     ),
-    SOUNDCLOUD(
-        "soundcloud",
-        "SoundCloud",
-        setOf("com.soundcloud.android"),
-    ),
-    SPOTIFY(
-        "spotify",
-        "Spotify",
-        setOf("com.spotify.music"),
-    ),
+    SOUNDCLOUD("soundcloud", "SoundCloud", setOf("com.soundcloud.android")),
+    SPOTIFY("spotify", "Spotify", setOf("com.spotify.music")),
     TWITCH(
         "twitch",
         "Twitch",
@@ -63,14 +53,12 @@ enum class MediaSourceLock(
     }
 
     companion object {
-        fun from(value: String?): MediaSourceLock = entries.firstOrNull { it.storedValue == value } ?: AUTO
+        fun from(value: String?): MediaSourceLock =
+            entries.firstOrNull { it.storedValue == value } ?: AUTO
     }
 }
 
-enum class ReactiveFlowMode(
-    val storedValue: String,
-    val label: String,
-) {
+enum class ReactiveFlowMode(val storedValue: String, val label: String) {
     AUTO("auto", "Beat Auto"),
     INWARD("inward", "Nach innen"),
     OUTWARD("outward", "Nach außen"),
@@ -84,7 +72,8 @@ enum class ReactiveFlowMode(
     }
 
     companion object {
-        fun from(value: String?): ReactiveFlowMode = entries.firstOrNull { it.storedValue == value } ?: AUTO
+        fun from(value: String?): ReactiveFlowMode =
+            entries.firstOrNull { it.storedValue == value } ?: AUTO
     }
 }
 
@@ -93,9 +82,9 @@ enum class BeatFxMode(
     val label: String,
     val multiplier: Float,
 ) {
-    SMOOTH("smooth", "Smooth", .58f),
+    SMOOTH("smooth", "Smooth", .62f),
     REACTIVE("reactive", "Reactive", 1f),
-    BRUTAL("brutal", "Brutal", 1.42f),
+    BRUTAL("brutal", "Brutal", 1.38f),
     ;
 
     fun next(): BeatFxMode {
@@ -104,7 +93,71 @@ enum class BeatFxMode(
     }
 
     companion object {
-        fun from(value: String?): BeatFxMode = entries.firstOrNull { it.storedValue == value } ?: BRUTAL
+        fun from(value: String?): BeatFxMode =
+            entries.firstOrNull { it.storedValue == value } ?: BRUTAL
+    }
+}
+
+enum class VisualLayerMode(val storedValue: String, val label: String) {
+    FULL("full", "Voll"),
+    CLEAN("clean", "Clean"),
+    BORDER_ONLY("border", "Nur Rand"),
+    BORDER_DROP("border_drop", "Rand + Drop"),
+    ;
+
+    fun next(): VisualLayerMode {
+        val values = entries
+        return values[(ordinal + 1) % values.size]
+    }
+
+    companion object {
+        fun from(value: String?): VisualLayerMode =
+            entries.firstOrNull { it.storedValue == value } ?: FULL
+    }
+}
+
+enum class MotionProfile(
+    val storedValue: String,
+    val label: String,
+    val attackRate: Float,
+    val releaseRate: Float,
+) {
+    SILKY("silky", "Seidig", 18f, 8.5f),
+    BALANCED("balanced", "Balance", 25f, 10.5f),
+    DIRECT("direct", "Direkt", 36f, 14f),
+    ;
+
+    fun next(): MotionProfile {
+        val values = entries
+        return values[(ordinal + 1) % values.size]
+    }
+
+    companion object {
+        fun from(value: String?): MotionProfile =
+            entries.firstOrNull { it.storedValue == value } ?: SILKY
+    }
+}
+
+enum class TrailMode(
+    val storedValue: String,
+    val label: String,
+    val beatDecayRate: Float,
+    val particleLifeScale: Float,
+    val silenceFadeRate: Float,
+) {
+    SHORT("short", "Kurz", 5.4f, .78f, 24f),
+    MEDIUM("medium", "Mittel", 4.2f, 1f, 15f),
+    LONG("long", "Lang", 3.1f, 1.28f, 9f),
+    ;
+
+    fun next(): TrailMode {
+        val values = entries
+        return values[(ordinal + 1) % values.size]
+    }
+
+    companion object {
+        fun from(value: String?): TrailMode =
+            entries.firstOrNull { it.storedValue == value } ?: SHORT
     }
 }
 
@@ -117,6 +170,9 @@ object CapsulePreferences {
     private const val KEY_LOCK_SCREEN = "lock_screen"
     private const val KEY_FLOW_MODE = "flow_mode"
     private const val KEY_BEAT_FX = "beat_fx"
+    private const val KEY_VISUAL_LAYER = "visual_layer"
+    private const val KEY_MOTION_PROFILE = "motion_profile"
+    private const val KEY_TRAIL_MODE = "trail_mode"
 
     fun displayMode(context: Context): CapsuleDisplayMode = CapsuleDisplayMode.from(
         prefs(context).getString(KEY_DISPLAY_MODE, CapsuleDisplayMode.MINI.storedValue),
@@ -134,7 +190,8 @@ object CapsulePreferences {
         prefs(context).edit().putString(KEY_SOURCE_LOCK, source.storedValue).apply()
     }
 
-    fun edgePanelsEnabled(context: Context): Boolean = prefs(context).getBoolean(KEY_EDGE_PANELS, true)
+    fun edgePanelsEnabled(context: Context): Boolean =
+        prefs(context).getBoolean(KEY_EDGE_PANELS, true)
 
     fun setEdgePanelsEnabled(context: Context, enabled: Boolean) {
         prefs(context).edit().putBoolean(KEY_EDGE_PANELS, enabled).apply()
@@ -142,10 +199,12 @@ object CapsulePreferences {
 
     fun neonIntensity(context: Context): Float = prefs(context)
         .getFloat(KEY_NEON_INTENSITY, 1.35f)
-        .coerceIn(0.75f, 1.8f)
+        .coerceIn(.75f, 1.8f)
 
     fun setNeonIntensity(context: Context, intensity: Float) {
-        prefs(context).edit().putFloat(KEY_NEON_INTENSITY, intensity.coerceIn(0.75f, 1.8f)).apply()
+        prefs(context).edit()
+            .putFloat(KEY_NEON_INTENSITY, intensity.coerceIn(.75f, 1.8f))
+            .apply()
     }
 
     fun nextIntensity(context: Context): Float {
@@ -159,7 +218,8 @@ object CapsulePreferences {
         return next
     }
 
-    fun lockScreenEnabled(context: Context): Boolean = prefs(context).getBoolean(KEY_LOCK_SCREEN, true)
+    fun lockScreenEnabled(context: Context): Boolean =
+        prefs(context).getBoolean(KEY_LOCK_SCREEN, true)
 
     fun setLockScreenEnabled(context: Context, enabled: Boolean) {
         prefs(context).edit().putBoolean(KEY_LOCK_SCREEN, enabled).apply()
@@ -181,5 +241,30 @@ object CapsulePreferences {
         prefs(context).edit().putString(KEY_BEAT_FX, mode.storedValue).apply()
     }
 
-    private fun prefs(context: Context) = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+    fun visualLayerMode(context: Context): VisualLayerMode = VisualLayerMode.from(
+        prefs(context).getString(KEY_VISUAL_LAYER, VisualLayerMode.FULL.storedValue),
+    )
+
+    fun setVisualLayerMode(context: Context, mode: VisualLayerMode) {
+        prefs(context).edit().putString(KEY_VISUAL_LAYER, mode.storedValue).apply()
+    }
+
+    fun motionProfile(context: Context): MotionProfile = MotionProfile.from(
+        prefs(context).getString(KEY_MOTION_PROFILE, MotionProfile.SILKY.storedValue),
+    )
+
+    fun setMotionProfile(context: Context, profile: MotionProfile) {
+        prefs(context).edit().putString(KEY_MOTION_PROFILE, profile.storedValue).apply()
+    }
+
+    fun trailMode(context: Context): TrailMode = TrailMode.from(
+        prefs(context).getString(KEY_TRAIL_MODE, TrailMode.SHORT.storedValue),
+    )
+
+    fun setTrailMode(context: Context, mode: TrailMode) {
+        prefs(context).edit().putString(KEY_TRAIL_MODE, mode.storedValue).apply()
+    }
+
+    private fun prefs(context: Context) =
+        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
 }
