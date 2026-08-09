@@ -5,7 +5,10 @@ import android.graphics.Bitmap
 data class CapsuleSnapshot(
     val overlayRunning: Boolean = false,
     val analyzerRunning: Boolean = false,
-    val expanded: Boolean = false,
+    val mode: CapsuleMode = CapsuleMode.COMPACT,
+    val edgePanelsEnabled: Boolean = true,
+    val edgeIntensity: Float = 1.12f,
+    val sourceLock: MediaSourceLock = MediaSourceLock.AUTO,
     val message: String = "Music Capsule aus",
     val title: String = "Keine Wiedergabe",
     val artist: String = "",
@@ -15,7 +18,10 @@ data class CapsuleSnapshot(
     val signal: Float = 0f,
     val levels: FloatArray = FloatArray(CapsuleRuntime.BAND_COUNT),
     val source: String = "idle",
-)
+) {
+    val expanded: Boolean
+        get() = mode == CapsuleMode.EXPANDED
+}
 
 object CapsuleRuntime {
     const val BAND_COUNT = 16
@@ -29,18 +35,35 @@ object CapsuleRuntime {
 
     fun updateOverlay(
         running: Boolean,
-        expanded: Boolean = state.expanded,
+        mode: CapsuleMode = state.mode,
+        edgePanelsEnabled: Boolean = state.edgePanelsEnabled,
+        edgeIntensity: Float = state.edgeIntensity,
+        sourceLock: MediaSourceLock = state.sourceLock,
         message: String = state.message,
     ) = synchronized(lock) {
         state = state.copy(
             overlayRunning = running,
-            expanded = expanded,
+            mode = mode,
+            edgePanelsEnabled = edgePanelsEnabled,
+            edgeIntensity = edgeIntensity.coerceIn(0.55f, 1.65f),
+            sourceLock = sourceLock,
             message = message,
         )
     }
 
-    fun updateExpanded(expanded: Boolean) = synchronized(lock) {
-        state = state.copy(expanded = expanded)
+    fun updateMode(mode: CapsuleMode) = synchronized(lock) {
+        state = state.copy(mode = mode)
+    }
+
+    fun updateEdgePanels(enabled: Boolean, intensity: Float = state.edgeIntensity) = synchronized(lock) {
+        state = state.copy(
+            edgePanelsEnabled = enabled,
+            edgeIntensity = intensity.coerceIn(0.55f, 1.65f),
+        )
+    }
+
+    fun updateSourceLock(sourceLock: MediaSourceLock) = synchronized(lock) {
+        state = state.copy(sourceLock = sourceLock)
     }
 
     fun updateAnalyzer(
