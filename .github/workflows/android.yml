@@ -119,7 +119,7 @@ jobs:
           grep -F 'class PlaybackAnalyzerService' musiccapsule/src/main/java/com/skallahaze/musiccapsule/PlaybackAnalyzerService.kt
           grep -F 'class CapsuleNotificationListener' musiccapsule/src/main/java/com/skallahaze/musiccapsule/CapsuleNotificationListener.kt
           grep -F 'class CapsuleMediaSessionPoller' musiccapsule/src/main/java/com/skallahaze/musiccapsule/CapsuleMediaSessionPoller.kt
-          grep -F 'MediaSession watchdog' musiccapsule/src/main/java/com/skallahaze/musiccapsule/CapsuleMediaSessionPoller.kt
+          grep -F 'requestRebindIfNeeded' musiccapsule/src/main/java/com/skallahaze/musiccapsule/CapsuleMediaSessionPoller.kt
           grep -F 'class EdgePanelView' musiccapsule/src/main/java/com/skallahaze/musiccapsule/EdgePanelView.kt
           grep -F 'enum class MediaSourceLock' musiccapsule/src/main/java/com/skallahaze/musiccapsule/CapsulePreferences.kt
           grep -F 'preferredDisplayModeId' musiccapsule/src/main/java/com/skallahaze/musiccapsule/CapsuleOverlayService.kt
