@@ -1,6 +1,7 @@
 package com.skallahaze.musiccapsule
 
 import android.Manifest
+import android.annotation.SuppressLint
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
@@ -77,8 +78,13 @@ class PlaybackAnalyzerService : Service() {
         return START_NOT_STICKY
     }
 
+    @SuppressLint("MissingPermission")
     private fun startCapture(resultCode: Int, resultData: Intent) {
         runCatching {
+            if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
+                error("Audioaufnahme-Berechtigung wurde entzogen")
+            }
+
             val manager = getSystemService(MediaProjectionManager::class.java)
             val mediaProjection = manager.getMediaProjection(resultCode, resultData)
                 ?: error("MediaProjection konnte nicht gestartet werden")
