@@ -161,6 +161,60 @@ enum class TrailMode(
     }
 }
 
+enum class AutoTuneMode(val storedValue: String, val label: String) {
+    OFF("off", "Aus / Manuell"),
+    SOFT("soft", "Auto Soft"),
+    BALANCED("balanced", "Auto Balance"),
+    BRUTAL("brutal", "Auto Brutal"),
+    ;
+
+    fun next(): AutoTuneMode {
+        val values = entries
+        return values[(ordinal + 1) % values.size]
+    }
+
+    companion object {
+        fun from(value: String?): AutoTuneMode =
+            entries.firstOrNull { it.storedValue == value } ?: BALANCED
+    }
+}
+
+enum class StarMode(val storedValue: String, val label: String) {
+    OFF("off", "Aus"),
+    SUBTLE("subtle", "Wenig"),
+    BALANCED("balanced", "Normal"),
+    BEAT_PLUS("beat_plus", "Mehr Beat"),
+    DROP_ONLY("drop_only", "Nur Drops"),
+    ;
+
+    fun next(): StarMode {
+        val values = entries
+        return values[(ordinal + 1) % values.size]
+    }
+
+    companion object {
+        fun from(value: String?): StarMode =
+            entries.firstOrNull { it.storedValue == value } ?: BEAT_PLUS
+    }
+}
+
+enum class StageStyle(val storedValue: String, val label: String) {
+    AMOLED_BLACK("black", "AMOLED Schwarz"),
+    NEON_AURA("aura", "Neon Aura"),
+    LEAF_AURA("leaf", "Hanf Aura"),
+    ;
+
+    fun next(): StageStyle {
+        val values = entries
+        return values[(ordinal + 1) % values.size]
+    }
+
+    companion object {
+        fun from(value: String?): StageStyle =
+            entries.firstOrNull { it.storedValue == value } ?: NEON_AURA
+    }
+}
+
 object CapsulePreferences {
     private const val PREFS = "music_capsule_design"
     private const val KEY_DISPLAY_MODE = "display_mode"
@@ -173,6 +227,10 @@ object CapsulePreferences {
     private const val KEY_VISUAL_LAYER = "visual_layer"
     private const val KEY_MOTION_PROFILE = "motion_profile"
     private const val KEY_TRAIL_MODE = "trail_mode"
+    private const val KEY_AUTO_TUNE = "auto_tune"
+    private const val KEY_STAR_MODE = "star_mode"
+    private const val KEY_STAGE_STYLE = "stage_style"
+    private const val KEY_STAGE_KEEP_AWAKE = "stage_keep_awake"
 
     fun displayMode(context: Context): CapsuleDisplayMode = CapsuleDisplayMode.from(
         prefs(context).getString(KEY_DISPLAY_MODE, CapsuleDisplayMode.MINI.storedValue),
@@ -263,6 +321,37 @@ object CapsulePreferences {
 
     fun setTrailMode(context: Context, mode: TrailMode) {
         prefs(context).edit().putString(KEY_TRAIL_MODE, mode.storedValue).apply()
+    }
+
+    fun autoTuneMode(context: Context): AutoTuneMode = AutoTuneMode.from(
+        prefs(context).getString(KEY_AUTO_TUNE, AutoTuneMode.BALANCED.storedValue),
+    )
+
+    fun setAutoTuneMode(context: Context, mode: AutoTuneMode) {
+        prefs(context).edit().putString(KEY_AUTO_TUNE, mode.storedValue).apply()
+    }
+
+    fun starMode(context: Context): StarMode = StarMode.from(
+        prefs(context).getString(KEY_STAR_MODE, StarMode.BEAT_PLUS.storedValue),
+    )
+
+    fun setStarMode(context: Context, mode: StarMode) {
+        prefs(context).edit().putString(KEY_STAR_MODE, mode.storedValue).apply()
+    }
+
+    fun stageStyle(context: Context): StageStyle = StageStyle.from(
+        prefs(context).getString(KEY_STAGE_STYLE, StageStyle.NEON_AURA.storedValue),
+    )
+
+    fun setStageStyle(context: Context, style: StageStyle) {
+        prefs(context).edit().putString(KEY_STAGE_STYLE, style.storedValue).apply()
+    }
+
+    fun stageKeepAwake(context: Context): Boolean =
+        prefs(context).getBoolean(KEY_STAGE_KEEP_AWAKE, true)
+
+    fun setStageKeepAwake(context: Context, enabled: Boolean) {
+        prefs(context).edit().putBoolean(KEY_STAGE_KEEP_AWAKE, enabled).apply()
     }
 
     private fun prefs(context: Context) =
