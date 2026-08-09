@@ -1,23 +1,25 @@
-package com.skallahaze.irbloasster.capsule
+package com.skallahaze.musiccapsule
 
 import android.media.session.MediaController
 import android.media.session.PlaybackState
 
-object MusicCapsuleMediaController {
+object MediaControllerBridge {
     private val lock = Any()
     private var controller: MediaController? = null
 
-    fun setActive(controller: MediaController?) = synchronized(lock) {
-        this.controller = controller
+    fun setActive(value: MediaController?) = synchronized(lock) {
+        controller = value
     }
 
     fun togglePlayPause(): Boolean = runCatching {
         val active = synchronized(lock) { controller } ?: return false
-        val state = active.playbackState?.state
-        if (state == PlaybackState.STATE_PLAYING || state == PlaybackState.STATE_BUFFERING) {
-            active.transportControls.pause()
-        } else {
-            active.transportControls.play()
+        when (active.playbackState?.state) {
+            PlaybackState.STATE_PLAYING,
+            PlaybackState.STATE_BUFFERING,
+            PlaybackState.STATE_CONNECTING,
+            -> active.transportControls.pause()
+
+            else -> active.transportControls.play()
         }
         true
     }.getOrDefault(false)

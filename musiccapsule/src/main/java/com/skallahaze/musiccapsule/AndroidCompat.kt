@@ -1,4 +1,4 @@
-package com.skallahaze.irbloasster.capsule
+package com.skallahaze.musiccapsule
 
 import android.graphics.Bitmap
 import android.graphics.Canvas
@@ -6,11 +6,8 @@ import android.graphics.Paint
 import android.graphics.Path
 import android.graphics.Rect
 import android.graphics.RectF
-import android.view.View
-import android.view.ViewGroup
-import android.view.WindowManager
 
-internal fun Canvas.drawBitmap(
+internal fun Canvas.drawBitmapCropped(
     bitmap: Bitmap,
     source: RectF,
     destination: RectF,
@@ -25,19 +22,9 @@ internal fun Canvas.drawBitmap(
     drawBitmap(bitmap, sourceRect, destination, paint)
 }
 
-internal fun Canvas.clipRoundRect(
-    rect: RectF,
-    radiusX: Float,
-    radiusY: Float,
-) {
-    val rounded = Path()
-    rounded.addRoundRect(rect, radiusX, radiusY, Path.Direction.CW)
-    clipPath(rounded)
-}
-
-internal fun WindowManager.updateViewLayout(
-    view: View?,
-    params: ViewGroup.LayoutParams,
-) {
-    if (view != null) updateViewLayout(view, params)
+internal fun Canvas.clipRounded(rect: RectF, radiusX: Float, radiusY: Float) {
+    val path = Path().apply {
+        addRoundRect(rect, radiusX, radiusY, Path.Direction.CW)
+    }
+    clipPath(path)
 }

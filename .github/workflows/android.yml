@@ -1,4 +1,4 @@
-name: SmartIR Android APK
+name: SmartIR + Music Capsule Android APKs
 
 on:
   push:
@@ -11,11 +11,11 @@ permissions:
   contents: read
 
 concurrency:
-  group: smartir-${{ github.workflow }}-${{ github.ref }}
+  group: android-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
-  build:
+  smartir-build:
     runs-on: ubuntu-latest
     timeout-minutes: 30
 
@@ -23,7 +23,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6
 
-      - name: Validate webOS visualizer and Android capsule assets
+      - name: Validate SmartIR and webOS assets
         run: |
           node --check webos-audio-bridge/app.js
           node --check webos-audio-bridge/visualizer.js
@@ -31,9 +31,8 @@ jobs:
           grep -F '"version": "0.6.1"' webos-audio-bridge/appinfo.json
           grep -F 'visualizer.js?v=061' webos-audio-bridge/index-v061.html
           grep -F 'HQ Smooth' webos-audio-bridge/index-v061.html
-          grep -F 'class MusicCapsuleOverlayService' app/src/main/java/com/skallahaze/irbloasster/capsule/MusicCapsuleOverlayService.kt
-          grep -F 'class MusicCapsuleNotificationListener' app/src/main/java/com/skallahaze/irbloasster/capsule/MusicCapsuleNotificationListener.kt
-          grep -F "versionName '1.5.0'" app/build.gradle
+          grep -F "versionName '1.5.1'" app/build.gradle
+          ! grep -Fq 'MusicCapsuleActivity' app/src/main/AndroidManifest.xml
 
       - name: Set up JDK 17
         uses: actions/setup-java@v5
@@ -46,10 +45,10 @@ jobs:
         with:
           cache-provider: basic
 
-      - name: Create ephemeral CI signing key
+      - name: Create ephemeral SmartIR signing key
         run: |
           mkdir -p "$HOME/.smartir"
-          PASS="ci-smartir-1.5.0-only"
+          PASS="ci-smartir-1.5.1-only"
           keytool -genkeypair \
             -keystore "$HOME/.smartir/smartir-release.jks" \
             -storetype PKCS12 \
@@ -67,40 +66,127 @@ jobs:
           keyPassword=$PASS
           EOF
 
-      - name: Test, lint and build stable release APK
+      - name: Test, lint and build SmartIR release
         run: |
           chmod +x gradlew
-          ./gradlew --no-daemon --stacktrace clean testDebugUnitTest lintDebug assembleRelease
+          ./gradlew --no-daemon --stacktrace :app:testDebugUnitTest :app:lintDebug :app:assembleRelease
 
-      - name: Verify APK signature schemes
+      - name: Verify SmartIR APK signature
         run: |
           APKSIGNER="$(find "$ANDROID_HOME/build-tools" -type f -name apksigner | sort -V | tail -n1)"
           test -n "$APKSIGNER"
-          "$APKSIGNER" verify --verbose --print-certs app/build/outputs/apk/release/app-release.apk | tee apksigner-verify.txt
-          grep -F "Verified using v2 scheme (APK Signature Scheme v2): true" apksigner-verify.txt
+          "$APKSIGNER" verify --verbose --print-certs app/build/outputs/apk/release/app-release.apk | tee smartir-apksigner-verify.txt
+          grep -F "Verified using v2 scheme (APK Signature Scheme v2): true" smartir-apksigner-verify.txt
 
-      - name: Prepare CI test APK and checksum
+      - name: Prepare SmartIR artifact
         run: |
-          cp app/build/outputs/apk/release/app-release.apk SmartIR-v1.5.0-CI-ephemeral-signature.apk
-          sha256sum SmartIR-v1.5.0-CI-ephemeral-signature.apk > SmartIR-v1.5.0-CI-ephemeral-signature.apk.sha256
+          cp app/build/outputs/apk/release/app-release.apk SmartIR-v1.5.1-CI-ephemeral-signature.apk
+          sha256sum SmartIR-v1.5.1-CI-ephemeral-signature.apk > SmartIR-v1.5.1-CI-ephemeral-signature.apk.sha256
 
-      - name: Upload CI test APK
+      - name: Upload SmartIR CI APK
         uses: actions/upload-artifact@v7
         with:
-          name: SmartIR-v1.5.0-CI-ephemeral-signature-DO-NOT-USE-FOR-UPDATES
+          name: SmartIR-v1.5.1-CI-ephemeral-signature-DO-NOT-USE-FOR-UPDATES
           path: |
-            SmartIR-v1.5.0-CI-ephemeral-signature.apk
-            SmartIR-v1.5.0-CI-ephemeral-signature.apk.sha256
-            apksigner-verify.txt
+            SmartIR-v1.5.1-CI-ephemeral-signature.apk
+            SmartIR-v1.5.1-CI-ephemeral-signature.apk.sha256
+            smartir-apksigner-verify.txt
           if-no-files-found: error
           retention-days: 30
 
-      - name: Upload lint report
+      - name: Upload SmartIR lint report
         if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: SmartIR-v1.5.0-lint
+          name: SmartIR-v1.5.1-lint
           path: app/build/reports/lint-results-debug.html
+          if-no-files-found: ignore
+          retention-days: 30
+
+  music-capsule-build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Validate standalone Music Capsule sources
+        run: |
+          grep -F 'include(":musiccapsule")' settings.gradle
+          grep -F "applicationId 'com.skallahaze.musiccapsule'" musiccapsule/build.gradle
+          grep -F "versionName '1.0.0'" musiccapsule/build.gradle
+          grep -F 'class PlaybackAnalyzerService' musiccapsule/src/main/java/com/skallahaze/musiccapsule/PlaybackAnalyzerService.kt
+          grep -F 'class CapsuleNotificationListener' musiccapsule/src/main/java/com/skallahaze/musiccapsule/CapsuleNotificationListener.kt
+          grep -F 'soundcloud' musiccapsule/src/main/java/com/skallahaze/musiccapsule/CapsuleNotificationListener.kt
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v6
+        with:
+          cache-provider: basic
+
+      - name: Create ephemeral Music Capsule signing key
+        run: |
+          mkdir -p "$HOME/.musiccapsule"
+          PASS="ci-music-capsule-1.0.0-only"
+          keytool -genkeypair \
+            -keystore "$HOME/.musiccapsule/music-capsule-release.jks" \
+            -storetype PKCS12 \
+            -storepass "$PASS" \
+            -alias musiccapsule \
+            -keypass "$PASS" \
+            -keyalg RSA \
+            -keysize 4096 \
+            -validity 10000 \
+            -dname "CN=Music Capsule CI,O=SkallaHaze74-Pro,C=DE" \
+            -noprompt
+          cat > "$HOME/.musiccapsule/signing.properties" <<EOF
+          storePassword=$PASS
+          keyAlias=musiccapsule
+          keyPassword=$PASS
+          EOF
+
+      - name: Lint and build standalone Music Capsule
+        run: |
+          chmod +x gradlew
+          ./gradlew --no-daemon --stacktrace :musiccapsule:lintRelease :musiccapsule:assembleRelease
+
+      - name: Verify Music Capsule APK signature
+        run: |
+          APKSIGNER="$(find "$ANDROID_HOME/build-tools" -type f -name apksigner | sort -V | tail -n1)"
+          test -n "$APKSIGNER"
+          "$APKSIGNER" verify --verbose --print-certs musiccapsule/build/outputs/apk/release/musiccapsule-release.apk | tee musiccapsule-apksigner-verify.txt
+          grep -F "Verified using v2 scheme (APK Signature Scheme v2): true" musiccapsule-apksigner-verify.txt || \
+            grep -F "Verified using v3 scheme (APK Signature Scheme v3): true" musiccapsule-apksigner-verify.txt
+
+      - name: Prepare Music Capsule artifact
+        run: |
+          cp musiccapsule/build/outputs/apk/release/musiccapsule-release.apk MusicCapsule-v1.0.0-CI-ephemeral-signature.apk
+          sha256sum MusicCapsule-v1.0.0-CI-ephemeral-signature.apk > MusicCapsule-v1.0.0-CI-ephemeral-signature.apk.sha256
+
+      - name: Upload standalone Music Capsule CI APK
+        uses: actions/upload-artifact@v7
+        with:
+          name: MusicCapsule-v1.0.0-CI-ephemeral-signature-DO-NOT-USE-FOR-UPDATES
+          path: |
+            MusicCapsule-v1.0.0-CI-ephemeral-signature.apk
+            MusicCapsule-v1.0.0-CI-ephemeral-signature.apk.sha256
+            musiccapsule-apksigner-verify.txt
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Upload Music Capsule lint report
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: MusicCapsule-v1.0.0-lint
+          path: musiccapsule/build/reports/lint-results-release.html
           if-no-files-found: ignore
           retention-days: 30
 
