@@ -120,7 +120,7 @@ jobs:
           grep -F 'AutoTuneMode.BALANCED' musiccapsule/src/main/java/com/skallahaze/musiccapsule/CapsulePreferences.kt
           grep -F 'StarMode.BEAT_PLUS' musiccapsule/src/main/java/com/skallahaze/musiccapsule/CapsulePreferences.kt
           grep -F 'StageStyle.NEON_AURA' musiccapsule/src/main/java/com/skallahaze/musiccapsule/CapsulePreferences.kt
-          grep -F 'BeatPatternMode.INFINITY' musiccapsule/src/main/java/com/skallahaze/musiccapsule/VisualTuningPreferences.kt
+          grep -F 'INFINITY("infinity"' musiccapsule/src/main/java/com/skallahaze/musiccapsule/VisualTuningPreferences.kt
           grep -F 'nextOpacity' musiccapsule/src/main/java/com/skallahaze/musiccapsule/VisualTuningPreferences.kt
           grep -F 'resolveAutoTune' musiccapsule/src/main/java/com/skallahaze/musiccapsule/EdgePanelView.kt
           grep -F 'spawnBeatStars' musiccapsule/src/main/java/com/skallahaze/musiccapsule/EdgePanelView.kt
