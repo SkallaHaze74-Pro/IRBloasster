@@ -111,7 +111,9 @@ class CapsuleOverlayService : Service() {
         params.x = 0
         params.y = dp(if (value) 48f else 30f)
         overlayView?.setExpanded(value)
-        runCatching { windowManager.updateViewLayout(overlayView, params) }
+        overlayView?.let { view ->
+            runCatching { windowManager.updateViewLayout(view, params) }
+        }
         CapsuleRuntime.updateExpanded(value)
     }
 
@@ -123,7 +125,9 @@ class CapsuleOverlayService : Service() {
         val maxY = max(0, screenHeight - params.height)
         params.x = (params.x + dx.toInt()).coerceIn(-maxX, maxX)
         params.y = (params.y + dy.toInt()).coerceIn(0, maxY)
-        runCatching { windowManager.updateViewLayout(overlayView, params) }
+        overlayView?.let { view ->
+            runCatching { windowManager.updateViewLayout(view, params) }
+        }
     }
 
     private fun requestListenerRebind() {
