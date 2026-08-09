@@ -167,7 +167,7 @@ class CapsuleOverlayService : Service() {
             running = true,
             expanded = expanded,
             message = if (CapsuleRuntime.snapshot().analyzerRunning) {
-                "Music Capsule LIVE · Rotation + Sperrbildschirm"
+                "Final Smooth LIVE · Beat Memory aktiv"
             } else {
                 "Music Capsule sichtbar · Audioanalyse noch starten"
             },
@@ -190,6 +190,7 @@ class CapsuleOverlayService : Service() {
         capsuleView = view
         capsuleParams = createCapsuleParams(mode, expanded = false)
         windowManager.addView(view, capsuleParams)
+        updateCapsuleVisibility()
     }
 
     private fun ensureEdgePanel(enabled: Boolean) {
@@ -198,7 +199,6 @@ class CapsuleOverlayService : Service() {
             val params = createEdgeParams()
             edgeView = view
             edgeParams = params
-            // Add behind the touchable capsule. It never intercepts screen touches.
             windowManager.addView(view, params)
             capsuleView?.let { capsule ->
                 capsuleParams?.let { paramsForCapsule ->
@@ -208,6 +208,7 @@ class CapsuleOverlayService : Service() {
                     }
                 }
             }
+            updateCapsuleVisibility()
         } else if (!enabled && edgeView != null) {
             edgeView?.let { runCatching { windowManager.removeView(it) } }
             edgeView = null
@@ -223,7 +224,7 @@ class CapsuleOverlayService : Service() {
             capsuleWidthPx(mode, expanded),
             capsuleHeightPx(mode, expanded),
             overlayWindowType(),
-            baseOverlayFlags(touchable = true),
+            baseOverlayFlags(touchable = mode != CapsuleDisplayMode.HIDDEN),
             PixelFormat.TRANSLUCENT,
         ).apply {
             gravity = Gravity.TOP or Gravity.CENTER_HORIZONTAL
@@ -247,8 +248,6 @@ class CapsuleOverlayService : Service() {
             gravity = Gravity.TOP or Gravity.START
             x = bounds.left
             y = bounds.top
-            // Android 12+ passes touches through an untrusted non-touchable
-            // overlay only below the obscuring-opacity threshold.
             alpha = 0.79f
         }
         configureInsets(params, fullScreen = true)
@@ -269,8 +268,6 @@ class CapsuleOverlayService : Service() {
                 WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL
         }
 
-        // FLAG_SHOW_WHEN_LOCKED is deprecated for Activity lifecycle reasons,
-        // but remains the only LayoutParams hint available to an overlay window.
         @Suppress("DEPRECATION")
         return flags or WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED
     }
@@ -317,9 +314,6 @@ class CapsuleOverlayService : Service() {
     }
 
     private fun screenBounds(): Rect {
-        if (!::displayManager.isInitialized) {
-            displayManager = getSystemService(DisplayManager::class.java)
-        }
         val display = displayManager.getDisplay(Display.DEFAULT_DISPLAY)
         if (display != null) {
             val metrics = DisplayMetrics()
@@ -357,6 +351,10 @@ class CapsuleOverlayService : Service() {
 
     private fun applyCurrentSettings() {
         val mode = CapsulePreferences.displayMode(this)
+        if (mode == CapsuleDisplayMode.HIDDEN && expanded) {
+            expanded = false
+            CapsuleRuntime.updateExpanded(false)
+        }
         capsuleView?.setDisplayMode(mode)
         ensureEdgePanel(CapsulePreferences.edgePanelsEnabled(this))
         updateEdgeLayout()
@@ -367,9 +365,10 @@ class CapsuleOverlayService : Service() {
     }
 
     private fun setExpanded(value: Boolean) {
+        val mode = CapsulePreferences.displayMode(this)
+        if (mode == CapsuleDisplayMode.HIDDEN && value) return
         if (expanded == value) return
         expanded = value
-        val mode = CapsulePreferences.displayMode(this)
         capsuleView?.setExpanded(value)
         updateCapsuleLayout(mode, value, resetPosition = true)
         CapsuleRuntime.updateExpanded(value)
@@ -383,9 +382,8 @@ class CapsuleOverlayService : Service() {
         val params = capsuleParams ?: return
         params.width = capsuleWidthPx(mode, expanded)
         params.height = capsuleHeightPx(mode, expanded)
+        params.flags = baseOverlayFlags(touchable = mode != CapsuleDisplayMode.HIDDEN || expanded)
         if (resetPosition) {
-            // A rotation swaps the screen axes. Re-centering prevents the old
-            // portrait X offset from leaving the widget stuck at the landscape edge.
             params.x = 0
             params.y = capsuleTopPx(mode, expanded)
         } else {
@@ -396,6 +394,15 @@ class CapsuleOverlayService : Service() {
         capsuleView?.let { view ->
             runCatching { windowManager.updateViewLayout(view, params) }
         }
+        updateCapsuleVisibility()
+    }
+
+    private fun updateCapsuleVisibility(forceLocked: Boolean? = null) {
+        val mode = CapsulePreferences.displayMode(this)
+        val locked = forceLocked ?: runCatching { keyguardManager.isKeyguardLocked }.getOrDefault(false)
+        val lockAllowed = !locked || CapsulePreferences.lockScreenEnabled(this)
+        val visible = lockAllowed && (mode != CapsuleDisplayMode.HIDDEN || expanded)
+        capsuleView?.visibility = if (visible) View.VISIBLE else View.INVISIBLE
     }
 
     private fun clampCapsulePosition(params: WindowManager.LayoutParams) {
@@ -408,7 +415,7 @@ class CapsuleOverlayService : Service() {
     }
 
     private fun moveCapsule(dx: Float, dy: Float) {
-        if (expanded) return
+        if (expanded || CapsulePreferences.displayMode(this) == CapsuleDisplayMode.HIDDEN) return
         val params = capsuleParams ?: return
         params.x += dx.toInt()
         params.y += dy.toInt()
@@ -419,12 +426,9 @@ class CapsuleOverlayService : Service() {
     }
 
     private fun applyLockScreenVisibility(forceLocked: Boolean? = null) {
-        if (!::keyguardManager.isInitialized) {
-            keyguardManager = getSystemService(KeyguardManager::class.java)
-        }
         val locked = forceLocked ?: runCatching { keyguardManager.isKeyguardLocked }.getOrDefault(false)
         val allowed = !locked || CapsulePreferences.lockScreenEnabled(this)
-        capsuleView?.visibility = if (allowed) View.VISIBLE else View.INVISIBLE
+        updateCapsuleVisibility(forceLocked = locked)
         edgeView?.visibility = if (allowed && CapsulePreferences.edgePanelsEnabled(this)) {
             View.VISIBLE
         } else {
@@ -455,8 +459,8 @@ class CapsuleOverlayService : Service() {
         )
         return NotificationCompat.Builder(this, CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_capsule)
-            .setContentTitle("Music Capsule · Lock + Rotate")
-            .setContentText("Neonrahmen folgt der Drehung und bleibt auf dem Sperrbildschirm aktiv")
+            .setContentTitle("Music Capsule · Final Smooth")
+            .setContentText("Adaptive Beat Memory, Randmodi und schneller Stille-Fade laufen")
             .setContentIntent(openPending)
             .setOngoing(true)
             .setOnlyAlertOnce(true)
@@ -475,7 +479,7 @@ class CapsuleOverlayService : Service() {
                 "Music Capsule Overlay",
                 NotificationManager.IMPORTANCE_LOW,
             ).apply {
-                description = "Dauerhafte Anzeige für Music Capsule, Rotation und Sperrbildschirm"
+                description = "Music Capsule, Rotation, Sperrbildschirm und Final-Smooth-Effekte"
                 lockscreenVisibility = android.app.Notification.VISIBILITY_PUBLIC
                 setShowBadge(false)
             },
@@ -496,17 +500,17 @@ class CapsuleOverlayService : Service() {
         if (expanded) return min(dp(430f), screenWidth - dp(16f))
         return when (mode) {
             CapsuleDisplayMode.MINI -> min(dp(270f), screenWidth - dp(24f))
-            CapsuleDisplayMode.RIM -> min(dp(205f), screenWidth - dp(34f))
+            CapsuleDisplayMode.RIM -> min(dp(174f), screenWidth - dp(52f))
+            CapsuleDisplayMode.HIDDEN -> 1
         }
     }
 
     private fun capsuleHeightPx(mode: CapsuleDisplayMode, expanded: Boolean): Int {
         if (expanded) return min(dp(560f), screenBounds().height() - dp(110f))
-        // 12 dp transparent/tappable chevron area is included underneath the
-        // visible bar. This fixes taps after the bar is moved over the clock.
         return when (mode) {
             CapsuleDisplayMode.MINI -> dp(60f)
-            CapsuleDisplayMode.RIM -> dp(38f)
+            CapsuleDisplayMode.RIM -> dp(31f)
+            CapsuleDisplayMode.HIDDEN -> 1
         }
     }
 
@@ -514,7 +518,8 @@ class CapsuleOverlayService : Service() {
         if (expanded) return statusBarHeightPx() + dp(8f)
         return when (mode) {
             CapsuleDisplayMode.MINI -> statusBarHeightPx() + dp(2f)
-            CapsuleDisplayMode.RIM -> max(0, statusBarHeightPx() - dp(9f))
+            CapsuleDisplayMode.RIM -> max(0, statusBarHeightPx() - dp(7f))
+            CapsuleDisplayMode.HIDDEN -> 0
         }
     }
 
@@ -542,6 +547,7 @@ class CapsuleOverlayService : Service() {
         edgeView = null
         edgeParams = null
         expanded = false
+        VisualBeatRuntime.clear()
         CapsuleRuntime.updateOverlay(false, expanded = false, message = "Music Capsule aus")
         super.onDestroy()
     }

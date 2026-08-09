@@ -39,6 +39,9 @@ class MainActivity : Activity() {
     private lateinit var lockScreenButton: Button
     private lateinit var flowButton: Button
     private lateinit var beatFxButton: Button
+    private lateinit var visualButton: Button
+    private lateinit var motionButton: Button
+    private lateinit var trailButton: Button
     private lateinit var previewView: NeonPreviewView
     private lateinit var projectionManager: MediaProjectionManager
     private val mainHandler = Handler(Looper.getMainLooper())
@@ -46,7 +49,7 @@ class MainActivity : Activity() {
     private val refreshRunnable = object : Runnable {
         override fun run() {
             refreshStatus()
-            mainHandler.postDelayed(this, 360L)
+            mainHandler.postDelayed(this, 320L)
         }
     }
 
@@ -86,11 +89,11 @@ class MainActivity : Activity() {
         root.addView(text("MUSIC CAPSULE", 11f, Color.rgb(91, 255, 210), bold = true).apply {
             letterSpacing = .18f
         })
-        root.addView(text("Brutal Reactive 1.3.0", 31f, Color.WHITE, bold = true).apply {
+        root.addView(text("Final Smooth 1.4.0", 31f, Color.WHITE, bold = true).apply {
             setPadding(0, dp(3), 0, 0)
         })
         root.addView(text(
-            "${XiaomiDisplayProfile.diagnosticLabel(this)} · ${XiaomiDisplayProfile.TARGET_GPU} · ${XiaomiDisplayProfile.TARGET_GL}",
+            "${XiaomiDisplayProfile.diagnosticLabel(this)} · Adaptive Beat Memory",
             12.5f,
             Color.rgb(170, 195, 226),
         ).apply { setPadding(0, dp(4), 0, dp(13)) })
@@ -103,14 +106,32 @@ class MainActivity : Activity() {
         }
         root.addView(previewView)
 
-        root.addView(sectionCard("Beat Engine · echte Tonbereiche", Color.rgb(255, 79, 212)).apply {
+        root.addView(sectionCard("Final Mix · Smooth + klarer Beat", Color.rgb(255, 79, 212)).apply {
             addView(text(
-                "Bass steuert Shockwaves, Paneel-Druck und Sternenregen. Mitten formen die großen Wellen. Höhen und Spectral Flux beschleunigen Farben, Funken und feine Balken. Neue Beat-Events werden separat erkannt und auf 144-Hz-VSync interpoliert.",
-                13.4f,
+                "Die Grundbewegung ist jetzt weicher, der Beat bekommt aber einen eigenen gehaltenen Impuls. Beat Memory lernt das aktuelle Intervall und ergänzt gelegentlich einen übersehenen Kick. Bei Stille beruhigt sich der Rahmen deutlich schneller.",
+                13.3f,
                 Color.rgb(212, 222, 240),
             ).apply { setPadding(0, dp(6), 0, dp(10)) })
 
-            val row = horizontalRow()
+            val rowOne = horizontalRow()
+            motionButton = neonButton("Bewegung: Seidig", Color.rgb(74, 229, 255)) {
+                val next = CapsulePreferences.motionProfile(this@MainActivity).next()
+                CapsulePreferences.setMotionProfile(this@MainActivity, next)
+                applyLiveSettings()
+                refreshDesignButtons()
+            }
+            trailButton = neonButton("Nachlauf: Kurz", Color.rgb(255, 124, 80)) {
+                val next = CapsulePreferences.trailMode(this@MainActivity).next()
+                CapsulePreferences.setTrailMode(this@MainActivity, next)
+                applyLiveSettings()
+                refreshDesignButtons()
+            }
+            rowOne.addView(motionButton, weightedButtonParams())
+            rowOne.addView(space(dp(9)))
+            rowOne.addView(trailButton, weightedButtonParams())
+            addView(rowOne)
+
+            val rowTwo = horizontalRow().apply { setPadding(0, dp(9), 0, 0) }
             flowButton = neonButton("Flow: Beat Auto", Color.rgb(66, 222, 255)) {
                 val next = CapsulePreferences.flowMode(this@MainActivity).next()
                 CapsulePreferences.setFlowMode(this@MainActivity, next)
@@ -123,42 +144,28 @@ class MainActivity : Activity() {
                 applyLiveSettings()
                 refreshDesignButtons()
             }
-            row.addView(flowButton, weightedButtonParams())
-            row.addView(space(dp(9)))
-            row.addView(beatFxButton, weightedButtonParams())
-            addView(row)
-
-            addView(text(
-                "Beat Auto bleibt überwiegend ›Nach innen‹ und schaltet nach mehreren Beats kurz auf Oben, Unten oder Außen. Brutal aktiviert Sternenregen, Bass-Burst, Farb-Sprünge und Shockwaves.",
-                11.5f,
-                Color.rgb(173, 190, 218),
-            ).apply { setPadding(0, dp(9), 0, 0) })
+            rowTwo.addView(flowButton, weightedButtonParams())
+            rowTwo.addView(space(dp(9)))
+            rowTwo.addView(beatFxButton, weightedButtonParams())
+            addView(rowTwo)
         })
 
-        root.addView(sectionCard("Medienquelle + SoundCloud", Color.rgb(255, 121, 71)).apply {
+        root.addView(sectionCard("Ansicht · alles oder nur Rand", Color.rgb(102, 255, 196)).apply {
             addView(text(
-                "YouTube und erlaubte Apps nutzen sauberes internes Audio. SoundCloud wechselt bei System-only-Capture automatisch zum Lautsprecher-Mikrofon-FFT-Fallback. Nach Root kommt der direkte Systemmix auch für Buds.",
-                13.4f,
+                "Voll zeigt alle Paneele, Symbole und Sterne. Clean entfernt Kleinkram. Nur Rand animiert ausschließlich die Außenkontur. Die Überraschung ›Rand + Drop‹ bleibt ruhig und lässt nur bei einem kräftigen Beat Shockwave und Sternenregen erscheinen.",
+                13.3f,
                 Color.rgb(212, 222, 240),
             ).apply { setPadding(0, dp(6), 0, dp(10)) })
-            sourceButton = neonButton("Quelle: Automatisch", Color.rgb(91, 255, 210)) {
-                val next = CapsulePreferences.sourceLock(this@MainActivity).next()
-                CapsulePreferences.setSourceLock(this@MainActivity, next)
-                requestNotificationRebind()
+
+            visualButton = neonButton("Visual: Voll", Color.rgb(89, 255, 167)) {
+                val next = CapsulePreferences.visualLayerMode(this@MainActivity).next()
+                CapsulePreferences.setVisualLayerMode(this@MainActivity, next)
                 applyLiveSettings()
                 refreshDesignButtons()
             }
-            addView(sourceButton, fullButtonParams())
-        })
+            addView(visualButton, fullButtonParams())
 
-        root.addView(sectionCard("Variante 2 · 393dp Vollbild-Profil", Color.rgb(81, 205, 255)).apply {
-            addView(text(
-                "Die Paneele sind auf 393dp kleinste Breite, 1280×2772 AMOLED, 447 dpi und 144 Hz abgestimmt. Beim Drehen werden die Achsen neu vermessen; der Rahmen bleibt vollflächig und die Kapsel wird neu zentriert.",
-                13.4f,
-                Color.rgb(212, 222, 240),
-            ).apply { setPadding(0, dp(6), 0, dp(10)) })
-
-            val rowOne = horizontalRow()
+            val row = horizontalRow().apply { setPadding(0, dp(9), 0, 0) }
             edgeButton = neonButton("Paneele: AN", Color.rgb(71, 255, 166)) {
                 val next = !CapsulePreferences.edgePanelsEnabled(this@MainActivity)
                 CapsulePreferences.setEdgePanelsEnabled(this@MainActivity, next)
@@ -171,10 +178,10 @@ class MainActivity : Activity() {
                 applyLiveSettings()
                 refreshDesignButtons()
             }
-            rowOne.addView(edgeButton, weightedButtonParams())
-            rowOne.addView(space(dp(9)))
-            rowOne.addView(modeButton, weightedButtonParams())
-            addView(rowOne)
+            row.addView(edgeButton, weightedButtonParams())
+            row.addView(space(dp(9)))
+            row.addView(modeButton, weightedButtonParams())
+            addView(row)
 
             intensityButton = neonButton("Neon: 135%", Color.rgb(238, 79, 255)) {
                 CapsulePreferences.nextIntensity(this@MainActivity)
@@ -183,14 +190,43 @@ class MainActivity : Activity() {
             }
             addView(intensityButton, fullButtonParams(topMargin = 9))
 
+            addView(text(
+                "Widget-Zyklus: Kleine Kapsel → Mini-Balken → Ausgeblendet. Wenn es ausgeblendet ist, kannst du es nur hier in der App wieder einschalten.",
+                11.4f,
+                Color.rgb(173, 190, 218),
+            ).apply { setPadding(0, dp(9), 0, 0) })
+        })
+
+        root.addView(sectionCard("Medienquelle + SoundCloud", Color.rgb(255, 121, 71)).apply {
+            addView(text(
+                "YouTube und erlaubte Apps nutzen sauberes internes Audio. SoundCloud wechselt rootfrei weiterhin zum Lautsprecher-Mikrofon-Fallback; nach Root kommt der direkte Systemmix auch für Buds.",
+                13.3f,
+                Color.rgb(212, 222, 240),
+            ).apply { setPadding(0, dp(6), 0, dp(10)) })
+            sourceButton = neonButton("Quelle: Automatisch", Color.rgb(91, 255, 210)) {
+                val next = CapsulePreferences.sourceLock(this@MainActivity).next()
+                CapsulePreferences.setSourceLock(this@MainActivity, next)
+                requestNotificationRebind()
+                applyLiveSettings()
+                refreshDesignButtons()
+            }
+            addView(sourceButton, fullButtonParams())
+        })
+
+        root.addView(sectionCard("Display + Sperrbildschirm", Color.rgb(81, 205, 255)).apply {
+            addView(text(
+                "Optimiert für 393dp, 1280×2772, 447 dpi und 144 Hz. Rotation wird neu vermessen und der Rahmen bleibt vollflächig.",
+                13.3f,
+                Color.rgb(212, 222, 240),
+            ).apply { setPadding(0, dp(6), 0, dp(10)) })
+
             lockScreenButton = neonButton("Sperrbildschirm: AN", Color.rgb(255, 104, 196)) {
                 val next = !CapsulePreferences.lockScreenEnabled(this@MainActivity)
                 CapsulePreferences.setLockScreenEnabled(this@MainActivity, next)
                 applyLiveSettings()
                 refreshDesignButtons()
             }
-            addView(lockScreenButton, fullButtonParams(topMargin = 9))
-
+            addView(lockScreenButton, fullButtonParams())
             addView(outlineButton("HyperOS App-Info öffnen") { openAppDetails() }, fullButtonParams(topMargin = 9))
         })
 
@@ -240,10 +276,10 @@ class MainActivity : Activity() {
             LinearLayout.LayoutParams.WRAP_CONTENT,
         ).also { it.bottomMargin = dp(14) })
 
-        root.addView(sectionCard("Effekt-Legende", Color.rgb(105, 255, 205)).apply {
+        root.addView(sectionCard("Überraschung · Beat Memory", Color.rgb(105, 255, 205)).apply {
             addView(text(
-                "BASS → Sternenregen + Shockwave + Paneele nach innen. MITTEN → große Seitenwellen. HÖHEN → schnelle Farben + Funken. DROP → Farbsprung, kräftiger Rahmen und Bass-Burst am unteren Rand.",
-                13.4f,
+                "Nach einigen echten Kicks lernt Music Capsule das ungefähre Intervall. Wird ein einzelner Kick vom FFT übersehen, ergänzt die Visualisierung einen vorsichtigen vorhergesagten Impuls. Dadurch bleibt der Beat sichtbar, ohne die Grundbewegung hektisch zu machen.",
+                13.3f,
                 Color.rgb(212, 222, 240),
             ))
         })
@@ -259,7 +295,7 @@ class MainActivity : Activity() {
             return
         }
         if (!notificationAccessEnabled()) {
-            statusView.text = "Für die richtige YouTube-/SoundCloud-Anzeige zuerst Benachrichtigungszugriff aktivieren."
+            statusView.text = "Für die richtige Medienanzeige zuerst Benachrichtigungszugriff aktivieren."
             openNotificationAccess()
             return
         }
@@ -275,7 +311,7 @@ class MainActivity : Activity() {
         CapsuleOverlayService.start(this)
         requestNotificationRebind()
         startActivityForResult(projectionManager.createScreenCaptureIntent(), REQUEST_MEDIA_PROJECTION)
-        statusView.text = "Gesamter Bildschirm freigeben – danach läuft Brutal Reactive zur Musik."
+        statusView.text = "Gesamter Bildschirm freigeben – danach läuft Final Smooth zur Musik."
     }
 
     private fun stopEverything() {
@@ -283,6 +319,7 @@ class MainActivity : Activity() {
         startService(Intent(this, PlaybackAnalyzerService::class.java).apply {
             action = PlaybackAnalyzerService.ACTION_STOP
         })
+        VisualBeatRuntime.clear()
         statusView.text = "Music Capsule, Paneele und Audioanalyse werden gestoppt."
     }
 
@@ -340,17 +377,19 @@ class MainActivity : Activity() {
         audioStateView.setTextColor(if (audio) Color.rgb(85, 255, 208) else Color.rgb(255, 195, 74))
 
         val snapshot = CapsuleRuntime.snapshot()
-        val sourceLock = CapsulePreferences.sourceLock(this)
-        val flow = CapsulePreferences.flowMode(this)
-        val beatFx = CapsulePreferences.beatFxMode(this)
+        val visualBeat = VisualBeatRuntime.snapshot()
+        val bpmText = if (visualBeat.bpm > 0f) "${visualBeat.bpm.toInt()} BPM" else "lernt …"
         statusView.text = buildString {
-            append(if (snapshot.overlayRunning) "BRUTAL NEON LIVE" else "Overlay aus")
+            append(if (snapshot.overlayRunning) "FINAL SMOOTH LIVE" else "Overlay aus")
             append(" · ")
             append(if (snapshot.analyzerRunning) "FFT LIVE" else "Audioanalyse aus")
-            append(" · ${displaySizeLabel()}")
-            append(" · ${XiaomiDisplayProfile.smallestWidthDp(this@MainActivity)}dp")
-            append("\nFlow ${flow.label} · FX ${beatFx.label} · Quelle ${sourceLock.label}")
-            append("\nB ${percent(snapshot.bass)}% · M ${percent(snapshot.mid)}% · H ${percent(snapshot.treble)}% · Beat ${percent(snapshot.beat)}%")
+            append(" · ${displaySizeLabel()} · ${XiaomiDisplayProfile.smallestWidthDp(this@MainActivity)}dp")
+            append("\nVisual ${CapsulePreferences.visualLayerMode(this@MainActivity).label}")
+            append(" · Bewegung ${CapsulePreferences.motionProfile(this@MainActivity).label}")
+            append(" · Nachlauf ${CapsulePreferences.trailMode(this@MainActivity).label}")
+            append("\nB ${percent(snapshot.bass)}% · M ${percent(snapshot.mid)}% · H ${percent(snapshot.treble)}%")
+            append(" · Beat ${percent(visualBeat.pulse)}% · $bpmText")
+            if (visualBeat.predicted) append(" · Memory")
             append("\n")
             append(snapshot.title)
             if (snapshot.artist.isNotBlank()) append(" — ${snapshot.artist}")
@@ -362,30 +401,29 @@ class MainActivity : Activity() {
 
     private fun refreshDesignButtons() {
         if (!::sourceButton.isInitialized) return
-        val source = CapsulePreferences.sourceLock(this)
-        val mode = CapsulePreferences.displayMode(this)
-        val edge = CapsulePreferences.edgePanelsEnabled(this)
-        val intensity = CapsulePreferences.neonIntensity(this)
-        val lockEnabled = CapsulePreferences.lockScreenEnabled(this)
-        val flow = CapsulePreferences.flowMode(this)
-        val beatFx = CapsulePreferences.beatFxMode(this)
-        sourceButton.text = "Quelle: ${source.label}"
-        modeButton.text = "Widget: ${if (mode == CapsuleDisplayMode.RIM) "Nur Rand" else "Klein"}"
-        edgeButton.text = "Paneele: ${if (edge) "AN" else "AUS"}"
-        intensityButton.text = "Neon: ${(intensity * 100).toInt()}%"
-        lockScreenButton.text = "Sperrbildschirm: ${if (lockEnabled) "AN" else "AUS"}"
-        flowButton.text = "Flow: ${flow.label}"
-        beatFxButton.text = "Beat FX: ${beatFx.label}"
-        previewView.setConfig(mode, edge, intensity, source)
+        sourceButton.text = "Quelle: ${CapsulePreferences.sourceLock(this).label}"
+        modeButton.text = "Widget: ${CapsulePreferences.displayMode(this).label}"
+        edgeButton.text = "Paneele: ${if (CapsulePreferences.edgePanelsEnabled(this)) "AN" else "AUS"}"
+        intensityButton.text = "Neon: ${(CapsulePreferences.neonIntensity(this) * 100).toInt()}%"
+        lockScreenButton.text = "Sperrbildschirm: ${if (CapsulePreferences.lockScreenEnabled(this)) "AN" else "AUS"}"
+        flowButton.text = "Flow: ${CapsulePreferences.flowMode(this).label}"
+        beatFxButton.text = "Beat FX: ${CapsulePreferences.beatFxMode(this).label}"
+        visualButton.text = "Visual: ${CapsulePreferences.visualLayerMode(this).label}"
+        motionButton.text = "Bewegung: ${CapsulePreferences.motionProfile(this).label}"
+        trailButton.text = "Nachlauf: ${CapsulePreferences.trailMode(this).label}"
+        previewView.setConfig(
+            CapsulePreferences.displayMode(this),
+            CapsulePreferences.edgePanelsEnabled(this),
+            CapsulePreferences.neonIntensity(this),
+            CapsulePreferences.sourceLock(this),
+        )
     }
 
-    private fun notificationAccessEnabled(): Boolean {
-        return NotificationManagerCompat.getEnabledListenerPackages(this).contains(packageName)
-    }
+    private fun notificationAccessEnabled(): Boolean =
+        NotificationManagerCompat.getEnabledListenerPackages(this).contains(packageName)
 
-    private fun recordAudioAllowed(): Boolean {
-        return ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
-    }
+    private fun recordAudioAllowed(): Boolean =
+        ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
 
     override fun onRequestPermissionsResult(
         requestCode: Int,
@@ -413,7 +451,7 @@ class MainActivity : Activity() {
                 },
             )
             CapsuleOverlayService.start(this)
-            statusView.text = "LIVE – Musik starten. Bass, Mitten, Höhen und Beats werden getrennt ausgewertet."
+            statusView.text = "LIVE – Musik starten. Smoothes Grundsignal und Beat Memory laufen getrennt."
         } else {
             statusView.text = "Audiofreigabe abgebrochen."
         }
@@ -430,18 +468,15 @@ class MainActivity : Activity() {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
             setPadding(0, dp(8), 0, dp(8))
-
             addView(state, LinearLayout.LayoutParams(dp(28), dp(28)).apply {
                 gravity = Gravity.CENTER_VERTICAL
                 marginEnd = dp(9)
             })
-
             addView(LinearLayout(this@MainActivity).apply {
                 orientation = LinearLayout.VERTICAL
                 addView(text(title, 14.5f, Color.WHITE, bold = true))
                 addView(text(body, 11.5f, Color.rgb(171, 187, 213)))
             }, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
-
             addView(outlineButton(action, onClick), LinearLayout.LayoutParams(dp(96), dp(42)).apply {
                 marginStart = dp(8)
             })
@@ -500,7 +535,7 @@ class MainActivity : Activity() {
             minHeight = 0
             minWidth = 0
             setTextColor(Color.WHITE)
-            textSize = 12.4f
+            textSize = 12.3f
             background = rounded(
                 Color.rgb(18, 21, 34),
                 dp(20).toFloat(),
@@ -565,15 +600,13 @@ class MainActivity : Activity() {
         }
     }
 
-    private fun weightedButtonParams(height: Int = 48): LinearLayout.LayoutParams {
-        return LinearLayout.LayoutParams(0, dp(height), 1f)
-    }
+    private fun weightedButtonParams(height: Int = 48): LinearLayout.LayoutParams =
+        LinearLayout.LayoutParams(0, dp(height), 1f)
 
-    private fun fullButtonParams(topMargin: Int = 0): LinearLayout.LayoutParams {
-        return LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(48)).apply {
+    private fun fullButtonParams(topMargin: Int = 0): LinearLayout.LayoutParams =
+        LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(48)).apply {
             this.topMargin = dp(topMargin)
         }
-    }
 
     private fun space(width: Int): View = View(this).apply {
         layoutParams = LinearLayout.LayoutParams(width, 1)
