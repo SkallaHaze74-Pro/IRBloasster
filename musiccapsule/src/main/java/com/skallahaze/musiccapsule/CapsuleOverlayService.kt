@@ -30,6 +30,7 @@ class CapsuleOverlayService : Service() {
     private var capsuleParams: WindowManager.LayoutParams? = null
     private var edgeView: EdgePanelView? = null
     private var edgeParams: WindowManager.LayoutParams? = null
+    private var mediaSessionPoller: CapsuleMediaSessionPoller? = null
     private var expanded = false
 
     private val refreshRunnable = object : Runnable {
@@ -69,6 +70,15 @@ class CapsuleOverlayService : Service() {
         if (intent?.action == ACTION_APPLY_SETTINGS) applyCurrentSettings()
 
         requestListenerRebind()
+        if (mediaSessionPoller == null) {
+            mediaSessionPoller = CapsuleMediaSessionPoller(
+                context = this,
+                requestListenerRebind = ::requestListenerRebind,
+            )
+        }
+        mediaSessionPoller?.start()
+        mediaSessionPoller?.kick()
+
         mainHandler.removeCallbacks(refreshRunnable)
         mainHandler.post(refreshRunnable)
         CapsuleRuntime.updateOverlay(
@@ -189,6 +199,7 @@ class CapsuleOverlayService : Service() {
         ensureEdgePanel(CapsulePreferences.edgePanelsEnabled(this))
         updateCapsuleLayout(mode, expanded)
         requestListenerRebind()
+        mediaSessionPoller?.kick()
     }
 
     private fun setExpanded(value: Boolean) {
@@ -250,7 +261,7 @@ class CapsuleOverlayService : Service() {
         return NotificationCompat.Builder(this, CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_capsule)
             .setContentTitle("Music Capsule · Edge Neon")
-            .setContentText("144-Hz-Paneele und Mini-Widget laufen")
+            .setContentText("144-Hz-Paneele, Mini-Widget und Medien-Watchdog laufen")
             .setContentIntent(openPending)
             .setOngoing(true)
             .setOnlyAlertOnce(true)
@@ -310,6 +321,8 @@ class CapsuleOverlayService : Service() {
 
     override fun onDestroy() {
         mainHandler.removeCallbacks(refreshRunnable)
+        mediaSessionPoller?.stop()
+        mediaSessionPoller = null
         capsuleView?.let { runCatching { windowManager.removeView(it) } }
         edgeView?.let { runCatching { windowManager.removeView(it) } }
         capsuleView = null
