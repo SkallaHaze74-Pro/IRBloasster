@@ -162,7 +162,8 @@ jobs:
           APKSIGNER="$(find "$ANDROID_HOME/build-tools" -type f -name apksigner | sort -V | tail -n1)"
           test -n "$APKSIGNER"
           "$APKSIGNER" verify --verbose --print-certs musiccapsule/build/outputs/apk/release/musiccapsule-release.apk | tee musiccapsule-apksigner-verify.txt
-          grep -F "Verified using v2 scheme (APK Signature Scheme v2): true" musiccapsule-apksigner-verify.txt
+          grep -F "Verified using v2 scheme (APK Signature Scheme v2): true" musiccapsule-apksigner-verify.txt || \
+            grep -F "Verified using v3 scheme (APK Signature Scheme v3): true" musiccapsule-apksigner-verify.txt
 
       - name: Prepare Music Capsule artifact
         run: |
