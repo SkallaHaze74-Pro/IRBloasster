@@ -11,9 +11,12 @@ import android.graphics.Path
 import android.graphics.RadialGradient
 import android.graphics.RectF
 import android.graphics.Shader
+import android.os.SystemClock
 import android.view.View
 import androidx.core.graphics.PathParser
+import java.util.Random
 import kotlin.math.PI
+import kotlin.math.abs
 import kotlin.math.cos
 import kotlin.math.exp
 import kotlin.math.max
@@ -22,7 +25,19 @@ import kotlin.math.sin
 
 /** AMOLED-black full-screen stage used when the phone is lying on a table. */
 class StageBackgroundView(context: Context) : View(context) {
+    private data class PatternPulse(
+        var active: Boolean = false,
+        var type: BeatPatternMode = BeatPatternMode.RECTANGLE,
+        var progress: Float = 0f,
+        var speed: Float = 1f,
+        var strength: Float = 0f,
+        var hue: Float = 0f,
+        var predicted: Boolean = false,
+        var phaseOffset: Float = 0f,
+    )
+
     private val density = resources.displayMetrics.density
+    private val random = Random()
     private val fillPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.FILL }
     private val strokePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         style = Paint.Style.STROKE
@@ -34,7 +49,9 @@ class StageBackgroundView(context: Context) : View(context) {
     ) ?: Path()
     private val transformedLeafPath = Path()
     private val transformMatrix = Matrix()
+    private val patternPath = Path()
     private val displayLevels = FloatArray(CapsuleRuntime.BAND_COUNT)
+    private val patternPulses = Array(MAX_PATTERN_PULSES) { PatternPulse() }
 
     private var style = CapsulePreferences.stageStyle(context)
     private var lastFrameNanos = 0L
@@ -43,6 +60,10 @@ class StageBackgroundView(context: Context) : View(context) {
     private var displayMid = 0f
     private var displayTreble = 0f
     private var displayBeat = 0f
+    private var lastAudioBeatSequence = Long.MIN_VALUE
+    private var lastVisualBeatSequence = Long.MIN_VALUE
+    private var lastPatternAt = 0L
+    private var lastPatternType = BeatPatternMode.INFINITY
 
     init {
         setLayerType(LAYER_TYPE_HARDWARE, null)
@@ -59,14 +80,16 @@ class StageBackgroundView(context: Context) : View(context) {
         super.onDraw(canvas)
         canvas.drawColor(Color.BLACK)
 
-        val now = System.nanoTime()
+        val nowNanos = System.nanoTime()
         val dt = if (lastFrameNanos == 0L) {
             1f / 60f
         } else {
-            ((now - lastFrameNanos) / 1_000_000_000f).coerceIn(1f / 240f, .08f)
+            ((nowNanos - lastFrameNanos) / 1_000_000_000f).coerceIn(1f / 240f, .08f)
         }
-        lastFrameNanos = now
+        lastFrameNanos = nowNanos
+        val nowMs = SystemClock.elapsedRealtime()
 
+        style = CapsulePreferences.stageStyle(context)
         val snapshot = CapsuleRuntime.snapshot()
         val visualBeat = VisualBeatRuntime.snapshot()
         val attack = 1f - exp(-dt * 24f)
@@ -82,13 +105,320 @@ class StageBackgroundView(context: Context) : View(context) {
         displayBeat = max(visualBeat.pulse, displayBeat * exp(-dt * 5.4f))
         phase = (phase + dt * (4f + displayTreble * 64f + displayBeat * 155f)) % 360f
 
+        detectBeatPattern(snapshot, visualBeat, nowMs)
+        updatePatterns(dt)
+
         when (style) {
             StageStyle.AMOLED_BLACK -> drawPureBlackAccent(canvas)
             StageStyle.NEON_AURA -> drawAura(canvas, drawLeaf = false)
             StageStyle.LEAF_AURA -> drawAura(canvas, drawLeaf = true)
         }
+        drawBeatPatterns(canvas)
 
         postInvalidateOnAnimation()
+    }
+
+    private fun detectBeatPattern(
+        snapshot: CapsuleSnapshot,
+        visualBeat: VisualBeatSnapshot,
+        nowMs: Long,
+    ) {
+        if (lastAudioBeatSequence == Long.MIN_VALUE || snapshot.beatSequence < lastAudioBeatSequence) {
+            lastAudioBeatSequence = snapshot.beatSequence
+        }
+        if (lastVisualBeatSequence == Long.MIN_VALUE || visualBeat.sequence < lastVisualBeatSequence) {
+            lastVisualBeatSequence = visualBeat.sequence
+        }
+
+        var triggered = false
+        var predicted = false
+        var strength = 0f
+
+        if (snapshot.beatSequence > lastAudioBeatSequence) {
+            triggered = true
+            strength = max(.32f, max(snapshot.beat, snapshot.bass * .86f))
+            lastAudioBeatSequence = snapshot.beatSequence
+        } else if (
+            visualBeat.sequence > lastVisualBeatSequence &&
+            nowMs - lastPatternAt >= MIN_PATTERN_GAP_MS
+        ) {
+            triggered = true
+            predicted = visualBeat.predicted
+            strength = max(.25f, visualBeat.pulse)
+        }
+        lastVisualBeatSequence = max(lastVisualBeatSequence, visualBeat.sequence)
+
+        if (triggered && nowMs - lastPatternAt >= MIN_PATTERN_GAP_MS) {
+            lastPatternAt = nowMs
+            spawnPattern(
+                type = choosePattern(snapshot),
+                strength = if (predicted) strength * .68f else strength,
+                predicted = predicted,
+            )
+        }
+    }
+
+    /**
+     * Feature-based and intentionally non-sequential. Repeating the same pattern
+     * on consecutive beats is allowed, so the visuals follow the music instead
+     * of walking through a fixed rectangle/up/down list.
+     */
+    private fun choosePattern(snapshot: CapsuleSnapshot): BeatPatternMode {
+        val requested = VisualTuningPreferences.patternMode(context)
+        if (requested != BeatPatternMode.AUTO) return requested
+
+        if (random.nextFloat() < .34f) return lastPatternType
+
+        val bass = max(displayBass, snapshot.bass)
+        val mid = max(displayMid, snapshot.mid)
+        val treble = max(displayTreble, snapshot.treble)
+        val chosen = when {
+            bass > .66f -> weightedChoice(
+                BeatPatternMode.RECTANGLE to 34,
+                BeatPatternMode.INFINITY to 34,
+                BeatPatternMode.DIAMOND to 20,
+                BeatPatternMode.UP_DOWN to 12,
+            )
+            mid > treble * 1.12f -> weightedChoice(
+                BeatPatternMode.INFINITY to 40,
+                BeatPatternMode.HORIZONTAL to 30,
+                BeatPatternMode.RECTANGLE to 20,
+                BeatPatternMode.DIAMOND to 10,
+            )
+            treble > mid * 1.14f -> weightedChoice(
+                BeatPatternMode.UP_DOWN to 37,
+                BeatPatternMode.DIAMOND to 27,
+                BeatPatternMode.HORIZONTAL to 22,
+                BeatPatternMode.INFINITY to 14,
+            )
+            else -> weightedChoice(
+                BeatPatternMode.INFINITY to 28,
+                BeatPatternMode.RECTANGLE to 24,
+                BeatPatternMode.HORIZONTAL to 20,
+                BeatPatternMode.UP_DOWN to 16,
+                BeatPatternMode.DIAMOND to 12,
+            )
+        }
+        lastPatternType = chosen
+        return chosen
+    }
+
+    private fun weightedChoice(vararg choices: Pair<BeatPatternMode, Int>): BeatPatternMode {
+        val total = choices.sumOf { it.second }.coerceAtLeast(1)
+        var value = random.nextInt(total)
+        choices.forEach { choice ->
+            value -= choice.second
+            if (value < 0) return choice.first
+        }
+        return choices.last().first
+    }
+
+    private fun spawnPattern(type: BeatPatternMode, strength: Float, predicted: Boolean) {
+        if (type == BeatPatternMode.OFF) return
+        val pulse = patternPulses.firstOrNull { !it.active }
+            ?: patternPulses.minByOrNull { 1f - it.progress }
+            ?: return
+        pulse.active = true
+        pulse.type = type
+        pulse.progress = 0f
+        pulse.speed = when (type) {
+            BeatPatternMode.INFINITY -> 1.55f
+            BeatPatternMode.RECTANGLE,
+            BeatPatternMode.DIAMOND,
+            -> 1.75f
+            BeatPatternMode.UP_DOWN,
+            BeatPatternMode.HORIZONTAL,
+            -> 2.0f
+            BeatPatternMode.AUTO,
+            BeatPatternMode.OFF,
+            -> 1.7f
+        }
+        pulse.strength = strength.coerceIn(.20f, 1f)
+        pulse.hue = (phase + random.nextFloat() * 145f) % 360f
+        pulse.predicted = predicted
+        pulse.phaseOffset = random.nextFloat() * PI.toFloat() * 2f
+        lastPatternType = type
+    }
+
+    private fun updatePatterns(dt: Float) {
+        patternPulses.forEach { pulse ->
+            if (!pulse.active) return@forEach
+            pulse.progress += dt * pulse.speed
+            if (pulse.progress >= 1f) pulse.active = false
+        }
+    }
+
+    private fun drawBeatPatterns(canvas: Canvas) {
+        val opacity = VisualTuningPreferences.opacity(context)
+        val brightness = CapsulePreferences.neonIntensity(context).coerceIn(.75f, 1.8f)
+        val centerX = width / 2f
+        val centerY = height * .48f
+        val minSide = min(width, height).toFloat()
+
+        patternPulses.forEach { pulse ->
+            if (!pulse.active) return@forEach
+            val p = pulse.progress.coerceIn(0f, 1f)
+            val envelope = sinf(p * PI.toFloat()).coerceAtLeast(0f)
+            val alpha = envelope * pulse.strength *
+                (if (pulse.predicted) .45f else .80f) * opacity
+            if (alpha <= .01f) return@forEach
+            val scale = .58f + p * .66f + pulse.strength * .08f
+            val hue = pulse.hue + p * 95f
+            strokePaint.shader = LinearGradient(
+                centerX - minSide * .42f,
+                centerY - minSide * .25f,
+                centerX + minSide * .42f,
+                centerY + minSide * .25f,
+                intArrayOf(
+                    hsv(hue, .95f, 1f, alpha),
+                    hsv(hue + 105f, .91f, 1f, alpha * .78f),
+                    hsv(hue + 220f, .95f, 1f, alpha),
+                ),
+                null,
+                Shader.TileMode.MIRROR,
+            )
+            strokePaint.strokeWidth = dp(.75f + pulse.strength * 2.15f) *
+                (.78f + brightness * .30f)
+
+            when (pulse.type) {
+                BeatPatternMode.RECTANGLE -> drawRectanglePattern(
+                    canvas,
+                    centerX,
+                    centerY,
+                    minSide,
+                    scale,
+                    pulse,
+                )
+                BeatPatternMode.INFINITY -> drawInfinityPattern(
+                    canvas,
+                    centerX,
+                    centerY,
+                    minSide,
+                    scale,
+                    pulse,
+                )
+                BeatPatternMode.UP_DOWN -> drawUpDownPattern(
+                    canvas,
+                    centerX,
+                    centerY,
+                    minSide,
+                    p,
+                    pulse,
+                )
+                BeatPatternMode.HORIZONTAL -> drawHorizontalPattern(
+                    canvas,
+                    centerX,
+                    centerY,
+                    minSide,
+                    scale,
+                    pulse,
+                )
+                BeatPatternMode.DIAMOND -> drawDiamondPattern(
+                    canvas,
+                    centerX,
+                    centerY,
+                    minSide,
+                    scale,
+                    pulse,
+                )
+                BeatPatternMode.AUTO,
+                BeatPatternMode.OFF,
+                -> Unit
+            }
+            strokePaint.shader = null
+        }
+    }
+
+    private fun drawRectanglePattern(
+        canvas: Canvas,
+        cx: Float,
+        cy: Float,
+        minSide: Float,
+        scale: Float,
+        pulse: PatternPulse,
+    ) {
+        val halfW = minSide * .31f * scale
+        val halfH = minSide * .51f * scale * (1f + displayBass * .10f)
+        val wobble = sinf(pulse.progress * PI.toFloat() * 2f + pulse.phaseOffset) * dp(7f)
+        val rect = RectF(cx - halfW - wobble, cy - halfH, cx + halfW + wobble, cy + halfH)
+        canvas.drawRoundRect(rect, minSide * .055f, minSide * .055f, strokePaint)
+    }
+
+    private fun drawInfinityPattern(
+        canvas: Canvas,
+        cx: Float,
+        cy: Float,
+        minSide: Float,
+        scale: Float,
+        pulse: PatternPulse,
+    ) {
+        patternPath.reset()
+        val a = minSide * .34f * scale
+        val b = minSide * .18f * scale * (1f + displayMid * .12f)
+        val points = 128
+        repeat(points + 1) { index ->
+            val t = index / points.toFloat() * PI.toFloat() * 2f + pulse.phaseOffset * .08f
+            val x = cx + a * sinf(t)
+            val y = cy + b * sinf(t) * cosf(t)
+            if (index == 0) patternPath.moveTo(x, y) else patternPath.lineTo(x, y)
+        }
+        canvas.drawPath(patternPath, strokePaint)
+    }
+
+    private fun drawUpDownPattern(
+        canvas: Canvas,
+        cx: Float,
+        cy: Float,
+        minSide: Float,
+        progress: Float,
+        pulse: PatternPulse,
+    ) {
+        val travel = minSide * .34f * sinf(progress * PI.toFloat())
+        val halfW = minSide * (.20f + pulse.strength * .10f)
+        val wave = sinf(progress * PI.toFloat() * 4f + pulse.phaseOffset) * dp(9f)
+        canvas.drawLine(cx - halfW, cy - travel + wave, cx + halfW, cy - travel - wave, strokePaint)
+        canvas.drawLine(cx - halfW, cy + travel - wave, cx + halfW, cy + travel + wave, strokePaint)
+    }
+
+    private fun drawHorizontalPattern(
+        canvas: Canvas,
+        cx: Float,
+        cy: Float,
+        minSide: Float,
+        scale: Float,
+        pulse: PatternPulse,
+    ) {
+        patternPath.reset()
+        val halfW = minSide * .40f * scale
+        val amplitude = minSide * .08f * (1f + displayTreble * .16f)
+        val points = 96
+        repeat(points + 1) { index ->
+            val normalized = index / points.toFloat()
+            val x = cx - halfW + normalized * halfW * 2f
+            val y = cy + sinf(normalized * PI.toFloat() * 4f + pulse.phaseOffset) * amplitude
+            if (index == 0) patternPath.moveTo(x, y) else patternPath.lineTo(x, y)
+        }
+        canvas.drawPath(patternPath, strokePaint)
+    }
+
+    private fun drawDiamondPattern(
+        canvas: Canvas,
+        cx: Float,
+        cy: Float,
+        minSide: Float,
+        scale: Float,
+        pulse: PatternPulse,
+    ) {
+        val halfW = minSide * .29f * scale
+        val halfH = minSide * .38f * scale * (1f + displayBass * .08f)
+        val twist = sinf(pulse.progress * PI.toFloat()) * minSide * .04f
+        patternPath.reset()
+        patternPath.moveTo(cx, cy - halfH)
+        patternPath.lineTo(cx + halfW + twist, cy)
+        patternPath.lineTo(cx, cy + halfH)
+        patternPath.lineTo(cx - halfW - twist, cy)
+        patternPath.close()
+        canvas.drawPath(patternPath, strokePaint)
     }
 
     private fun drawPureBlackAccent(canvas: Canvas) {
@@ -214,7 +544,12 @@ class StageBackgroundView(context: Context) : View(context) {
         )
         canvas.drawPath(transformedLeafPath, fillPaint)
         fillPaint.shader = null
-        strokePaint.color = Color.argb(190, 239, 255, 249)
+        strokePaint.color = Color.argb(
+            (190f * VisualTuningPreferences.opacity(context)).toInt().coerceIn(0, 255),
+            239,
+            255,
+            249,
+        )
         strokePaint.strokeWidth = dp(1.0f + displayBeat * .5f)
         canvas.drawPath(transformedLeafPath, strokePaint)
     }
@@ -239,12 +574,14 @@ class StageBackgroundView(context: Context) : View(context) {
         val sourceHeight = destination.height() / scale
         val sourceLeft = (bitmap.width - sourceWidth) / 2f
         val sourceTop = (bitmap.height - sourceHeight) / 2f
+        fillPaint.alpha = (255f * VisualTuningPreferences.opacity(context)).toInt().coerceIn(0, 255)
         canvas.drawBitmapCropped(
             bitmap,
             RectF(sourceLeft, sourceTop, sourceLeft + sourceWidth, sourceTop + sourceHeight),
             destination,
             fillPaint,
         )
+        fillPaint.alpha = 255
         canvas.restoreToCount(save)
     }
 
@@ -254,11 +591,15 @@ class StageBackgroundView(context: Context) : View(context) {
     }
 
     private fun hsv(hue: Float, saturation: Float, value: Float, alpha: Float): Int {
+        val brightness = CapsulePreferences.neonIntensity(context).coerceIn(.75f, 1.8f)
+        val opacity = VisualTuningPreferences.opacity(context)
+        val effectiveValue = (value * (.62f + brightness * .34f)).coerceIn(0f, 1f)
+        val effectiveAlpha = (alpha * opacity * (.70f + brightness * .20f)).coerceIn(0f, 1f)
         val color = Color.HSVToColor(
-            floatArrayOf((hue % 360f + 360f) % 360f, saturation, value),
+            floatArrayOf((hue % 360f + 360f) % 360f, saturation, effectiveValue),
         )
         return Color.argb(
-            (alpha.coerceIn(0f, 1f) * 255).toInt(),
+            (effectiveAlpha * 255).toInt(),
             Color.red(color),
             Color.green(color),
             Color.blue(color),
@@ -270,4 +611,9 @@ class StageBackgroundView(context: Context) : View(context) {
     private fun cosf(value: Float): Float = cos(value.toDouble()).toFloat()
 
     private fun dp(value: Float): Float = value * density
+
+    private companion object {
+        const val MAX_PATTERN_PULSES = 7
+        const val MIN_PATTERN_GAP_MS = 115L
+    }
 }

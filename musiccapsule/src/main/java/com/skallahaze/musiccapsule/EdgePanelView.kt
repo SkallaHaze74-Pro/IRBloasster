@@ -140,6 +140,7 @@ class EdgePanelView(context: Context) : View(context) {
         manualStarMode = CapsulePreferences.starMode(context)
         autoTuneMode = CapsulePreferences.autoTuneMode(context)
         visualEnabled = enabled
+        alpha = VisualTuningPreferences.opacity(context)
         for (index in targetLevels.indices) {
             targetLevels[index] = value.levels.getOrNull(index)?.coerceIn(0f, 1f) ?: 0f
         }
@@ -786,11 +787,11 @@ class EdgePanelView(context: Context) : View(context) {
                 zoneEnergy(progress) * dp(4f) +
                 flowBeat * max(beatPulse, beatSparkPulse) * dp(13f)
             val hue = flowingHue(progress, left, flowMode)
-            val alpha = (.24f + level * .68f + beatPulse * .12f + beatSparkPulse * .10f)
+            val alphaValue = (.24f + level * .68f + beatPulse * .12f + beatSparkPulse * .10f)
                 .coerceIn(0f, 1f)
             strokePaint.strokeWidth = dp(1f) + level * dp(2.25f) +
                 beatPulse * dp(.30f) + beatSparkPulse * dp(.18f)
-            strokePaint.color = hsv(hue, .97f, 1f, alpha)
+            strokePaint.color = hsv(hue, .97f, 1f, alphaValue)
             canvas.drawLine(baseX, y, baseX + direction * length, y, strokePaint)
         }
     }
@@ -799,9 +800,9 @@ class EdgePanelView(context: Context) : View(context) {
         val minSide = min(width, height).toFloat()
         shockwaves.forEach { wave ->
             if (!wave.active) return@forEach
-            val alpha = ((1f - wave.progress).pow(1.5f) * wave.strength).coerceIn(0f, 1f)
+            val alphaValue = ((1f - wave.progress).pow(1.5f) * wave.strength).coerceIn(0f, 1f)
             strokePaint.shader = null
-            strokePaint.color = hsv(wave.hue + wave.progress * 90f, .92f, 1f, alpha)
+            strokePaint.color = hsv(wave.hue + wave.progress * 90f, .92f, 1f, alphaValue)
             strokePaint.strokeWidth = dp(.8f) + (1f - wave.progress) * dp(3.5f) * wave.strength
             when (wave.mode) {
                 ReactiveFlowMode.UP -> {
@@ -908,9 +909,9 @@ class EdgePanelView(context: Context) : View(context) {
             val y = dp(11f) + progress * (height - dp(22f))
             val distance = dp(10f) + abs(sinf(seed + now * .37f)) * dp(27f)
             val x = if (leftSide) distance else width - distance
-            val alpha = (.035f + displayTreble * .28f + displayFlux * .15f) *
+            val alphaValue = (.035f + displayTreble * .28f + displayFlux * .15f) *
                 (.42f + abs(sinf(seed + now * 1.3f)) * .58f)
-            fillPaint.color = hsv(colorPhase + progress * 440f + index * 13f, .92f, 1f, alpha)
+            fillPaint.color = hsv(colorPhase + progress * 440f + index * 13f, .92f, 1f, alphaValue)
             canvas.drawCircle(x, y, dp(.46f) + displayTreble * dp(.95f), fillPaint)
         }
     }
@@ -949,9 +950,9 @@ class EdgePanelView(context: Context) : View(context) {
             } else {
                 sinf(progress * PI.toFloat()).coerceAtLeast(0f).pow(.72f)
             }
-            val alpha = (alphaCurve * (.45f + star.strength * .55f)).coerceIn(0f, 1f)
+            val alphaValue = (alphaCurve * (.45f + star.strength * .55f)).coerceIn(0f, 1f)
             val hue = star.hue + progress * if (star.beatSpark) 45f else 85f
-            strokePaint.color = hsv(hue, .90f, 1f, alpha * if (star.beatSpark) .62f else .42f)
+            strokePaint.color = hsv(hue, .90f, 1f, alphaValue * if (star.beatSpark) .62f else .42f)
             strokePaint.strokeWidth = max(dp(.5f), star.size * .27f)
             val trailScale = if (star.beatSpark) 1.7f else 2.6f + star.strength * 2.2f
             canvas.drawLine(
@@ -961,7 +962,7 @@ class EdgePanelView(context: Context) : View(context) {
                 star.y,
                 strokePaint,
             )
-            drawStar(canvas, star.x, star.y, star.size, star.rotation, hue, alpha)
+            drawStar(canvas, star.x, star.y, star.size, star.rotation, hue, alphaValue)
         }
     }
 
@@ -972,7 +973,7 @@ class EdgePanelView(context: Context) : View(context) {
         size: Float,
         rotation: Float,
         hue: Float,
-        alpha: Float,
+        alphaValue: Float,
     ) {
         symbolPath.reset()
         repeat(8) { index ->
@@ -983,7 +984,7 @@ class EdgePanelView(context: Context) : View(context) {
             if (index == 0) symbolPath.moveTo(px, py) else symbolPath.lineTo(px, py)
         }
         symbolPath.close()
-        fillPaint.color = hsv(hue, .78f, 1f, alpha)
+        fillPaint.color = hsv(hue, .78f, 1f, alphaValue)
         canvas.drawPath(symbolPath, fillPaint)
     }
 
@@ -1098,12 +1099,12 @@ class EdgePanelView(context: Context) : View(context) {
         return total / values.size
     }
 
-    private fun hsv(hue: Float, saturation: Float, value: Float, alpha: Float): Int {
+    private fun hsv(hue: Float, saturation: Float, value: Float, alphaValue: Float): Int {
         val color = Color.HSVToColor(
             floatArrayOf((hue % 360f + 360f) % 360f, saturation, value),
         )
         return Color.argb(
-            (alpha.coerceIn(0f, 1f) * 255).toInt(),
+            (alphaValue.coerceIn(0f, 1f) * 255).toInt(),
             Color.red(color),
             Color.green(color),
             Color.blue(color),
