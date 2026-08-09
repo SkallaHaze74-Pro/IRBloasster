@@ -111,29 +111,25 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6
 
-      - name: Validate Music Capsule 1.3.0 Brutal Reactive
+      - name: Validate Music Capsule 1.4.0 Final Smooth
         run: |
           grep -F 'include(":musiccapsule")' settings.gradle
           grep -F "applicationId 'com.skallahaze.musiccapsule'" musiccapsule/build.gradle
-          grep -F "versionName '1.3.0'" musiccapsule/build.gradle
+          grep -F "versionName '1.4.0'" musiccapsule/build.gradle
           grep -F 'TARGET_SMALLEST_WIDTH_DP = 393' musiccapsule/src/main/java/com/skallahaze/musiccapsule/XiaomiDisplayProfile.kt
-          grep -F 'TARGET_WIDTH_PX = 1280' musiccapsule/src/main/java/com/skallahaze/musiccapsule/XiaomiDisplayProfile.kt
-          grep -F 'TARGET_HEIGHT_PX = 2772' musiccapsule/src/main/java/com/skallahaze/musiccapsule/XiaomiDisplayProfile.kt
-          grep -F 'TARGET_REFRESH_HZ = 144' musiccapsule/src/main/java/com/skallahaze/musiccapsule/XiaomiDisplayProfile.kt
-          grep -F 'ReactiveFlowMode' musiccapsule/src/main/java/com/skallahaze/musiccapsule/CapsulePreferences.kt
-          grep -F 'BeatFxMode.BRUTAL' musiccapsule/src/main/java/com/skallahaze/musiccapsule/CapsulePreferences.kt
-          grep -F 'spectralFlux' musiccapsule/src/main/java/com/skallahaze/musiccapsule/CapsuleRuntime.kt
-          grep -F 'beatSequence' musiccapsule/src/main/java/com/skallahaze/musiccapsule/PlaybackAnalyzerService.kt
-          grep -F 'detectFeatures' musiccapsule/src/main/java/com/skallahaze/musiccapsule/PlaybackAnalyzerService.kt
-          grep -F 'spawnStars' musiccapsule/src/main/java/com/skallahaze/musiccapsule/EdgePanelView.kt
-          grep -F 'drawShockwaves' musiccapsule/src/main/java/com/skallahaze/musiccapsule/EdgePanelView.kt
-          grep -F 'drawStarRain' musiccapsule/src/main/java/com/skallahaze/musiccapsule/EdgePanelView.kt
-          grep -F 'Brutal Reactive 1.3.0' musiccapsule/src/main/java/com/skallahaze/musiccapsule/MainActivity.kt
+          grep -F 'CapsuleDisplayMode.HIDDEN' musiccapsule/src/main/java/com/skallahaze/musiccapsule/CapsuleOverlayService.kt
+          grep -F 'VisualLayerMode.BORDER_ONLY' musiccapsule/src/main/java/com/skallahaze/musiccapsule/EdgePanelView.kt
+          grep -F 'VisualLayerMode.BORDER_DROP' musiccapsule/src/main/java/com/skallahaze/musiccapsule/EdgePanelView.kt
+          grep -F 'MotionProfile.SILKY' musiccapsule/src/main/java/com/skallahaze/musiccapsule/CapsulePreferences.kt
+          grep -F 'TrailMode.SHORT' musiccapsule/src/main/java/com/skallahaze/musiccapsule/CapsulePreferences.kt
+          grep -F 'maybePredictBeat' musiccapsule/src/main/java/com/skallahaze/musiccapsule/EdgePanelView.kt
+          grep -F 'SILENCE_SNAP_MS' musiccapsule/src/main/java/com/skallahaze/musiccapsule/EdgePanelView.kt
+          grep -F 'object VisualBeatRuntime' musiccapsule/src/main/java/com/skallahaze/musiccapsule/VisualBeatRuntime.kt
+          grep -F 'Rand + Drop' musiccapsule/src/main/java/com/skallahaze/musiccapsule/MainActivity.kt
           grep -F 'MICROPHONE_FALLBACK' musiccapsule/src/main/java/com/skallahaze/musiccapsule/PlaybackAnalyzerService.kt
           grep -F 'FLAG_SHOW_WHEN_LOCKED' musiccapsule/src/main/java/com/skallahaze/musiccapsule/CapsuleOverlayService.kt
           grep -F 'registerDisplayListener' musiccapsule/src/main/java/com/skallahaze/musiccapsule/CapsuleOverlayService.kt
           grep -F 'onConfigurationChanged' musiccapsule/src/main/java/com/skallahaze/musiccapsule/CapsuleOverlayService.kt
-          grep -F 'display.getRealMetrics' musiccapsule/src/main/java/com/skallahaze/musiccapsule/CapsuleOverlayService.kt
           grep -F 'setFitInsetsTypes(0)' musiccapsule/src/main/java/com/skallahaze/musiccapsule/CapsuleOverlayService.kt
           grep -F 'LAYOUT_IN_DISPLAY_CUTOUT_MODE_ALWAYS' musiccapsule/src/main/java/com/skallahaze/musiccapsule/CapsuleOverlayService.kt
           grep -F 'drawExpandHandle' musiccapsule/src/main/java/com/skallahaze/musiccapsule/CapsuleOverlayView.kt
@@ -152,7 +148,7 @@ jobs:
       - name: Create ephemeral Music Capsule signing key
         run: |
           mkdir -p "$HOME/.musiccapsule"
-          PASS="ci-music-capsule-1.3.0-only"
+          PASS="ci-music-capsule-1.4.0-only"
           keytool -genkeypair \
             -keystore "$HOME/.musiccapsule/music-capsule-release.jks" \
             -storetype PKCS12 \
@@ -185,16 +181,16 @@ jobs:
 
       - name: Prepare Music Capsule artifact
         run: |
-          cp musiccapsule/build/outputs/apk/release/musiccapsule-release.apk MusicCapsule-v1.3.0-CI-ephemeral-signature.apk
-          sha256sum MusicCapsule-v1.3.0-CI-ephemeral-signature.apk > MusicCapsule-v1.3.0-CI-ephemeral-signature.apk.sha256
+          cp musiccapsule/build/outputs/apk/release/musiccapsule-release.apk MusicCapsule-v1.4.0-CI-ephemeral-signature.apk
+          sha256sum MusicCapsule-v1.4.0-CI-ephemeral-signature.apk > MusicCapsule-v1.4.0-CI-ephemeral-signature.apk.sha256
 
       - name: Upload standalone Music Capsule CI APK
         uses: actions/upload-artifact@v7
         with:
-          name: MusicCapsule-v1.3.0-CI-ephemeral-signature-DO-NOT-USE-FOR-UPDATES
+          name: MusicCapsule-v1.4.0-CI-ephemeral-signature-DO-NOT-USE-FOR-UPDATES
           path: |
-            MusicCapsule-v1.3.0-CI-ephemeral-signature.apk
-            MusicCapsule-v1.3.0-CI-ephemeral-signature.apk.sha256
+            MusicCapsule-v1.4.0-CI-ephemeral-signature.apk
+            MusicCapsule-v1.4.0-CI-ephemeral-signature.apk.sha256
             musiccapsule-apksigner-verify.txt
           if-no-files-found: error
           retention-days: 30
@@ -203,7 +199,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: MusicCapsule-v1.3.0-lint
+          name: MusicCapsule-v1.4.0-lint
           path: musiccapsule/build/reports/lint-results-release.html
           if-no-files-found: ignore
           retention-days: 30
