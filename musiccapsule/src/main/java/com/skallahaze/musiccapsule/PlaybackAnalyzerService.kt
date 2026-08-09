@@ -9,9 +9,12 @@ import android.app.Service
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.media.AudioAttributes
+import android.media.AudioDeviceInfo
 import android.media.AudioFormat
+import android.media.AudioManager
 import android.media.AudioPlaybackCaptureConfiguration
 import android.media.AudioRecord
+import android.media.MediaRecorder
 import android.media.projection.MediaProjection
 import android.media.projection.MediaProjectionManager
 import android.os.Build
@@ -31,14 +34,32 @@ import kotlin.math.max
 import kotlin.math.sqrt
 
 class PlaybackAnalyzerService : Service() {
+    private enum class AnalyzerMode {
+        PLAYBACK_CAPTURE,
+        MICROPHONE_FALLBACK,
+    }
+
+    private val mainHandler = Handler(Looper.getMainLooper())
     private var projection: MediaProjection? = null
     private var recorder: AudioRecord? = null
     private var captureThread: Thread? = null
     private var wakeLock: PowerManager.WakeLock? = null
+    private var projectionCallback: MediaProjection.Callback? = null
 
     @Volatile
     private var running = false
 
+    @Volatile
+    private var switchingMode = false
+
+    @Volatile
+    private var shuttingDown = false
+
+    private var recorderGeneration = 0
+    private var analyzerMode = AnalyzerMode.PLAYBACK_CAPTURE
+    private var playbackSilenceSince = 0L
+    private var nonSoundCloudSince = 0L
+    private var lastFallbackWarningAt = 0L
     private val smoothedLevels = FloatArray(CapsuleRuntime.BAND_COUNT)
     private var lastSignalAt = 0L
     private var lastPublishAt = 0L
@@ -47,6 +68,7 @@ class PlaybackAnalyzerService : Service() {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         if (intent?.action == ACTION_STOP) {
+            shuttingDown = true
             stopSelf()
             return START_NOT_STICKY
         }
@@ -74,87 +96,42 @@ class PlaybackAnalyzerService : Service() {
             return START_NOT_STICKY
         }
 
-        if (!running) startCapture(resultCode, resultData)
+        restartPlaybackCapture(resultCode, resultData)
         return START_NOT_STICKY
     }
 
     @SuppressLint("MissingPermission")
-    private fun startCapture(resultCode: Int, resultData: Intent) {
+    private fun restartPlaybackCapture(resultCode: Int, resultData: Intent) {
         runCatching {
             if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
                 error("Audioaufnahme-Berechtigung wurde entzogen")
             }
 
+            switchingMode = true
+            stopRecorderOnly()
+            releaseProjectionOnly()
+            smoothedLevels.fill(0f)
+            playbackSilenceSince = 0L
+            nonSoundCloudSince = 0L
+            analyzerMode = AnalyzerMode.PLAYBACK_CAPTURE
+
             val manager = getSystemService(MediaProjectionManager::class.java)
             val mediaProjection = manager.getMediaProjection(resultCode, resultData)
                 ?: error("MediaProjection konnte nicht gestartet werden")
             projection = mediaProjection
-            mediaProjection.registerCallback(
-                object : MediaProjection.Callback() {
-                    override fun onStop() {
-                        stopSelf()
-                    }
-                },
-                Handler(Looper.getMainLooper()),
-            )
 
-            val captureConfig = AudioPlaybackCaptureConfiguration.Builder(mediaProjection)
-                .addMatchingUsage(AudioAttributes.USAGE_MEDIA)
-                .addMatchingUsage(AudioAttributes.USAGE_GAME)
-                .addMatchingUsage(AudioAttributes.USAGE_UNKNOWN)
-                .build()
-
-            val format = AudioFormat.Builder()
-                .setEncoding(AudioFormat.ENCODING_PCM_16BIT)
-                .setSampleRate(SAMPLE_RATE)
-                .setChannelMask(AudioFormat.CHANNEL_IN_STEREO)
-                .build()
-
-            val minBuffer = AudioRecord.getMinBufferSize(
-                SAMPLE_RATE,
-                AudioFormat.CHANNEL_IN_STEREO,
-                AudioFormat.ENCODING_PCM_16BIT,
-            )
-            val record = AudioRecord.Builder()
-                .setAudioFormat(format)
-                .setAudioPlaybackCaptureConfig(captureConfig)
-                .setBufferSizeInBytes(max(minBuffer * 2, 16_384))
-                .build()
-
-            if (record.state != AudioRecord.STATE_INITIALIZED) {
-                record.release()
-                error("AudioRecord konnte nicht initialisiert werden")
-            }
-
-            recorder = record
-            acquireWakeLock()
-            running = true
-            lastSignalAt = System.currentTimeMillis()
-            record.startRecording()
-            CapsuleRuntime.updateAnalyzer(
-                running = true,
-                message = "Audioanalyse LIVE · wartet auf SoundCloud/Medienaudio",
-                source = "playback-capture",
-            )
-
-            captureThread = thread(name = "MusicCapsule-PlaybackAnalyzer", isDaemon = true) {
-                Process.setThreadPriority(Process.THREAD_PRIORITY_AUDIO)
-                val bytes = ByteArray(PCM_CHUNK_BYTES)
-                while (running) {
-                    val read = runCatching {
-                        record.read(bytes, 0, bytes.size, AudioRecord.READ_BLOCKING)
-                    }.getOrDefault(-1)
-
-                    if (read > 0) {
-                        analyzePcm(bytes, read)
-                    } else if (read < 0) {
-                        CapsuleRuntime.markAnalyzerStopped("Audioanalyse abgebrochen: $read")
-                        break
-                    }
+            val callback = object : MediaProjection.Callback() {
+                override fun onStop() {
+                    if (!switchingMode && !shuttingDown) stopSelf()
                 }
-                stopSelf()
             }
+            projectionCallback = callback
+            mediaProjection.registerCallback(callback, mainHandler)
+
+            startPlaybackRecorder(mediaProjection)
+            switchingMode = false
         }.onFailure { error ->
+            switchingMode = false
             CapsuleRuntime.markAnalyzerStopped(
                 "Audioanalyse konnte nicht starten: ${error.message ?: error.javaClass.simpleName}",
             )
@@ -162,63 +139,333 @@ class PlaybackAnalyzerService : Service() {
         }
     }
 
-    private fun analyzePcm(bytes: ByteArray, length: Int) {
-        val usable = length - (length % 4)
-        val frames = usable / 4
-        if (frames < 128) return
+    @SuppressLint("MissingPermission")
+    private fun startPlaybackRecorder(mediaProjection: MediaProjection) {
+        val captureConfig = AudioPlaybackCaptureConfiguration.Builder(mediaProjection)
+            .addMatchingUsage(AudioAttributes.USAGE_MEDIA)
+            .addMatchingUsage(AudioAttributes.USAGE_GAME)
+            .addMatchingUsage(AudioAttributes.USAGE_UNKNOWN)
+            .build()
+
+        val format = AudioFormat.Builder()
+            .setEncoding(AudioFormat.ENCODING_PCM_16BIT)
+            .setSampleRate(SAMPLE_RATE)
+            .setChannelMask(AudioFormat.CHANNEL_IN_STEREO)
+            .build()
+
+        val minBuffer = AudioRecord.getMinBufferSize(
+            SAMPLE_RATE,
+            AudioFormat.CHANNEL_IN_STEREO,
+            AudioFormat.ENCODING_PCM_16BIT,
+        )
+        val record = AudioRecord.Builder()
+            .setAudioFormat(format)
+            .setAudioPlaybackCaptureConfig(captureConfig)
+            .setBufferSizeInBytes(max(minBuffer * 2, 16_384))
+            .build()
+
+        if (record.state != AudioRecord.STATE_INITIALIZED) {
+            record.release()
+            error("AudioRecord konnte nicht initialisiert werden")
+        }
+
+        analyzerMode = AnalyzerMode.PLAYBACK_CAPTURE
+        playbackSilenceSince = 0L
+        startReader(
+            record = record,
+            channels = 2,
+            mode = AnalyzerMode.PLAYBACK_CAPTURE,
+            startMessage = "Audioanalyse LIVE · internes Medienaudio",
+        )
+    }
+
+    @SuppressLint("MissingPermission")
+    private fun switchToMicrophoneFallback() {
+        if (switchingMode || analyzerMode == AnalyzerMode.MICROPHONE_FALLBACK || shuttingDown) return
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
+            CapsuleRuntime.updateAnalyzer(
+                running = true,
+                message = "SoundCloud schützt internen Ton; Mikrofon-Berechtigung fehlt",
+                source = "soundcloud-system-only",
+            )
+            return
+        }
+
+        runCatching {
+            switchingMode = true
+            stopRecorderOnly()
+            smoothedLevels.fill(0f)
+
+            val audioManager = getSystemService(AudioManager::class.java)
+            val unprocessedSupported = Build.VERSION.SDK_INT >= Build.VERSION_CODES.N &&
+                audioManager.getProperty(AudioManager.PROPERTY_SUPPORT_AUDIO_SOURCE_UNPROCESSED) == "true"
+            val audioSource = if (unprocessedSupported) {
+                MediaRecorder.AudioSource.UNPROCESSED
+            } else {
+                MediaRecorder.AudioSource.VOICE_RECOGNITION
+            }
+
+            val format = AudioFormat.Builder()
+                .setEncoding(AudioFormat.ENCODING_PCM_16BIT)
+                .setSampleRate(SAMPLE_RATE)
+                .setChannelMask(AudioFormat.CHANNEL_IN_MONO)
+                .build()
+            val minBuffer = AudioRecord.getMinBufferSize(
+                SAMPLE_RATE,
+                AudioFormat.CHANNEL_IN_MONO,
+                AudioFormat.ENCODING_PCM_16BIT,
+            )
+            val record = AudioRecord.Builder()
+                .setAudioSource(audioSource)
+                .setAudioFormat(format)
+                .setBufferSizeInBytes(max(minBuffer * 2, 16_384))
+                .build()
+
+            if (record.state != AudioRecord.STATE_INITIALIZED) {
+                record.release()
+                error("Mikrofon-Fallback konnte nicht initialisiert werden")
+            }
+
+            analyzerMode = AnalyzerMode.MICROPHONE_FALLBACK
+            nonSoundCloudSince = 0L
+            startReader(
+                record = record,
+                channels = 1,
+                mode = AnalyzerMode.MICROPHONE_FALLBACK,
+                startMessage = "SoundCloud Mikrofon-Fallback LIVE · nur FFT, keine Speicherung",
+            )
+            switchingMode = false
+        }.onFailure { error ->
+            switchingMode = false
+            CapsuleRuntime.updateAnalyzer(
+                running = true,
+                message = "SoundCloud schützt internen Ton; Mikrofon-Fallback fehlgeschlagen: ${error.message}",
+                source = "soundcloud-system-only",
+            )
+        }
+    }
+
+    @SuppressLint("MissingPermission")
+    private fun switchBackToPlaybackCapture() {
+        val activeProjection = projection ?: return
+        if (switchingMode || analyzerMode == AnalyzerMode.PLAYBACK_CAPTURE || shuttingDown) return
+
+        runCatching {
+            switchingMode = true
+            stopRecorderOnly()
+            smoothedLevels.fill(0f)
+            startPlaybackRecorder(activeProjection)
+            switchingMode = false
+        }.onFailure { error ->
+            switchingMode = false
+            CapsuleRuntime.updateAnalyzer(
+                running = true,
+                message = "Interne Audioanalyse konnte nicht wiederhergestellt werden: ${error.message}",
+                source = "playback-capture-error",
+            )
+        }
+    }
+
+    private fun startReader(
+        record: AudioRecord,
+        channels: Int,
+        mode: AnalyzerMode,
+        startMessage: String,
+    ) {
+        acquireWakeLock()
+        recorder = record
+        running = true
+        lastSignalAt = System.currentTimeMillis()
+        lastPublishAt = 0L
+        val generation = ++recorderGeneration
+        record.startRecording()
+
+        CapsuleRuntime.updateAnalyzer(
+            running = true,
+            message = startMessage,
+            source = if (mode == AnalyzerMode.PLAYBACK_CAPTURE) {
+                "playback-capture"
+            } else {
+                "microphone-fallback"
+            },
+        )
+
+        captureThread = thread(name = "MusicCapsule-${mode.name}", isDaemon = true) {
+            Process.setThreadPriority(Process.THREAD_PRIORITY_AUDIO)
+            val bytes = ByteArray(PCM_CHUNK_BYTES)
+            while (running && recorderGeneration == generation && !shuttingDown) {
+                val read = runCatching {
+                    record.read(bytes, 0, bytes.size, AudioRecord.READ_BLOCKING)
+                }.getOrDefault(-1)
+
+                if (read > 0) {
+                    val signal = analyzePcm(bytes, read, channels, mode)
+                    when (mode) {
+                        AnalyzerMode.PLAYBACK_CAPTURE -> maybeStartSoundCloudFallback(signal)
+                        AnalyzerMode.MICROPHONE_FALLBACK -> maybeReturnToPlaybackCapture()
+                    }
+                } else if (read < 0 && !switchingMode) {
+                    CapsuleRuntime.markAnalyzerStopped("Audioanalyse abgebrochen: $read")
+                    break
+                }
+            }
+
+            if (!switchingMode && !shuttingDown && recorderGeneration == generation) {
+                stopSelf()
+            }
+        }
+    }
+
+    private fun maybeStartSoundCloudFallback(signal: Float) {
+        val snapshot = CapsuleRuntime.snapshot()
+        val soundCloudSelected = CapsulePreferences.sourceLock(this) == MediaSourceLock.SOUNDCLOUD ||
+            snapshot.packageName.contains("soundcloud", ignoreCase = true)
+
+        if (!soundCloudSelected || !snapshot.isPlaying) {
+            playbackSilenceSince = 0L
+            return
+        }
+        if (signal > SIGNAL_THRESHOLD) {
+            playbackSilenceSince = 0L
+            return
+        }
+
+        val now = System.currentTimeMillis()
+        if (playbackSilenceSince == 0L) playbackSilenceSince = now
+        if (now - playbackSilenceSince < SOUNDCLOUD_FALLBACK_DELAY_MS) return
+
+        if (externalAudioRouteActive()) {
+            if (now - lastFallbackWarningAt > 2_000L) {
+                lastFallbackWarningAt = now
+                CapsuleRuntime.updateAnalyzer(
+                    running = true,
+                    message = "SoundCloud erlaubt nur Systemaufnahme. Kopfhörer/Bluetooth erkannt; Mikrofon-Fallback braucht den Handylautsprecher.",
+                    source = "soundcloud-system-only",
+                )
+            }
+            return
+        }
+
+        mainHandler.post { switchToMicrophoneFallback() }
+    }
+
+    private fun maybeReturnToPlaybackCapture() {
+        val snapshot = CapsuleRuntime.snapshot()
+        val soundCloudSelected = CapsulePreferences.sourceLock(this) == MediaSourceLock.SOUNDCLOUD ||
+            snapshot.packageName.contains("soundcloud", ignoreCase = true)
+        if (soundCloudSelected) {
+            nonSoundCloudSince = 0L
+            return
+        }
+
+        val now = System.currentTimeMillis()
+        if (nonSoundCloudSince == 0L) nonSoundCloudSince = now
+        if (now - nonSoundCloudSince >= RETURN_TO_PLAYBACK_DELAY_MS) {
+            mainHandler.post { switchBackToPlaybackCapture() }
+        }
+    }
+
+    private fun externalAudioRouteActive(): Boolean {
+        val manager = getSystemService(AudioManager::class.java)
+        return manager.getDevices(AudioManager.GET_DEVICES_OUTPUTS).any { device ->
+            when (device.type) {
+                AudioDeviceInfo.TYPE_BLUETOOTH_A2DP,
+                AudioDeviceInfo.TYPE_BLUETOOTH_SCO,
+                AudioDeviceInfo.TYPE_WIRED_HEADPHONES,
+                AudioDeviceInfo.TYPE_WIRED_HEADSET,
+                AudioDeviceInfo.TYPE_USB_HEADSET,
+                AudioDeviceInfo.TYPE_USB_DEVICE,
+                AudioDeviceInfo.TYPE_HDMI,
+                -> true
+
+                else -> Build.VERSION.SDK_INT >= Build.VERSION_CODES.S &&
+                    (device.type == AudioDeviceInfo.TYPE_BLE_HEADSET ||
+                        device.type == AudioDeviceInfo.TYPE_BLE_SPEAKER)
+            }
+        }
+    }
+
+    private fun analyzePcm(
+        bytes: ByteArray,
+        length: Int,
+        channels: Int,
+        mode: AnalyzerMode,
+    ): Float {
+        val bytesPerFrame = channels * 2
+        val usable = length - (length % bytesPerFrame)
+        val frames = usable / bytesPerFrame
+        if (frames < 128) return 0f
 
         val samples = FloatArray(frames)
         var offset = 0
         var squareSum = 0.0
         var peak = 0f
         for (frame in 0 until frames) {
-            val left = pcm16(bytes, offset) / 32768f
-            val right = pcm16(bytes, offset + 2) / 32768f
-            val mono = (left + right) * 0.5f
+            var mono = 0f
+            for (channel in 0 until channels) {
+                mono += pcm16(bytes, offset + channel * 2) / 32768f
+            }
+            mono /= channels
             samples[frame] = mono
             squareSum += mono * mono
             peak = max(peak, abs(mono))
-            offset += 4
+            offset += bytesPerFrame
         }
 
         val rms = sqrt(squareSum / frames).toFloat()
-        val signal = max(rms * 4.2f, peak * 0.72f).coerceIn(0f, 1f)
+        val multiplier = if (mode == AnalyzerMode.MICROPHONE_FALLBACK) 7.2f else 4.2f
+        val signal = max(rms * multiplier, peak * .72f).coerceIn(0f, 1f)
         val levels = FloatArray(CapsuleRuntime.BAND_COUNT)
 
         for (index in BAND_FREQUENCIES.indices) {
             val magnitude = goertzel(samples, BAND_FREQUENCIES[index])
-            val weighted = magnitude * (1f + index * 0.035f)
-            val normalized = if (weighted < 0.0015f) {
+            val weighted = magnitude * (1f + index * .035f)
+            val normalization = if (mode == AnalyzerMode.MICROPHONE_FALLBACK) 210.0 else 120.0
+            val normalized = if (weighted < .0012f) {
                 0f
             } else {
-                (ln(1.0 + weighted * 120.0) / ln(61.0)).toFloat().coerceIn(0f, 1f)
+                (ln(1.0 + weighted * normalization) / ln(1.0 + normalization * .50)).toFloat()
+                    .coerceIn(0f, 1f)
             }
-            val target = normalized.coerceIn(0f, 1f)
             val previous = smoothedLevels[index]
-            val factor = if (target > previous) 0.68f else 0.20f
-            val smooth = previous + (target - previous) * factor
+            val factor = if (normalized > previous) .68f else .20f
+            val smooth = previous + (normalized - previous) * factor
             smoothedLevels[index] = smooth
             levels[index] = smooth
         }
 
         val now = System.currentTimeMillis()
-        if (signal > 0.008f) lastSignalAt = now
-        if (now - lastPublishAt < PUBLISH_INTERVAL_MS) return
+        if (signal > SIGNAL_THRESHOLD) lastSignalAt = now
+        if (now - lastPublishAt < PUBLISH_INTERVAL_MS) return signal
         lastPublishAt = now
 
-        val message = when {
-            signal > 0.008f -> "LIVE · echter SoundCloud/Medien-Equalizer"
-            now - lastSignalAt > 2_500L ->
-                "Capture aktiv, aber noch kein internes Audiosignal – Musik starten oder App-Capture prüfen"
-            else -> "Audioanalyse bereit · wartet auf Musik"
+        val message = when (mode) {
+            AnalyzerMode.PLAYBACK_CAPTURE -> when {
+                signal > SIGNAL_THRESHOLD -> "LIVE · echter interner Medien-Equalizer"
+                now - lastSignalAt > 2_500L ->
+                    "Capture aktiv, aber noch kein internes Audiosignal – SoundCloud kann Drittanbieter-Capture sperren"
+                else -> "Audioanalyse bereit · wartet auf Musik"
+            }
+
+            AnalyzerMode.MICROPHONE_FALLBACK -> when {
+                signal > SIGNAL_THRESHOLD ->
+                    "SoundCloud Mikrofon-Fallback LIVE · Handylautsprecher → FFT · nichts wird gespeichert"
+                else ->
+                    "SoundCloud schützt internen Ton · Mikrofon-Fallback wartet auf hörbaren Handylautsprecher"
+            }
         }
 
         CapsuleRuntime.updateLevels(
             levels = levels,
             signal = signal,
             message = message,
-            source = "playback-capture",
+            source = if (mode == AnalyzerMode.PLAYBACK_CAPTURE) {
+                "playback-capture"
+            } else {
+                "soundcloud-microphone-fallback"
+            },
         )
+        return signal
     }
 
     private fun pcm16(bytes: ByteArray, offset: Int): Int {
@@ -246,6 +493,7 @@ class PlaybackAnalyzerService : Service() {
     }
 
     private fun acquireWakeLock() {
+        if (wakeLock?.isHeld == true) return
         runCatching {
             val power = getSystemService(PowerManager::class.java)
             wakeLock = power.newWakeLock(
@@ -256,6 +504,27 @@ class PlaybackAnalyzerService : Service() {
                 acquire()
             }
         }
+    }
+
+    private fun stopRecorderOnly() {
+        running = false
+        recorderGeneration += 1
+        val current = recorder
+        recorder = null
+        runCatching { current?.stop() }
+        runCatching { current?.release() }
+        captureThread = null
+    }
+
+    private fun releaseProjectionOnly() {
+        val currentProjection = projection
+        val callback = projectionCallback
+        projection = null
+        projectionCallback = null
+        if (currentProjection != null && callback != null) {
+            runCatching { currentProjection.unregisterCallback(callback) }
+        }
+        runCatching { currentProjection?.stop() }
     }
 
     private fun buildNotification(): android.app.Notification {
@@ -274,7 +543,7 @@ class PlaybackAnalyzerService : Service() {
         return NotificationCompat.Builder(this, CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_capsule)
             .setContentTitle("Music Capsule Audioanalyse")
-            .setContentText("Internes Medienaudio wird nur analysiert; nichts wird gespeichert")
+            .setContentText("Internes Audio; bei SoundCloud automatisch Lautsprecher-Mikrofon-Fallback")
             .setContentIntent(openPending)
             .setOngoing(true)
             .setOnlyAlertOnce(true)
@@ -291,22 +560,19 @@ class PlaybackAnalyzerService : Service() {
                 "Music Capsule Audioanalyse",
                 NotificationManager.IMPORTANCE_LOW,
             ).apply {
-                description = "Lokale Audioanalyse für den schwebenden Equalizer"
+                description = "Lokale Audioanalyse und SoundCloud-Mikrofon-Fallback"
                 setShowBadge(false)
             },
         )
     }
 
     override fun onDestroy() {
-        running = false
-        runCatching { recorder?.stop() }
-        runCatching { recorder?.release() }
-        recorder = null
-        runCatching { projection?.stop() }
-        projection = null
+        shuttingDown = true
+        switchingMode = true
+        stopRecorderOnly()
+        releaseProjectionOnly()
         runCatching { if (wakeLock?.isHeld == true) wakeLock?.release() }
         wakeLock = null
-        captureThread = null
         smoothedLevels.fill(0f)
         CapsuleRuntime.markAnalyzerStopped("Audioanalyse aus")
         super.onDestroy()
@@ -323,6 +589,9 @@ class PlaybackAnalyzerService : Service() {
         private const val SAMPLE_RATE = 48_000
         private const val PCM_CHUNK_BYTES = 4_096
         private const val PUBLISH_INTERVAL_MS = 45L
+        private const val SIGNAL_THRESHOLD = .008f
+        private const val SOUNDCLOUD_FALLBACK_DELAY_MS = 3_200L
+        private const val RETURN_TO_PLAYBACK_DELAY_MS = 2_000L
 
         private val BAND_FREQUENCIES = doubleArrayOf(
             60.0,
