@@ -22,9 +22,10 @@ import kotlin.math.pow
 /**
  * Shared main-LIVE/Stage pattern layer and spectrum endpoint-orb renderer.
  *
- * Every timed decision now comes from SyncLearningRuntime. Patterns, endpoint
- * pulses and RGB phase therefore use the same learned beat instead of running
- * three slightly different clocks.
+ * Every timed decision comes from SyncLearningRuntime. 1.6.3 keeps the
+ * existing shapes and adds an original pattern pack based on generic edge-
+ * visualizer families discovered during the Muviz comparison. No proprietary
+ * code/assets are copied; the patterns below are independent Canvas designs.
  */
 class FusionOverlayView(context: Context) : View(context) {
     private enum class FusionPattern {
@@ -37,6 +38,15 @@ class FusionOverlayView(context: Context) : View(context) {
         ZIGZAG,
         RING,
         STACKED,
+        SIDE_WAVES,
+        FLAT_BARS,
+        SERIAL_DOTS,
+        MIRROR_RAIN,
+        FIRE_DANCE,
+        STRINGS,
+        BUBBLES,
+        SNOW,
+        GLOW_PULSE,
     }
 
     private data class PatternPulse(
@@ -226,8 +236,17 @@ class FusionOverlayView(context: Context) : View(context) {
             FusionPattern.HORIZONTAL,
             FusionPattern.UP_DOWN,
             FusionPattern.ZIGZAG,
+            FusionPattern.SIDE_WAVES,
+            FusionPattern.STRINGS,
             -> 1.08f
-            FusionPattern.RING -> 1.02f
+            FusionPattern.RING,
+            FusionPattern.GLOW_PULSE,
+            FusionPattern.BUBBLES,
+            -> 1.02f
+            FusionPattern.MIRROR_RAIN,
+            FusionPattern.FIRE_DANCE,
+            FusionPattern.SNOW,
+            -> 1.12f
             else -> .96f
         }
         pulse.active = true
@@ -251,52 +270,81 @@ class FusionOverlayView(context: Context) : View(context) {
                 BeatPatternMode.UP_DOWN -> FusionPattern.UP_DOWN
                 BeatPatternMode.HORIZONTAL -> FusionPattern.HORIZONTAL
                 BeatPatternMode.DIAMOND -> FusionPattern.DIAMOND
+                BeatPatternMode.SIDE_WAVES -> FusionPattern.SIDE_WAVES
+                BeatPatternMode.FLAT_BARS -> FusionPattern.FLAT_BARS
+                BeatPatternMode.SERIAL_DOTS -> FusionPattern.SERIAL_DOTS
+                BeatPatternMode.MIRROR_RAIN -> FusionPattern.MIRROR_RAIN
+                BeatPatternMode.FIRE_DANCE -> FusionPattern.FIRE_DANCE
+                BeatPatternMode.STRINGS -> FusionPattern.STRINGS
+                BeatPatternMode.BUBBLES -> FusionPattern.BUBBLES
+                BeatPatternMode.SNOW -> FusionPattern.SNOW
+                BeatPatternMode.GLOW_PULSE -> FusionPattern.GLOW_PULSE
                 BeatPatternMode.AUTO,
                 BeatPatternMode.OFF,
                 -> FusionPattern.INFINITY
             }
         }
 
-        // Repetition is deliberately allowed; music, not a fixed sequence,
-        // decides what comes next.
-        if (random.nextFloat() < .31f) return lastPattern
-        val bass = snapshot.bass
-        val mid = snapshot.mid
-        val treble = snapshot.treble
+        // Repetition remains allowed; the track decides, not a fixed carousel.
+        if (random.nextFloat() < .28f) return lastPattern
+        val low = groupAverage(0, 3)
+        val mid = groupAverage(4, 9)
+        val high = groupAverage(10, 15)
         return when {
-            bass > .66f -> weightedChoice(
-                FusionPattern.RING to 22,
-                FusionPattern.STACKED to 20,
-                FusionPattern.RECTANGLE to 18,
-                FusionPattern.INFINITY to 18,
-                FusionPattern.DIAMOND to 14,
-                FusionPattern.CROSS to 8,
-            )
-            mid > treble * 1.12f -> weightedChoice(
-                FusionPattern.INFINITY to 26,
-                FusionPattern.HORIZONTAL to 22,
-                FusionPattern.ZIGZAG to 18,
-                FusionPattern.STACKED to 14,
-                FusionPattern.RECTANGLE to 12,
-                FusionPattern.CROSS to 8,
-            )
-            treble > mid * 1.14f -> weightedChoice(
-                FusionPattern.UP_DOWN to 24,
-                FusionPattern.ZIGZAG to 22,
-                FusionPattern.CROSS to 18,
-                FusionPattern.HORIZONTAL to 16,
-                FusionPattern.DIAMOND to 12,
+            low > .62f -> weightedChoice(
+                FusionPattern.RING to 14,
+                FusionPattern.GLOW_PULSE to 13,
+                FusionPattern.STACKED to 12,
+                FusionPattern.FLAT_BARS to 12,
+                FusionPattern.FIRE_DANCE to 11,
+                FusionPattern.RECTANGLE to 10,
+                FusionPattern.BUBBLES to 9,
                 FusionPattern.INFINITY to 8,
+                FusionPattern.DIAMOND to 6,
+                FusionPattern.SERIAL_DOTS to 5,
+            )
+            mid > high * 1.10f -> weightedChoice(
+                FusionPattern.INFINITY to 15,
+                FusionPattern.STRINGS to 14,
+                FusionPattern.SIDE_WAVES to 13,
+                FusionPattern.HORIZONTAL to 12,
+                FusionPattern.FLAT_BARS to 10,
+                FusionPattern.ZIGZAG to 9,
+                FusionPattern.STACKED to 8,
+                FusionPattern.BUBBLES to 7,
+                FusionPattern.RECTANGLE to 6,
+                FusionPattern.SERIAL_DOTS to 6,
+            )
+            high > mid * 1.12f -> weightedChoice(
+                FusionPattern.MIRROR_RAIN to 15,
+                FusionPattern.SNOW to 14,
+                FusionPattern.UP_DOWN to 12,
+                FusionPattern.ZIGZAG to 11,
+                FusionPattern.CROSS to 10,
+                FusionPattern.SIDE_WAVES to 9,
+                FusionPattern.HORIZONTAL to 8,
+                FusionPattern.SERIAL_DOTS to 8,
+                FusionPattern.DIAMOND to 7,
+                FusionPattern.STRINGS to 6,
             )
             else -> weightedChoice(
-                FusionPattern.INFINITY to 20,
-                FusionPattern.HORIZONTAL to 16,
-                FusionPattern.RECTANGLE to 14,
-                FusionPattern.RING to 13,
-                FusionPattern.DIAMOND to 11,
-                FusionPattern.ZIGZAG to 10,
-                FusionPattern.CROSS to 9,
-                FusionPattern.STACKED to 7,
+                FusionPattern.INFINITY to 10,
+                FusionPattern.SIDE_WAVES to 9,
+                FusionPattern.STRINGS to 9,
+                FusionPattern.HORIZONTAL to 8,
+                FusionPattern.SERIAL_DOTS to 8,
+                FusionPattern.RING to 7,
+                FusionPattern.FLAT_BARS to 7,
+                FusionPattern.RECTANGLE to 7,
+                FusionPattern.MIRROR_RAIN to 6,
+                FusionPattern.BUBBLES to 6,
+                FusionPattern.DIAMOND to 5,
+                FusionPattern.ZIGZAG to 5,
+                FusionPattern.GLOW_PULSE to 5,
+                FusionPattern.CROSS to 4,
+                FusionPattern.FIRE_DANCE to 4,
+                FusionPattern.SNOW to 4,
+                FusionPattern.STACKED to 4,
             )
         }
     }
@@ -330,7 +378,6 @@ class FusionOverlayView(context: Context) : View(context) {
         pulses.forEach { pulse ->
             if (!pulse.active) return@forEach
             val p = pulse.progress.coerceIn(0f, 1f)
-            // Near-instant visual attack, then a tempo-sized decay.
             val attack = (1f - exp(-p * 24f)).coerceIn(0f, 1f)
             val release = (1f - p).pow(.66f)
             val envelope = attack * release
@@ -366,6 +413,15 @@ class FusionOverlayView(context: Context) : View(context) {
                 FusionPattern.ZIGZAG -> drawZigzag(canvas, centerX, centerY, minSide, scale, pulse)
                 FusionPattern.RING -> drawRing(canvas, centerX, centerY, minSide, scale, pulse)
                 FusionPattern.STACKED -> drawStacked(canvas, centerX, centerY, minSide, scale, pulse)
+                FusionPattern.SIDE_WAVES -> drawSideWaves(canvas, centerX, centerY, minSide, scale, pulse)
+                FusionPattern.FLAT_BARS -> drawFlatBars(canvas, centerX, centerY, minSide, scale, pulse)
+                FusionPattern.SERIAL_DOTS -> drawSerialDots(canvas, centerX, centerY, minSide, scale, pulse, hue, alphaValue)
+                FusionPattern.MIRROR_RAIN -> drawMirrorRain(canvas, centerX, centerY, minSide, scale, pulse)
+                FusionPattern.FIRE_DANCE -> drawFireDance(canvas, centerX, centerY, minSide, scale, pulse)
+                FusionPattern.STRINGS -> drawStrings(canvas, centerX, centerY, minSide, scale, pulse)
+                FusionPattern.BUBBLES -> drawBubbles(canvas, centerX, centerY, minSide, scale, pulse)
+                FusionPattern.SNOW -> drawSnow(canvas, centerX, centerY, minSide, scale, pulse, hue, alphaValue)
+                FusionPattern.GLOW_PULSE -> drawGlowPulse(canvas, centerX, centerY, minSide, scale, pulse, hue, alphaValue)
             }
             strokePaint.shader = null
         }
@@ -380,7 +436,7 @@ class FusionOverlayView(context: Context) : View(context) {
         pulse: PatternPulse,
     ) {
         val halfW = minSide * .30f * scale
-        val halfH = minSide * .48f * scale * (1f + snapshot.bass * .07f)
+        val halfH = minSide * .48f * scale * (1f + groupAverage(0, 3) * .07f)
         val wobble = sinf(pulse.progress * PI.toFloat() * 2f + pulse.phaseOffset) * dp(5f)
         canvas.drawRoundRect(
             RectF(cx - halfW - wobble, cy - halfH, cx + halfW + wobble, cy + halfH),
@@ -400,7 +456,7 @@ class FusionOverlayView(context: Context) : View(context) {
     ) {
         path.reset()
         val a = minSide * .34f * scale
-        val b = minSide * .18f * scale * (1f + snapshot.mid * .10f)
+        val b = minSide * .18f * scale * (1f + groupAverage(4, 9) * .10f)
         val points = 112
         repeat(points + 1) { index ->
             val t = index / points.toFloat() * PI.toFloat() * 2f + pulse.phaseOffset * .08f
@@ -436,7 +492,7 @@ class FusionOverlayView(context: Context) : View(context) {
     ) {
         path.reset()
         val halfW = minSide * .40f * scale
-        val amplitude = minSide * .075f * (1f + snapshot.treble * .14f)
+        val amplitude = minSide * .075f * (1f + groupAverage(10, 15) * .14f)
         val points = 84
         repeat(points + 1) { index ->
             val normalized = index / points.toFloat()
@@ -513,7 +569,7 @@ class FusionOverlayView(context: Context) : View(context) {
         pulse: PatternPulse,
     ) {
         val radius = minSide * .27f * scale *
-            (1f + snapshot.bass * .10f + sinf(pulse.progress * PI.toFloat()) * .08f)
+            (1f + groupAverage(0, 3) * .10f + sinf(pulse.progress * PI.toFloat()) * .08f)
         canvas.drawCircle(cx, cy, radius, strokePaint)
         if (pulse.strength > .68f) canvas.drawCircle(cx, cy, radius * .72f, strokePaint)
     }
@@ -540,6 +596,232 @@ class FusionOverlayView(context: Context) : View(context) {
         }
     }
 
+    private fun drawSideWaves(
+        canvas: Canvas,
+        cx: Float,
+        cy: Float,
+        minSide: Float,
+        scale: Float,
+        pulse: PatternPulse,
+    ) {
+        val halfH = minSide * .39f * scale
+        val side = minSide * .24f * scale
+        val amp = minSide * (.035f + groupAverage(4, 15) * .035f) * scale
+        repeat(2) { directionIndex ->
+            val direction = if (directionIndex == 0) -1f else 1f
+            path.reset()
+            val points = 72
+            repeat(points + 1) { index ->
+                val n = index / points.toFloat()
+                val y = cy - halfH + n * halfH * 2f
+                val x = cx + direction * side +
+                    sinf(n * PI.toFloat() * 5f + pulse.phaseOffset) * amp * direction
+                if (index == 0) path.moveTo(x, y) else path.lineTo(x, y)
+            }
+            canvas.drawPath(path, strokePaint)
+        }
+    }
+
+    private fun drawFlatBars(
+        canvas: Canvas,
+        cx: Float,
+        cy: Float,
+        minSide: Float,
+        scale: Float,
+        pulse: PatternPulse,
+    ) {
+        val low = groupAverage(0, 3)
+        val mid = groupAverage(4, 9)
+        val high = groupAverage(10, 15)
+        val count = 7
+        val spacing = minSide * .042f * scale
+        repeat(count) { index ->
+            val normalized = index / (count - 1f)
+            val envelope = when {
+                normalized < .34f -> high
+                normalized < .68f -> mid
+                else -> low
+            }
+            val widthScale = .42f + envelope * .38f + pulse.strength * .08f
+            val halfW = minSide * widthScale * scale * .52f
+            val y = cy + (index - (count - 1) / 2f) * spacing
+            canvas.drawLine(cx - halfW, y, cx + halfW, y, strokePaint)
+        }
+    }
+
+    private fun drawSerialDots(
+        canvas: Canvas,
+        cx: Float,
+        cy: Float,
+        minSide: Float,
+        scale: Float,
+        pulse: PatternPulse,
+        hue: Float,
+        alphaValue: Float,
+    ) {
+        val rx = minSide * .34f * scale
+        val ry = minSide * .27f * scale
+        val count = 28
+        repeat(count) { index ->
+            val t = index / count.toFloat() * PI.toFloat() * 2f + pulse.phaseOffset * .08f
+            val x = cx + cosf(t) * rx
+            val y = cy + sinf(t) * ry
+            val travel = (index / count.toFloat() + pulse.progress * 1.6f) % 1f
+            val head = (1f - abs(travel - .5f) * 2f).coerceIn(0f, 1f)
+            val radius = dp(.65f + head * 2.2f + pulse.strength * .45f)
+            fillPaint.color = hsv(hue + index * 10f, .88f, 1f, alphaValue * (.32f + head * .68f))
+            canvas.drawCircle(x, y, radius, fillPaint)
+        }
+    }
+
+    private fun drawMirrorRain(
+        canvas: Canvas,
+        cx: Float,
+        cy: Float,
+        minSide: Float,
+        scale: Float,
+        pulse: PatternPulse,
+    ) {
+        val width = minSide * .36f * scale
+        val height = minSide * .34f * scale
+        val columns = 8
+        repeat(columns) { index ->
+            val n = index / (columns - 1f)
+            val xOffset = minSide * (.045f + n * .30f) * scale
+            val travel = (pulse.progress + n * .22f) % 1f
+            val y = cy - height + travel * height * 2f
+            val streak = dp(7f + groupAverage(10, 15) * 14f)
+            canvas.drawLine(cx - xOffset, y - streak, cx - xOffset, y + streak, strokePaint)
+            canvas.drawLine(cx + xOffset, y - streak, cx + xOffset, y + streak, strokePaint)
+        }
+    }
+
+    private fun drawFireDance(
+        canvas: Canvas,
+        cx: Float,
+        cy: Float,
+        minSide: Float,
+        scale: Float,
+        pulse: PatternPulse,
+    ) {
+        val low = groupAverage(0, 3)
+        val height = minSide * (.28f + low * .20f) * scale
+        val baseWidth = minSide * .19f * scale
+        repeat(3) { flame ->
+            path.reset()
+            val offset = (flame - 1) * baseWidth * .72f
+            val points = 18
+            repeat(points + 1) { index ->
+                val n = index / points.toFloat()
+                val y = cy + height * .48f - n * height
+                val taper = 1f - n * .72f
+                val x = cx + offset * taper +
+                    sinf(n * PI.toFloat() * (4f + flame) + pulse.phaseOffset + flame) *
+                    baseWidth * .22f * taper
+                if (index == 0) path.moveTo(x, y) else path.lineTo(x, y)
+            }
+            canvas.drawPath(path, strokePaint)
+        }
+    }
+
+    private fun drawStrings(
+        canvas: Canvas,
+        cx: Float,
+        cy: Float,
+        minSide: Float,
+        scale: Float,
+        pulse: PatternPulse,
+    ) {
+        val halfW = minSide * .38f * scale
+        val amplitude = minSide * (.022f + groupAverage(4, 9) * .045f) * scale
+        repeat(4) { stringIndex ->
+            path.reset()
+            val yBase = cy + (stringIndex - 1.5f) * minSide * .055f * scale
+            val points = 72
+            repeat(points + 1) { index ->
+                val n = index / points.toFloat()
+                val x = cx - halfW + n * halfW * 2f
+                val y = yBase + sinf(
+                    n * PI.toFloat() * (3f + stringIndex * .45f) +
+                        pulse.phaseOffset + pulse.progress * PI.toFloat() * 2f,
+                ) * amplitude
+                if (index == 0) path.moveTo(x, y) else path.lineTo(x, y)
+            }
+            canvas.drawPath(path, strokePaint)
+        }
+    }
+
+    private fun drawBubbles(
+        canvas: Canvas,
+        cx: Float,
+        cy: Float,
+        minSide: Float,
+        scale: Float,
+        pulse: PatternPulse,
+    ) {
+        val low = groupAverage(0, 3)
+        repeat(7) { index ->
+            val angle = index / 7f * PI.toFloat() * 2f + pulse.phaseOffset
+            val distance = minSide * (.08f + (index % 3) * .055f) * scale
+            val drift = minSide * .055f * pulse.progress
+            val x = cx + cosf(angle) * (distance + drift)
+            val y = cy + sinf(angle) * (distance + drift * .75f)
+            val radius = minSide * (.018f + (index % 3) * .009f + low * .015f) * scale
+            canvas.drawCircle(x, y, radius, strokePaint)
+        }
+    }
+
+    private fun drawSnow(
+        canvas: Canvas,
+        cx: Float,
+        cy: Float,
+        minSide: Float,
+        scale: Float,
+        pulse: PatternPulse,
+        hue: Float,
+        alphaValue: Float,
+    ) {
+        val halfW = minSide * .36f * scale
+        val halfH = minSide * .34f * scale
+        repeat(18) { index ->
+            val seed = (index * 37 % 101) / 100f
+            val x = cx - halfW + ((index * 53 % 97) / 96f) * halfW * 2f
+            val travel = (seed + pulse.progress * (1.0f + (index % 4) * .08f)) % 1f
+            val y = cy - halfH + travel * halfH * 2f
+            val radius = dp(.45f + (index % 4) * .24f + groupAverage(10, 15) * .55f)
+            fillPaint.color = hsv(hue + index * 7f, .48f, 1f, alphaValue * (.42f + (index % 3) * .16f))
+            canvas.drawCircle(x, y, radius, fillPaint)
+        }
+    }
+
+    private fun drawGlowPulse(
+        canvas: Canvas,
+        cx: Float,
+        cy: Float,
+        minSide: Float,
+        scale: Float,
+        pulse: PatternPulse,
+        hue: Float,
+        alphaValue: Float,
+    ) {
+        val radius = minSide * (.16f + pulse.progress * .22f + groupAverage(0, 3) * .05f) * scale
+        fillPaint.shader = RadialGradient(
+            cx,
+            cy,
+            max(dp(1f), radius),
+            intArrayOf(
+                hsv(hue + 15f, .70f, 1f, alphaValue * .30f),
+                hsv(hue + 120f, .86f, 1f, alphaValue * .13f),
+                Color.TRANSPARENT,
+            ),
+            floatArrayOf(0f, .46f, 1f),
+            Shader.TileMode.CLAMP,
+        )
+        canvas.drawCircle(cx, cy, radius, fillPaint)
+        fillPaint.shader = null
+        canvas.drawCircle(cx, cy, radius * .72f, strokePaint)
+    }
+
     private fun drawEndpointAccents(canvas: Canvas, drawBars: Boolean) {
         val endpoint = VisualTuningPreferences.endpointMode(context)
         if (endpoint == EndpointMode.OFF) return
@@ -551,6 +833,7 @@ class FusionOverlayView(context: Context) : View(context) {
         val time = SystemClock.uptimeMillis() / 1000f
         val phase = SyncLearningRuntime.hueAt()
         val beat = max(beatEnvelope, sync.beatStrength * .78f)
+        val low = groupAverage(0, 3).pow(.68f)
 
         repeat(2) { side ->
             val left = side == 0
@@ -559,10 +842,13 @@ class FusionOverlayView(context: Context) : View(context) {
             repeat(segments) { segment ->
                 val progress = segment / (segments - 1f)
                 val band = edgeBandIndex(progress)
-                val level = levels[band].coerceIn(0f, 1f).pow(.62f)
+                val detail = levels[band].coerceIn(0f, 1f).pow(.62f)
+                // Same LOW-led rule as Nur Striche: side accents move together,
+                // with only a little per-band texture.
+                val level = low * .78f + detail * .22f
                 val body = sinf(progress * PI.toFloat()) * dp(13f)
                 val wave = sinf(progress * PI.toFloat() * 5f + time * .62f + side) * dp(2.0f)
-                val baseX = outer + direction * (dp(2f) + body + wave * (.20f + snapshot.mid * .58f))
+                val baseX = outer + direction * (dp(2f) + body + wave * (.20f + groupAverage(4, 9) * .58f))
                 val length = dp(3.2f) + level * dp(if (stageMode) 24f else 27f) * neonIntensity +
                     beat * dp(5.2f)
                 val endX = baseX + direction * length
@@ -625,6 +911,18 @@ class FusionOverlayView(context: Context) : View(context) {
         fillPaint.shader = null
         fillPaint.color = hsv(hue + 22f, .14f, 1f, max(.74f, alphaValue) * opacity)
         canvas.drawCircle(x, y, coreRadius, fillPaint)
+    }
+
+    private fun groupAverage(start: Int, end: Int): Float {
+        val safeStart = start.coerceIn(0, levels.lastIndex)
+        val safeEnd = end.coerceIn(safeStart, levels.lastIndex)
+        var total = 0f
+        var count = 0
+        for (index in safeStart..safeEnd) {
+            total += levels[index]
+            count += 1
+        }
+        return if (count == 0) 0f else (total / count).coerceIn(0f, 1f)
     }
 
     private fun edgeBandIndex(progress: Float): Int = when {

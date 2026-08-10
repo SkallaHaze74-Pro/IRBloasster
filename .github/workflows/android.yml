@@ -111,24 +111,31 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6
 
-      - name: Validate Music Capsule 1.6.2 System Mix Probe
+      - name: Validate Music Capsule 1.6.3 Musical Bands + Pattern Pack
         run: |
           grep -F 'include(":musiccapsule")' settings.gradle
           grep -F "applicationId 'com.skallahaze.musiccapsule'" musiccapsule/build.gradle
-          grep -F "versionName '1.6.2'" musiccapsule/build.gradle
-          grep -F "versionCode 15" musiccapsule/build.gradle
+          grep -F "versionName '1.6.3'" musiccapsule/build.gradle
+          grep -F "versionCode 16" musiccapsule/build.gradle
           grep -F 'BALANCED("balanced", "Auto Lernen")' musiccapsule/src/main/java/com/skallahaze/musiccapsule/CapsulePreferences.kt
           grep -F 'object SyncLearningRuntime' musiccapsule/src/main/java/com/skallahaze/musiccapsule/SyncLearningRuntime.kt
+          grep -F 'SIDE_WAVES("side_waves", "Seitenwellen")' musiccapsule/src/main/java/com/skallahaze/musiccapsule/VisualTuningPreferences.kt
+          grep -F 'MIRROR_RAIN("mirror_rain", "Mirror Rain")' musiccapsule/src/main/java/com/skallahaze/musiccapsule/VisualTuningPreferences.kt
+          grep -F 'FIRE_DANCE("fire_dance", "Fire Dance")' musiccapsule/src/main/java/com/skallahaze/musiccapsule/VisualTuningPreferences.kt
+          grep -F 'SERIAL_DOTS("serial_dots", "Serial Dots")' musiccapsule/src/main/java/com/skallahaze/musiccapsule/VisualTuningPreferences.kt
+          grep -F 'low * .82f + detail * .18f' musiccapsule/src/main/java/com/skallahaze/musiccapsule/StripesOnlyView.kt
+          grep -F 'musicalEnvelope * .86f + detail * .14f' musiccapsule/src/main/java/com/skallahaze/musiccapsule/StripesOnlyView.kt
+          grep -F 'FusionPattern.SIDE_WAVES' musiccapsule/src/main/java/com/skallahaze/musiccapsule/FusionOverlayView.kt
+          grep -F 'FusionPattern.SERIAL_DOTS' musiccapsule/src/main/java/com/skallahaze/musiccapsule/FusionOverlayView.kt
+          grep -F 'FusionPattern.MIRROR_RAIN' musiccapsule/src/main/java/com/skallahaze/musiccapsule/FusionOverlayView.kt
+          grep -F 'FusionPattern.FIRE_DANCE' musiccapsule/src/main/java/com/skallahaze/musiccapsule/FusionOverlayView.kt
+          grep -F 'FusionPattern.STRINGS' musiccapsule/src/main/java/com/skallahaze/musiccapsule/FusionOverlayView.kt
+          grep -F 'FusionPattern.BUBBLES' musiccapsule/src/main/java/com/skallahaze/musiccapsule/FusionOverlayView.kt
+          grep -F 'FusionPattern.SNOW' musiccapsule/src/main/java/com/skallahaze/musiccapsule/FusionOverlayView.kt
+          grep -F 'FusionPattern.GLOW_PULSE' musiccapsule/src/main/java/com/skallahaze/musiccapsule/FusionOverlayView.kt
           grep -F 'class OutputMixVisualizerService' musiccapsule/src/main/java/com/skallahaze/musiccapsule/OutputMixVisualizerService.kt
           grep -F 'Visualizer(0)' musiccapsule/src/main/java/com/skallahaze/musiccapsule/OutputMixVisualizerService.kt
-          grep -F 'SCALING_MODE_NORMALIZED' musiccapsule/src/main/java/com/skallahaze/musiccapsule/OutputMixVisualizerService.kt
-          grep -F 'output-mix-visualizer-live' musiccapsule/src/main/java/com/skallahaze/musiccapsule/OutputMixVisualizerService.kt
-          grep -F 'SyncLearningRuntime.observe' musiccapsule/src/main/java/com/skallahaze/musiccapsule/OutputMixVisualizerService.kt
-          grep -F 'class OutputMixProbeActivity' musiccapsule/src/main/java/com/skallahaze/musiccapsule/OutputMixProbeActivity.kt
-          grep -F 'START SYSTEM MIX' musiccapsule/src/main/java/com/skallahaze/musiccapsule/OutputMixProbeActivity.kt
           grep -F 'android.permission.MODIFY_AUDIO_SETTINGS' musiccapsule/src/main/AndroidManifest.xml
-          grep -F '.OutputMixProbeActivity' musiccapsule/src/main/AndroidManifest.xml
-          grep -F '.OutputMixVisualizerService' musiccapsule/src/main/AndroidManifest.xml
           grep -F 'CLEAN("clean", "Nur Striche")' musiccapsule/src/main/java/com/skallahaze/musiccapsule/CapsulePreferences.kt
           grep -F 'StripesOnlyView(this)' musiccapsule/src/main/java/com/skallahaze/musiccapsule/CapsuleOverlayService.kt
           grep -F 'FusionOverlayView(this)' musiccapsule/src/main/java/com/skallahaze/musiccapsule/CapsuleOverlayService.kt
@@ -148,7 +155,7 @@ jobs:
       - name: Create ephemeral Music Capsule signing key
         run: |
           mkdir -p "$HOME/.musiccapsule"
-          PASS="ci-music-capsule-1.6.2-output-mix"
+          PASS="ci-music-capsule-1.6.3-musical-bands"
           keytool -genkeypair \
             -keystore "$HOME/.musiccapsule/music-capsule-release.jks" \
             -storetype PKCS12 \
@@ -181,16 +188,16 @@ jobs:
 
       - name: Prepare Music Capsule artifact
         run: |
-          cp musiccapsule/build/outputs/apk/release/musiccapsule-release.apk MusicCapsule-v1.6.2-OUTPUT-MIX-CI-ephemeral-signature.apk
-          sha256sum MusicCapsule-v1.6.2-OUTPUT-MIX-CI-ephemeral-signature.apk > MusicCapsule-v1.6.2-OUTPUT-MIX-CI-ephemeral-signature.apk.sha256
+          cp musiccapsule/build/outputs/apk/release/musiccapsule-release.apk MusicCapsule-v1.6.3-MUSICAL-BANDS-CI-ephemeral-signature.apk
+          sha256sum MusicCapsule-v1.6.3-MUSICAL-BANDS-CI-ephemeral-signature.apk > MusicCapsule-v1.6.3-MUSICAL-BANDS-CI-ephemeral-signature.apk.sha256
 
       - name: Upload standalone Music Capsule CI APK
         uses: actions/upload-artifact@v7
         with:
-          name: MusicCapsule-v1.6.2-OUTPUT-MIX-CI-ephemeral-signature-DO-NOT-USE-FOR-UPDATES
+          name: MusicCapsule-v1.6.3-MUSICAL-BANDS-CI-ephemeral-signature-DO-NOT-USE-FOR-UPDATES
           path: |
-            MusicCapsule-v1.6.2-OUTPUT-MIX-CI-ephemeral-signature.apk
-            MusicCapsule-v1.6.2-OUTPUT-MIX-CI-ephemeral-signature.apk.sha256
+            MusicCapsule-v1.6.3-MUSICAL-BANDS-CI-ephemeral-signature.apk
+            MusicCapsule-v1.6.3-MUSICAL-BANDS-CI-ephemeral-signature.apk.sha256
             musiccapsule-apksigner-verify.txt
           if-no-files-found: error
           retention-days: 30
@@ -199,7 +206,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: MusicCapsule-v1.6.2-output-mix-lint
+          name: MusicCapsule-v1.6.3-musical-bands-lint
           path: musiccapsule/build/reports/lint-results-release.html
           if-no-files-found: ignore
           retention-days: 30
