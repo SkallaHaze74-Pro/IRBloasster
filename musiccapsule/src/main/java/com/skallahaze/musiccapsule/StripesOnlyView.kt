@@ -18,9 +18,10 @@ import kotlin.math.pow
  * only short RGB spectrum stripes around all four display edges.
  * No solid frame, centre patterns, stars, symbols or shockwaves.
  *
- * Sync/Learn Fix: this view is also the central observer for the shared
- * SyncLearningRuntime. Even while hidden it keeps learning the current track,
- * so all other visual layers can use exactly the same BPM and beat clock.
+ * 1.6.3 Musical Bands: the 16 FFT bands still provide detail, but they no
+ * longer command each stripe independently. Side stripes follow one stable
+ * LOW envelope, while top/bottom are driven mainly by MID/HIGH envelopes.
+ * This keeps the spectrum musical instead of letting neighboring lines fight.
  */
 class StripesOnlyView(context: Context) : View(context) {
     private val density = resources.displayMetrics.density
@@ -96,29 +97,62 @@ class StripesOnlyView(context: Context) : View(context) {
         beatPulse *= exp(-dt * beatDecay)
         val huePhase = SyncLearningRuntime.hueAt()
 
-        drawHorizontalStripes(canvas, top = true, huePhase = huePhase)
-        drawHorizontalStripes(canvas, top = false, huePhase = huePhase)
-        drawVerticalStripes(canvas, left = true, huePhase = huePhase)
-        drawVerticalStripes(canvas, left = false, huePhase = huePhase)
+        // Broad musical roles keep the motion coherent. The old 16-band detail
+        // remains at low weight so the visualizer still has texture.
+        val low = groupAverage(0, 3).pow(.72f)
+        val mid = groupAverage(4, 9).pow(.74f)
+        val high = groupAverage(10, 15).pow(.72f)
+
+        drawHorizontalStripes(
+            canvas = canvas,
+            top = true,
+            huePhase = huePhase,
+            low = low,
+            mid = mid,
+            high = high,
+        )
+        drawHorizontalStripes(
+            canvas = canvas,
+            top = false,
+            huePhase = huePhase,
+            low = low,
+            mid = mid,
+            high = high,
+        )
+        drawVerticalStripes(canvas, left = true, huePhase = huePhase, low = low)
+        drawVerticalStripes(canvas, left = false, huePhase = huePhase, low = low)
 
         postInvalidateOnAnimation()
     }
 
-    private fun drawHorizontalStripes(canvas: Canvas, top: Boolean, huePhase: Float) {
+    private fun drawHorizontalStripes(
+        canvas: Canvas,
+        top: Boolean,
+        huePhase: Float,
+        low: Float,
+        mid: Float,
+        high: Float,
+    ) {
         val segments = 76
         val inset = dp(7f)
         val usable = width - inset * 2f
         val gap = usable / max(1f, (segments - 1).toFloat())
         val baseY = if (top) dp(5.5f) else height - dp(5.5f)
         val direction = if (top) 1f else -1f
+        val musicalEnvelope = if (top) {
+            high * .56f + mid * .34f + low * .10f
+        } else {
+            mid * .58f + high * .28f + low * .14f
+        }
 
         repeat(segments) { index ->
             val progress = index / max(1f, (segments - 1).toFloat())
             val band = mirroredBand(progress)
-            val level = max(.018f, displayLevels[band].pow(.63f))
+            val detail = displayLevels[band].coerceIn(0f, 1f).pow(.63f)
+            val level = max(.018f, musicalEnvelope * .86f + detail * .14f)
             val beatWave = abs(
                 sinf(progress * PI.toFloat() * 5f + huePhase * .012f),
-            ) * beatPulse
+            ) * beatPulse * (.70f + high * .30f)
             val length = dp(1.5f) + level * dp(9.4f) * intensity + beatWave * dp(5.2f)
             val x = inset + index * gap
             val hue = huePhase + progress * 430f + if (top) 0f else 165f
@@ -147,7 +181,12 @@ class StripesOnlyView(context: Context) : View(context) {
         }
     }
 
-    private fun drawVerticalStripes(canvas: Canvas, left: Boolean, huePhase: Float) {
+    private fun drawVerticalStripes(
+        canvas: Canvas,
+        left: Boolean,
+        huePhase: Float,
+        low: Float,
+    ) {
         val segments = 78
         val inset = dp(6f)
         val usable = height - inset * 2f
@@ -158,7 +197,10 @@ class StripesOnlyView(context: Context) : View(context) {
         repeat(segments) { index ->
             val progress = index / max(1f, (segments - 1).toFloat())
             val band = edgeBand(progress)
-            val level = max(.018f, displayLevels[band].pow(.61f))
+            val detail = displayLevels[band].coerceIn(0f, 1f).pow(.61f)
+            // Side movement is intentionally LOW-led. Individual bands only
+            // add small texture, preventing the random-looking line fights.
+            val level = max(.018f, low * .82f + detail * .18f)
             val length = dp(2.5f) + level * dp(27.5f) * intensity + beatPulse * dp(4.8f)
             val y = inset + index * gap
             val hue = huePhase + progress * 520f + if (left) 42f else 218f
@@ -222,6 +264,18 @@ class StripesOnlyView(context: Context) : View(context) {
         dotPaint.shader = null
         dotPaint.color = hsv(hue + 22f, .12f, 1f, max(.74f, alphaValue))
         canvas.drawCircle(x, y, max(dp(.58f), core), dotPaint)
+    }
+
+    private fun groupAverage(start: Int, end: Int): Float {
+        val safeStart = start.coerceIn(0, displayLevels.lastIndex)
+        val safeEnd = end.coerceIn(safeStart, displayLevels.lastIndex)
+        var total = 0f
+        var count = 0
+        for (index in safeStart..safeEnd) {
+            total += displayLevels[index]
+            count += 1
+        }
+        return if (count == 0) 0f else (total / count).coerceIn(0f, 1f)
     }
 
     private fun mirroredBand(progress: Float): Int {
