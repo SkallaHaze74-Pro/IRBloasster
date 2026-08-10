@@ -20,12 +20,12 @@ import kotlin.math.min
 import kotlin.math.pow
 
 /**
- * Shared main-LIVE/Stage pattern layer and spectrum endpoint-orb renderer.
+ * Shared main-LIVE/Stage pattern layer.
  *
- * Every timed decision comes from SyncLearningRuntime. 1.6.3 keeps the
- * existing shapes and adds an original pattern pack based on generic edge-
- * visualizer families discovered during the Muviz comparison. No proprietary
- * code/assets are copied; the patterns below are independent Canvas designs.
+ * 1.6.4 keeps SyncLearningRuntime as the single timing clock, brightens the
+ * centre patterns slightly, and makes the musical LOW/MID/HIGH side stripes
+ * visible in FULL and Stage Fusion. Bars are independent from endpoint-orbs:
+ * turning endpoints off no longer makes the Stage stripes disappear.
  */
 class FusionOverlayView(context: Context) : View(context) {
     private enum class FusionPattern {
@@ -118,7 +118,7 @@ class FusionOverlayView(context: Context) : View(context) {
         updateLevels(dt)
         detectSharedBeat(nowMs)
         updatePulses(dt)
-        beatEnvelope *= exp(-dt * (6.4f + sync.tempoFactor * 3.1f))
+        beatEnvelope *= exp(-dt * (6.6f + sync.tempoFactor * 3.2f))
 
         val stageContent = VisualTuningPreferences.stageContentMode(context)
         val liveMode = effectiveLivePatternMode()
@@ -129,7 +129,16 @@ class FusionOverlayView(context: Context) : View(context) {
                 drawPatterns(canvas, stage = true)
             }
             if (stageContent == StageContentMode.FUSION) {
-                drawEndpointAccents(canvas, drawBars = true)
+                val stripeMode = VisualTuningPreferences.stageStripeMode(context)
+                if (stripeMode != StageStripeMode.OFF) {
+                    drawSideAccents(
+                        canvas = canvas,
+                        drawBars = true,
+                        stripeMultiplier = stripeMode.multiplier,
+                        stage = true,
+                    )
+                    drawHorizontalStageStripes(canvas, stripeMode.multiplier)
+                }
             }
         } else {
             if (
@@ -139,8 +148,17 @@ class FusionOverlayView(context: Context) : View(context) {
             ) {
                 drawPatterns(canvas, stage = false)
             }
-            if (visualMode != VisualLayerMode.BORDER_ONLY && visualMode != VisualLayerMode.CLEAN) {
-                drawEndpointAccents(canvas, drawBars = false)
+
+            // FULL gets one coherent LOW-led stripe layer on top of the old
+            // decorative edge texture. Endpoints are calculated from these
+            // exact same lines, so they no longer float beside the bar ends.
+            if (visualMode == VisualLayerMode.FULL) {
+                drawSideAccents(
+                    canvas = canvas,
+                    drawBars = true,
+                    stripeMultiplier = 1.05f,
+                    stage = false,
+                )
             }
         }
 
@@ -182,7 +200,7 @@ class FusionOverlayView(context: Context) : View(context) {
         if (!stageMode && liveMode == LivePatternMode.SUBTLE && sequence % 2L != 0L) return
 
         val strength = sync.beatStrength.coerceIn(.18f, 1f)
-        beatEnvelope = max(beatEnvelope, strength)
+        beatEnvelope = max(beatEnvelope, .32f + strength * .68f)
         spawnPattern(
             pattern = choosePattern(),
             strength = strength,
@@ -203,16 +221,16 @@ class FusionOverlayView(context: Context) : View(context) {
     }
 
     private fun maxConcurrentPatterns(strength: Float): Int {
-        if (stageMode) return if (strength > .80f) 2 else 1
+        if (stageMode) return if (strength > .82f) 2 else 1
         return when (effectiveLivePatternMode()) {
             LivePatternMode.OFF -> 0
             LivePatternMode.SUBTLE -> 1
             LivePatternMode.BALANCED,
             LivePatternMode.BEAT_ONLY,
-            -> if (strength > .82f) 2 else 1
+            -> if (strength > .84f) 2 else 1
             LivePatternMode.STRONG,
             LivePatternMode.AUTO,
-            -> if (strength > .70f) 2 else 1
+            -> if (strength > .72f) 2 else 1
         }
     }
 
@@ -227,7 +245,7 @@ class FusionOverlayView(context: Context) : View(context) {
         val active = pulses.count { it.active }
         val pulse = when {
             active < maxActive -> pulses.firstOrNull { !it.active }
-            strength >= .88f -> pulses.maxByOrNull { it.progress }
+            strength >= .90f -> pulses.maxByOrNull { it.progress }
             else -> null
         } ?: return
 
@@ -252,7 +270,7 @@ class FusionOverlayView(context: Context) : View(context) {
         pulse.active = true
         pulse.pattern = pattern
         pulse.progress = 0f
-        pulse.speed = (sync.patternSpeed * typeScale).coerceIn(1.25f, 3.75f)
+        pulse.speed = (sync.patternSpeed * typeScale).coerceIn(1.30f, 3.85f)
         pulse.strength = strength
         pulse.hue = SyncLearningRuntime.hueAt(nowMs)
         pulse.predicted = predicted
@@ -285,7 +303,6 @@ class FusionOverlayView(context: Context) : View(context) {
             }
         }
 
-        // Repetition remains allowed; the track decides, not a fixed carousel.
         if (random.nextFloat() < .28f) return lastPattern
         val low = groupAverage(0, 3)
         val mid = groupAverage(4, 9)
@@ -372,17 +389,26 @@ class FusionOverlayView(context: Context) : View(context) {
         val centerX = width / 2f
         val centerY = height * if (stage) .48f else .54f
         val minSide = min(width, height).toFloat()
-        val baseAlpha = if (stage) .68f else .31f
-        val baseScale = if (stage) .90f else .60f
+        val liveMode = effectiveLivePatternMode()
+        val modeBoost = when (liveMode) {
+            LivePatternMode.SUBTLE -> .88f
+            LivePatternMode.STRONG -> 1.16f
+            LivePatternMode.AUTO -> 1.08f
+            else -> 1f
+        }
+        val baseAlpha = if (stage) .76f else .40f * modeBoost
+        val baseScale = if (stage) .91f else .61f
 
         pulses.forEach { pulse ->
             if (!pulse.active) return@forEach
             val p = pulse.progress.coerceIn(0f, 1f)
-            val attack = (1f - exp(-p * 24f)).coerceIn(0f, 1f)
+            val attack = (1f - exp(-p * 28f)).coerceIn(0f, 1f)
             val release = (1f - p).pow(.66f)
             val envelope = attack * release
-            val alphaValue = envelope * pulse.strength * baseAlpha * opacity *
-                if (pulse.predicted) .52f else 1f
+            val alphaValue = (
+                envelope * pulse.strength * baseAlpha * opacity *
+                    if (pulse.predicted) .54f else 1f
+                ).coerceIn(0f, 1f)
             if (alphaValue <= .012f) return@forEach
             val scale = baseScale * (.80f + p * .32f + pulse.strength * .08f)
             val hue = pulse.hue + p * (18f + sync.tempoFactor * 13f)
@@ -394,14 +420,14 @@ class FusionOverlayView(context: Context) : View(context) {
                 centerY + minSide * .30f,
                 intArrayOf(
                     hsv(hue, .96f, 1f, alphaValue),
-                    hsv(hue + 112f, .90f, 1f, alphaValue * .76f),
+                    hsv(hue + 112f, .90f, 1f, alphaValue * .82f),
                     hsv(hue + 226f, .96f, 1f, alphaValue),
                 ),
                 null,
                 Shader.TileMode.MIRROR,
             )
-            strokePaint.strokeWidth = dp(.72f + pulse.strength * 1.82f) *
-                (.72f + neonIntensity * .25f)
+            strokePaint.strokeWidth = dp(.82f + pulse.strength * 2.00f) *
+                (.74f + neonIntensity * .27f)
 
             when (pulse.pattern) {
                 FusionPattern.RECTANGLE -> drawRectangle(canvas, centerX, centerY, minSide, scale, pulse)
@@ -568,10 +594,17 @@ class FusionOverlayView(context: Context) : View(context) {
         scale: Float,
         pulse: PatternPulse,
     ) {
-        val radius = minSide * .27f * scale *
-            (1f + groupAverage(0, 3) * .10f + sinf(pulse.progress * PI.toFloat()) * .08f)
-        canvas.drawCircle(cx, cy, radius, strokePaint)
-        if (pulse.strength > .68f) canvas.drawCircle(cx, cy, radius * .72f, strokePaint)
+        val low = groupAverage(0, 3)
+        val oval = sinf(pulse.progress * PI.toFloat() * 2f + pulse.phaseOffset)
+        val rx = minSide * .27f * scale * (1f + low * .08f + oval * .08f)
+        val ry = minSide * .27f * scale * (1f + low * .05f - oval * .06f)
+        canvas.drawOval(RectF(cx - rx, cy - ry, cx + rx, cy + ry), strokePaint)
+        if (pulse.strength > .68f) {
+            canvas.drawOval(
+                RectF(cx - rx * .72f, cy - ry * .72f, cx + rx * .72f, cy + ry * .72f),
+                strokePaint,
+            )
+        }
     }
 
     private fun drawStacked(
@@ -682,14 +715,13 @@ class FusionOverlayView(context: Context) : View(context) {
         scale: Float,
         pulse: PatternPulse,
     ) {
-        val width = minSide * .36f * scale
-        val height = minSide * .34f * scale
+        val heightLocal = minSide * .34f * scale
         val columns = 8
         repeat(columns) { index ->
             val n = index / (columns - 1f)
             val xOffset = minSide * (.045f + n * .30f) * scale
             val travel = (pulse.progress + n * .22f) % 1f
-            val y = cy - height + travel * height * 2f
+            val y = cy - heightLocal + travel * heightLocal * 2f
             val streak = dp(7f + groupAverage(10, 15) * 14f)
             canvas.drawLine(cx - xOffset, y - streak, cx - xOffset, y + streak, strokePaint)
             canvas.drawLine(cx + xOffset, y - streak, cx + xOffset, y + streak, strokePaint)
@@ -705,7 +737,7 @@ class FusionOverlayView(context: Context) : View(context) {
         pulse: PatternPulse,
     ) {
         val low = groupAverage(0, 3)
-        val height = minSide * (.28f + low * .20f) * scale
+        val heightLocal = minSide * (.28f + low * .20f) * scale
         val baseWidth = minSide * .19f * scale
         repeat(3) { flame ->
             path.reset()
@@ -713,7 +745,7 @@ class FusionOverlayView(context: Context) : View(context) {
             val points = 18
             repeat(points + 1) { index ->
                 val n = index / points.toFloat()
-                val y = cy + height * .48f - n * height
+                val y = cy + heightLocal * .48f - n * heightLocal
                 val taper = 1f - n * .72f
                 val x = cx + offset * taper +
                     sinf(n * PI.toFloat() * (4f + flame) + pulse.phaseOffset + flame) *
@@ -810,8 +842,8 @@ class FusionOverlayView(context: Context) : View(context) {
             cy,
             max(dp(1f), radius),
             intArrayOf(
-                hsv(hue + 15f, .70f, 1f, alphaValue * .30f),
-                hsv(hue + 120f, .86f, 1f, alphaValue * .13f),
+                hsv(hue + 15f, .70f, 1f, alphaValue * .36f),
+                hsv(hue + 120f, .86f, 1f, alphaValue * .17f),
                 Color.TRANSPARENT,
             ),
             floatArrayOf(0f, .46f, 1f),
@@ -822,56 +854,153 @@ class FusionOverlayView(context: Context) : View(context) {
         canvas.drawCircle(cx, cy, radius * .72f, strokePaint)
     }
 
-    private fun drawEndpointAccents(canvas: Canvas, drawBars: Boolean) {
+    private fun drawSideAccents(
+        canvas: Canvas,
+        drawBars: Boolean,
+        stripeMultiplier: Float,
+        stage: Boolean,
+    ) {
         val endpoint = VisualTuningPreferences.endpointMode(context)
-        if (endpoint == EndpointMode.OFF) return
         val opacity = VisualTuningPreferences.opacity(context)
-        val segments = 44
-        val top = dp(8f)
-        val bottom = height - dp(8f)
+        val segments = if (stage) 52 else 48
+        val top = dp(if (stage) 12f else 8f)
+        val bottom = height - dp(if (stage) 12f else 8f)
         val usable = max(1f, bottom - top)
         val time = SystemClock.uptimeMillis() / 1000f
         val phase = SyncLearningRuntime.hueAt()
-        val beat = max(beatEnvelope, sync.beatStrength * .78f)
+        val beat = max(beatEnvelope, sync.beatStrength * .82f)
         val low = groupAverage(0, 3).pow(.68f)
+        val mid = groupAverage(4, 9).pow(.72f)
 
         repeat(2) { side ->
             val left = side == 0
             val direction = if (left) 1f else -1f
-            val outer = if (left) dp(4.5f) else width - dp(4.5f)
+            val outer = if (left) dp(if (stage) 7f else 4.8f) else width - dp(if (stage) 7f else 4.8f)
             repeat(segments) { segment ->
                 val progress = segment / (segments - 1f)
                 val band = edgeBandIndex(progress)
                 val detail = levels[band].coerceIn(0f, 1f).pow(.62f)
-                // Same LOW-led rule as Nur Striche: side accents move together,
-                // with only a little per-band texture.
-                val level = low * .78f + detail * .22f
-                val body = sinf(progress * PI.toFloat()) * dp(13f)
-                val wave = sinf(progress * PI.toFloat() * 5f + time * .62f + side) * dp(2.0f)
-                val baseX = outer + direction * (dp(2f) + body + wave * (.20f + groupAverage(4, 9) * .58f))
-                val length = dp(3.2f) + level * dp(if (stageMode) 24f else 27f) * neonIntensity +
-                    beat * dp(5.2f)
+                val level = (low * .82f + detail * .18f).coerceIn(0f, 1f)
+                val body = sinf(progress * PI.toFloat()) * dp(if (stage) 9f else 12f)
+                val wave = sinf(progress * PI.toFloat() * 5f + time * .58f + side) * dp(1.7f)
+                val baseX = outer + direction * (
+                    dp(1.5f) + body + wave * (.12f + mid * .48f)
+                    )
+                val length = (
+                    dp(if (stage) 4.4f else 3.6f) +
+                        level * dp(if (stage) 31f else 29f) * neonIntensity +
+                        beat * dp(if (stage) 7.5f else 5.5f)
+                    ) * stripeMultiplier
                 val endX = baseX + direction * length
                 val y = top + progress * usable
                 val hue = phase + progress * 430f + side * 145f
-                val visible = (.19f + level * .75f + beat * .14f).coerceIn(.18f, 1f)
+                val visible = (
+                    .22f + level * .78f + beat * .16f
+                    ).coerceIn(.18f, 1f)
 
                 if (drawBars) {
                     strokePaint.shader = null
-                    strokePaint.color = hsv(hue, .96f, 1f, visible * .72f * opacity)
-                    strokePaint.strokeWidth = dp(.85f + level * 1.75f)
+                    strokePaint.color = hsv(
+                        hue,
+                        .96f,
+                        1f,
+                        visible * (if (stage) .92f else .72f) * opacity,
+                    )
+                    strokePaint.strokeWidth = dp(
+                        if (stage) .95f + level * 2.05f else .88f + level * 1.82f,
+                    )
                     canvas.drawLine(baseX, y, endX, y, strokePaint)
                 }
 
+                if (endpoint != EndpointMode.OFF) {
+                    drawEndpointOrb(
+                        canvas = canvas,
+                        x = endX,
+                        y = y,
+                        hue = hue,
+                        level = level,
+                        beat = beat,
+                        opacity = opacity,
+                        endpoint = endpoint,
+                        stage = stage,
+                    )
+                }
+            }
+        }
+    }
+
+    private fun drawHorizontalStageStripes(canvas: Canvas, stripeMultiplier: Float) {
+        val opacity = VisualTuningPreferences.opacity(context)
+        val endpoint = VisualTuningPreferences.endpointMode(context)
+        val phase = SyncLearningRuntime.hueAt()
+        val low = groupAverage(0, 3).pow(.72f)
+        val mid = groupAverage(4, 9).pow(.72f)
+        val high = groupAverage(10, 15).pow(.70f)
+        val beat = max(beatEnvelope, sync.beatStrength * .82f)
+        val segments = 62
+        val inset = dp(12f)
+        val usable = width - inset * 2f
+        val gap = usable / max(1f, (segments - 1).toFloat())
+
+        repeat(segments) { index ->
+            val progress = index / max(1f, (segments - 1).toFloat())
+            val detail = levels[mirroredBandIndex(progress)].pow(.62f)
+            val topLevel = (high * .56f + mid * .34f + detail * .10f).coerceIn(0f, 1f)
+            val bottomLevel = (mid * .58f + high * .28f + low * .08f + detail * .06f).coerceIn(0f, 1f)
+            val x = inset + index * gap
+            val topStart = dp(7f)
+            val bottomStart = height - dp(7f)
+            val topLength = (
+                dp(2.2f) + topLevel * dp(14f) * neonIntensity + beat * dp(3.5f)
+                ) * stripeMultiplier
+            val bottomLength = (
+                dp(2.2f) + bottomLevel * dp(14f) * neonIntensity + beat * dp(3.5f)
+                ) * stripeMultiplier
+            val hueTop = phase + progress * 430f
+            val hueBottom = phase + 170f + progress * 430f
+
+            strokePaint.color = hsv(
+                hueTop,
+                .95f,
+                1f,
+                (.30f + topLevel * .68f + beat * .12f) * opacity,
+            )
+            strokePaint.strokeWidth = dp(.78f + topLevel * 1.55f)
+            canvas.drawLine(x, topStart, x, topStart + topLength, strokePaint)
+
+            strokePaint.color = hsv(
+                hueBottom,
+                .95f,
+                1f,
+                (.30f + bottomLevel * .68f + beat * .12f) * opacity,
+            )
+            strokePaint.strokeWidth = dp(.78f + bottomLevel * 1.55f)
+            canvas.drawLine(x, bottomStart, x, bottomStart - bottomLength, strokePaint)
+
+            if (endpoint != EndpointMode.OFF && index % 3 == 0) {
                 drawEndpointOrb(
-                    canvas = canvas,
-                    x = endX,
-                    y = y,
-                    hue = hue,
-                    level = level,
-                    beat = beat,
-                    opacity = opacity,
-                    endpoint = endpoint,
+                    canvas,
+                    x,
+                    topStart + topLength,
+                    hueTop,
+                    topLevel,
+                    beat,
+                    opacity,
+                    endpoint,
+                    stage = true,
+                    compact = true,
+                )
+                drawEndpointOrb(
+                    canvas,
+                    x,
+                    bottomStart - bottomLength,
+                    hueBottom,
+                    bottomLevel,
+                    beat,
+                    opacity,
+                    endpoint,
+                    stage = true,
+                    compact = true,
                 )
             }
         }
@@ -886,22 +1015,30 @@ class FusionOverlayView(context: Context) : View(context) {
         beat: Float,
         opacity: Float,
         endpoint: EndpointMode,
+        stage: Boolean,
+        compact: Boolean = false,
     ) {
+        // No permanent dotted wall: the point only appears when the line has
+        // real musical energy. Its centre is exactly the calculated line end.
+        val activity = (level * .82f + beat * .28f).coerceIn(0f, 1f)
+        if (activity < .13f) return
+
         val strength = endpoint.strength
-        val coreRadius = max(
-            dp(.68f),
-            dp(.62f + level * 1.32f + beat * .62f) * strength,
-        )
-        val glowRadius = max(dp(2.2f), coreRadius * 3.15f)
-        val alphaValue = (.50f + level * .38f + beat * .12f).coerceIn(.50f, 1f)
+        val compactScale = if (compact) .70f else 1f
+        val stageScale = if (stage) 1.10f else 1f
+        val coreRadius = dp(
+            (.42f + activity * 1.18f + beat * .30f) * compactScale * stageScale,
+        ) * strength
+        val glowRadius = max(dp(.9f), coreRadius * 2.75f)
+        val alphaValue = (activity * .86f + beat * .12f).coerceIn(.12f, 1f)
 
         fillPaint.shader = RadialGradient(
             x,
             y,
             glowRadius,
             intArrayOf(
-                hsv(hue + 18f, .30f, 1f, alphaValue * opacity),
-                hsv(hue, .90f, 1f, alphaValue * .32f * opacity),
+                hsv(hue + 18f, .28f, 1f, alphaValue * opacity),
+                hsv(hue, .88f, 1f, alphaValue * .30f * opacity),
                 Color.TRANSPARENT,
             ),
             null,
@@ -909,8 +1046,8 @@ class FusionOverlayView(context: Context) : View(context) {
         )
         canvas.drawCircle(x, y, glowRadius, fillPaint)
         fillPaint.shader = null
-        fillPaint.color = hsv(hue + 22f, .14f, 1f, max(.74f, alphaValue) * opacity)
-        canvas.drawCircle(x, y, coreRadius, fillPaint)
+        fillPaint.color = hsv(hue + 22f, .12f, 1f, alphaValue * opacity)
+        canvas.drawCircle(x, y, max(dp(.38f), coreRadius), fillPaint)
     }
 
     private fun groupAverage(start: Int, end: Int): Float {
@@ -931,8 +1068,13 @@ class FusionOverlayView(context: Context) : View(context) {
         else -> (4f - (progress - .72f) / .28f * 4f).toInt().coerceIn(0, 4)
     }
 
+    private fun mirroredBandIndex(progress: Float): Int {
+        val mirrored = if (progress <= .5f) progress * 2f else (1f - progress) * 2f
+        return (mirrored * levels.lastIndex).toInt().coerceIn(0, levels.lastIndex)
+    }
+
     private fun hsv(hue: Float, saturation: Float, value: Float, alphaValue: Float): Int {
-        val brightness = (.63f + neonIntensity * .32f).coerceIn(.65f, 1.20f)
+        val brightness = (.65f + neonIntensity * .33f).coerceIn(.68f, 1.22f)
         val color = Color.HSVToColor(
             floatArrayOf(
                 (hue % 360f + 360f) % 360f,
