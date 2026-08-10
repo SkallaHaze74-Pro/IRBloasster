@@ -111,13 +111,18 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6
 
-      - name: Validate Music Capsule 1.6.0 Visual Fusion
+      - name: Validate Music Capsule 1.6.0 RGB stripes hotfix
         run: |
           grep -F 'include(":musiccapsule")' settings.gradle
           grep -F "applicationId 'com.skallahaze.musiccapsule'" musiccapsule/build.gradle
           grep -F "versionName '1.6.0'" musiccapsule/build.gradle
-          grep -F "versionCode 11" musiccapsule/build.gradle
+          grep -F "versionCode 12" musiccapsule/build.gradle
           grep -F 'TARGET_SMALLEST_WIDTH_DP = 393' musiccapsule/src/main/java/com/skallahaze/musiccapsule/XiaomiDisplayProfile.kt
+          grep -F 'CLEAN("clean", "Nur Striche")' musiccapsule/src/main/java/com/skallahaze/musiccapsule/CapsulePreferences.kt
+          grep -F 'class StripesOnlyView' musiccapsule/src/main/java/com/skallahaze/musiccapsule/StripesOnlyView.kt
+          grep -F 'No solid frame, centre patterns, stars, symbols or shockwaves' musiccapsule/src/main/java/com/skallahaze/musiccapsule/StripesOnlyView.kt
+          grep -F 'stripesView?.setSnapshot' musiccapsule/src/main/java/com/skallahaze/musiccapsule/CapsuleOverlayService.kt
+          grep -F 'fusionView?.visibility = if (stripesOnly) View.GONE else View.VISIBLE' musiccapsule/src/main/java/com/skallahaze/musiccapsule/CapsuleOverlayService.kt
           grep -F 'enum class LivePatternMode' musiccapsule/src/main/java/com/skallahaze/musiccapsule/VisualTuningPreferences.kt
           grep -F 'EndpointMode.STRONG' musiccapsule/src/main/java/com/skallahaze/musiccapsule/VisualTuningPreferences.kt
           grep -F 'StageContentMode.FUSION' musiccapsule/src/main/java/com/skallahaze/musiccapsule/VisualTuningPreferences.kt
@@ -155,7 +160,7 @@ jobs:
       - name: Create ephemeral Music Capsule signing key
         run: |
           mkdir -p "$HOME/.musiccapsule"
-          PASS="ci-music-capsule-1.6.0-only"
+          PASS="ci-music-capsule-1.6.0-stripes-only"
           keytool -genkeypair \
             -keystore "$HOME/.musiccapsule/music-capsule-release.jks" \
             -storetype PKCS12 \
@@ -206,7 +211,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: MusicCapsule-v1.6.0-lint
+          name: MusicCapsule-v1.6.0-stripes-only-lint
           path: musiccapsule/build/reports/lint-results-release.html
           if-no-files-found: ignore
           retention-days: 30
