@@ -82,8 +82,8 @@ enum class BeatFxMode(
     val label: String,
     val multiplier: Float,
 ) {
-    // 1.6.1 Sync Fix: slower base hue travel. Beat/BPM still accelerates it,
-    // but colors no longer outrun the spectrum and pattern motion.
+    // Sync Fix: slower base hue travel. Beat/BPM can still accelerate it,
+    // but colors no longer outrun spectrum and pattern motion.
     SMOOTH("smooth", "Smooth", .40f),
     REACTIVE("reactive", "Reactive", .67f),
     BRUTAL("brutal", "Brutal", .92f),
@@ -168,7 +168,9 @@ enum class TrailMode(
 enum class AutoTuneMode(val storedValue: String, val label: String) {
     OFF("off", "Aus / Manuell"),
     SOFT("soft", "Auto Soft"),
-    BALANCED("balanced", "Auto Balance"),
+    // The old balanced slot keeps its stored value for update compatibility,
+    // but is now the neutral adaptive learner requested by the user.
+    BALANCED("balanced", "Auto Lernen"),
     BRUTAL("brutal", "Auto Brutal"),
     ;
 
