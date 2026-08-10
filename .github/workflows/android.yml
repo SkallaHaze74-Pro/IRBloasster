@@ -111,37 +111,28 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6
 
-      - name: Validate Music Capsule 1.6.1 Sync Learning
+      - name: Validate Music Capsule 1.6.2 System Mix Probe
         run: |
           grep -F 'include(":musiccapsule")' settings.gradle
           grep -F "applicationId 'com.skallahaze.musiccapsule'" musiccapsule/build.gradle
-          grep -F "versionName '1.6.1'" musiccapsule/build.gradle
-          grep -F "versionCode 14" musiccapsule/build.gradle
-          grep -F 'TARGET_SMALLEST_WIDTH_DP = 393' musiccapsule/src/main/java/com/skallahaze/musiccapsule/XiaomiDisplayProfile.kt
-          grep -F 'CLEAN("clean", "Nur Striche")' musiccapsule/src/main/java/com/skallahaze/musiccapsule/CapsulePreferences.kt
+          grep -F "versionName '1.6.2'" musiccapsule/build.gradle
+          grep -F "versionCode 15" musiccapsule/build.gradle
           grep -F 'BALANCED("balanced", "Auto Lernen")' musiccapsule/src/main/java/com/skallahaze/musiccapsule/CapsulePreferences.kt
-          grep -F 'REACTIVE("reactive", "Reactive", .67f)' musiccapsule/src/main/java/com/skallahaze/musiccapsule/CapsulePreferences.kt
           grep -F 'object SyncLearningRuntime' musiccapsule/src/main/java/com/skallahaze/musiccapsule/SyncLearningRuntime.kt
-          grep -F 'colorRateDegreesPerSecond' musiccapsule/src/main/java/com/skallahaze/musiccapsule/SyncLearningRuntime.kt
-          grep -F 'patternSpeed' musiccapsule/src/main/java/com/skallahaze/musiccapsule/SyncLearningRuntime.kt
-          grep -F 'lernt neuen Track' musiccapsule/src/main/java/com/skallahaze/musiccapsule/SyncLearningRuntime.kt
-          grep -F 'SyncLearningRuntime.observe' musiccapsule/src/main/java/com/skallahaze/musiccapsule/StripesOnlyView.kt
-          grep -F 'SyncLearningRuntime.hueAt' musiccapsule/src/main/java/com/skallahaze/musiccapsule/StripesOnlyView.kt
-          grep -F 'drawEndpointDot' musiccapsule/src/main/java/com/skallahaze/musiccapsule/StripesOnlyView.kt
-          grep -F 'detectSharedBeat' musiccapsule/src/main/java/com/skallahaze/musiccapsule/FusionOverlayView.kt
-          grep -F 'sync.patternSpeed' musiccapsule/src/main/java/com/skallahaze/musiccapsule/FusionOverlayView.kt
-          grep -F 'sync.patternGapMs' musiccapsule/src/main/java/com/skallahaze/musiccapsule/FusionOverlayView.kt
-          grep -F 'drawEndpointOrb' musiccapsule/src/main/java/com/skallahaze/musiccapsule/FusionOverlayView.kt
-          grep -F 'enum class LivePatternMode' musiccapsule/src/main/java/com/skallahaze/musiccapsule/VisualTuningPreferences.kt
-          grep -F 'EndpointMode.STRONG' musiccapsule/src/main/java/com/skallahaze/musiccapsule/VisualTuningPreferences.kt
-          grep -F 'StageContentMode.FUSION' musiccapsule/src/main/java/com/skallahaze/musiccapsule/VisualTuningPreferences.kt
+          grep -F 'class OutputMixVisualizerService' musiccapsule/src/main/java/com/skallahaze/musiccapsule/OutputMixVisualizerService.kt
+          grep -F 'Visualizer(0)' musiccapsule/src/main/java/com/skallahaze/musiccapsule/OutputMixVisualizerService.kt
+          grep -F 'SCALING_MODE_NORMALIZED' musiccapsule/src/main/java/com/skallahaze/musiccapsule/OutputMixVisualizerService.kt
+          grep -F 'output-mix-visualizer-live' musiccapsule/src/main/java/com/skallahaze/musiccapsule/OutputMixVisualizerService.kt
+          grep -F 'SyncLearningRuntime.observe' musiccapsule/src/main/java/com/skallahaze/musiccapsule/OutputMixVisualizerService.kt
+          grep -F 'class OutputMixProbeActivity' musiccapsule/src/main/java/com/skallahaze/musiccapsule/OutputMixProbeActivity.kt
+          grep -F 'START SYSTEM MIX' musiccapsule/src/main/java/com/skallahaze/musiccapsule/OutputMixProbeActivity.kt
+          grep -F 'android.permission.MODIFY_AUDIO_SETTINGS' musiccapsule/src/main/AndroidManifest.xml
+          grep -F '.OutputMixProbeActivity' musiccapsule/src/main/AndroidManifest.xml
+          grep -F '.OutputMixVisualizerService' musiccapsule/src/main/AndroidManifest.xml
+          grep -F 'CLEAN("clean", "Nur Striche")' musiccapsule/src/main/java/com/skallahaze/musiccapsule/CapsulePreferences.kt
           grep -F 'StripesOnlyView(this)' musiccapsule/src/main/java/com/skallahaze/musiccapsule/CapsuleOverlayService.kt
           grep -F 'FusionOverlayView(this)' musiccapsule/src/main/java/com/skallahaze/musiccapsule/CapsuleOverlayService.kt
-          grep -F 'setStageMode(true)' musiccapsule/src/main/java/com/skallahaze/musiccapsule/StageActivity.kt
           grep -F 'MICROPHONE_FALLBACK' musiccapsule/src/main/java/com/skallahaze/musiccapsule/PlaybackAnalyzerService.kt
-          grep -F 'FLAG_SHOW_WHEN_LOCKED' musiccapsule/src/main/java/com/skallahaze/musiccapsule/CapsuleOverlayService.kt
-          grep -F 'registerDisplayListener' musiccapsule/src/main/java/com/skallahaze/musiccapsule/CapsuleOverlayService.kt
-          grep -F 'onConfigurationChanged' musiccapsule/src/main/java/com/skallahaze/musiccapsule/CapsuleOverlayService.kt
 
       - name: Set up JDK 17
         uses: actions/setup-java@v5
@@ -157,7 +148,7 @@ jobs:
       - name: Create ephemeral Music Capsule signing key
         run: |
           mkdir -p "$HOME/.musiccapsule"
-          PASS="ci-music-capsule-1.6.1-sync-learning"
+          PASS="ci-music-capsule-1.6.2-output-mix"
           keytool -genkeypair \
             -keystore "$HOME/.musiccapsule/music-capsule-release.jks" \
             -storetype PKCS12 \
@@ -190,16 +181,16 @@ jobs:
 
       - name: Prepare Music Capsule artifact
         run: |
-          cp musiccapsule/build/outputs/apk/release/musiccapsule-release.apk MusicCapsule-v1.6.1-SYNC-LEARNING-CI-ephemeral-signature.apk
-          sha256sum MusicCapsule-v1.6.1-SYNC-LEARNING-CI-ephemeral-signature.apk > MusicCapsule-v1.6.1-SYNC-LEARNING-CI-ephemeral-signature.apk.sha256
+          cp musiccapsule/build/outputs/apk/release/musiccapsule-release.apk MusicCapsule-v1.6.2-OUTPUT-MIX-CI-ephemeral-signature.apk
+          sha256sum MusicCapsule-v1.6.2-OUTPUT-MIX-CI-ephemeral-signature.apk > MusicCapsule-v1.6.2-OUTPUT-MIX-CI-ephemeral-signature.apk.sha256
 
       - name: Upload standalone Music Capsule CI APK
         uses: actions/upload-artifact@v7
         with:
-          name: MusicCapsule-v1.6.1-SYNC-LEARNING-CI-ephemeral-signature-DO-NOT-USE-FOR-UPDATES
+          name: MusicCapsule-v1.6.2-OUTPUT-MIX-CI-ephemeral-signature-DO-NOT-USE-FOR-UPDATES
           path: |
-            MusicCapsule-v1.6.1-SYNC-LEARNING-CI-ephemeral-signature.apk
-            MusicCapsule-v1.6.1-SYNC-LEARNING-CI-ephemeral-signature.apk.sha256
+            MusicCapsule-v1.6.2-OUTPUT-MIX-CI-ephemeral-signature.apk
+            MusicCapsule-v1.6.2-OUTPUT-MIX-CI-ephemeral-signature.apk.sha256
             musiccapsule-apksigner-verify.txt
           if-no-files-found: error
           retention-days: 30
@@ -208,7 +199,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: MusicCapsule-v1.6.1-sync-learning-lint
+          name: MusicCapsule-v1.6.2-output-mix-lint
           path: musiccapsule/build/reports/lint-results-release.html
           if-no-files-found: ignore
           retention-days: 30
