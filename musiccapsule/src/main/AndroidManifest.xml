@@ -38,6 +38,17 @@
             </intent-filter>
         </activity>
 
+        <activity
+            android:name=".OutputMixProbeActivity"
+            android:exported="true"
+            android:label="Music Capsule Mix Test"
+            android:launchMode="singleTask">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+
         <service
             android:name=".CapsuleOverlayService"
             android:exported="false"
@@ -51,6 +62,15 @@
             android:name=".PlaybackAnalyzerService"
             android:exported="false"
             android:foregroundServiceType="mediaProjection|microphone" />
+
+        <service
+            android:name=".OutputMixVisualizerService"
+            android:exported="false"
+            android:foregroundServiceType="specialUse">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="User-started root-free Android output-mix visualizer diagnostic" />
+        </service>
 
         <service
             android:name=".CapsuleNotificationListener"
