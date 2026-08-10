@@ -14,14 +14,12 @@ import kotlin.math.max
 import kotlin.math.pow
 
 /**
- * Minimal main-LIVE style requested from the Xiaomi recordings:
- * only short RGB spectrum stripes around all four display edges.
- * No solid frame, centre patterns, stars, symbols or shockwaves.
+ * Minimal main-LIVE style: only music-driven RGB stripes around all four edges.
  *
- * 1.6.3 Musical Bands: the 16 FFT bands still provide detail, but they no
- * longer command each stripe independently. Side stripes follow one stable
- * LOW envelope, while top/bottom are driven mainly by MID/HIGH envelopes.
- * This keeps the spectrum musical instead of letting neighboring lines fight.
+ * 1.6.4 keeps the coherent LOW/MID/HIGH roles from 1.6.3, raises stripe
+ * visibility slightly, and makes endpoint dots truly belong to their stripe:
+ * they are drawn at the exact calculated tip and fade out when that stripe has
+ * no real musical energy instead of forming a permanent dotted wall.
  */
 class StripesOnlyView(context: Context) : View(context) {
     private val density = resources.displayMetrics.density
@@ -81,7 +79,7 @@ class StripesOnlyView(context: Context) : View(context) {
             lastSyncBeatSequence = sync.beatSequence
         }
         if (sync.beatSequence > lastSyncBeatSequence) {
-            beatPulse = max(beatPulse, .67f + sync.beatStrength * .33f)
+            beatPulse = max(beatPulse, .69f + sync.beatStrength * .31f)
             lastSyncBeatSequence = sync.beatSequence
         }
 
@@ -93,34 +91,18 @@ class StripesOnlyView(context: Context) : View(context) {
             displayLevels[index] += (target - displayLevels[index]) * factor
         }
 
-        val beatDecay = 6.4f + sync.tempoFactor * 3.2f
+        val beatDecay = 6.7f + sync.tempoFactor * 3.3f
         beatPulse *= exp(-dt * beatDecay)
         val huePhase = SyncLearningRuntime.hueAt()
 
-        // Broad musical roles keep the motion coherent. The old 16-band detail
-        // remains at low weight so the visualizer still has texture.
         val low = groupAverage(0, 3).pow(.72f)
         val mid = groupAverage(4, 9).pow(.74f)
         val high = groupAverage(10, 15).pow(.72f)
 
-        drawHorizontalStripes(
-            canvas = canvas,
-            top = true,
-            huePhase = huePhase,
-            low = low,
-            mid = mid,
-            high = high,
-        )
-        drawHorizontalStripes(
-            canvas = canvas,
-            top = false,
-            huePhase = huePhase,
-            low = low,
-            mid = mid,
-            high = high,
-        )
-        drawVerticalStripes(canvas, left = true, huePhase = huePhase, low = low)
-        drawVerticalStripes(canvas, left = false, huePhase = huePhase, low = low)
+        drawHorizontalStripes(canvas, true, huePhase, low, mid, high)
+        drawHorizontalStripes(canvas, false, huePhase, low, mid, high)
+        drawVerticalStripes(canvas, true, huePhase, low)
+        drawVerticalStripes(canvas, false, huePhase, low)
 
         postInvalidateOnAnimation()
     }
@@ -149,34 +131,25 @@ class StripesOnlyView(context: Context) : View(context) {
             val progress = index / max(1f, (segments - 1).toFloat())
             val band = mirroredBand(progress)
             val detail = displayLevels[band].coerceIn(0f, 1f).pow(.63f)
-            val level = max(.018f, musicalEnvelope * .86f + detail * .14f)
+            val level = max(.012f, musicalEnvelope * .86f + detail * .14f)
             val beatWave = abs(
                 sinf(progress * PI.toFloat() * 5f + huePhase * .012f),
             ) * beatPulse * (.70f + high * .30f)
-            val length = dp(1.5f) + level * dp(9.4f) * intensity + beatWave * dp(5.2f)
+            val length = dp(1.7f) + level * dp(10.2f) * intensity + beatWave * dp(5.5f)
             val x = inset + index * gap
             val hue = huePhase + progress * 430f + if (top) 0f else 165f
-            paint.strokeWidth = dp(.72f) + level * dp(1.55f)
+            paint.strokeWidth = dp(.80f) + level * dp(1.65f)
             paint.color = hsv(
                 hue,
                 .97f,
                 1f,
-                .22f + level * .74f + beatPulse * .08f,
+                (.28f + level * .72f + beatPulse * .10f).coerceIn(.18f, 1f),
             )
             val endY = baseY + direction * length
             canvas.drawLine(x, baseY, x, endY, paint)
 
-            // Top/bottom points stay sparse so the minimal mode remains clean.
             if (VisualTuningPreferences.endpointMode(context) != EndpointMode.OFF && index % 3 == 0) {
-                drawEndpointDot(
-                    canvas = canvas,
-                    x = x,
-                    y = endY,
-                    hue = hue,
-                    level = level,
-                    beat = beatPulse,
-                    horizontal = true,
-                )
+                drawEndpointDot(canvas, x, endY, hue, level, beatPulse, horizontal = true)
             }
         }
     }
@@ -198,32 +171,22 @@ class StripesOnlyView(context: Context) : View(context) {
             val progress = index / max(1f, (segments - 1).toFloat())
             val band = edgeBand(progress)
             val detail = displayLevels[band].coerceIn(0f, 1f).pow(.61f)
-            // Side movement is intentionally LOW-led. Individual bands only
-            // add small texture, preventing the random-looking line fights.
-            val level = max(.018f, low * .82f + detail * .18f)
-            val length = dp(2.5f) + level * dp(27.5f) * intensity + beatPulse * dp(4.8f)
+            val level = max(.012f, low * .82f + detail * .18f)
+            val length = dp(2.8f) + level * dp(29.2f) * intensity + beatPulse * dp(5.1f)
             val y = inset + index * gap
             val hue = huePhase + progress * 520f + if (left) 42f else 218f
-            paint.strokeWidth = dp(.82f) + level * dp(1.95f)
+            paint.strokeWidth = dp(.92f) + level * dp(2.08f)
             paint.color = hsv(
                 hue,
                 .98f,
                 1f,
-                .22f + level * .75f + beatPulse * .10f,
+                (.29f + level * .71f + beatPulse * .11f).coerceIn(.18f, 1f),
             )
             val endX = baseX + direction * length
             canvas.drawLine(baseX, y, endX, y, paint)
 
             if (VisualTuningPreferences.endpointMode(context) != EndpointMode.OFF) {
-                drawEndpointDot(
-                    canvas = canvas,
-                    x = endX,
-                    y = y,
-                    hue = hue,
-                    level = level,
-                    beat = beatPulse,
-                    horizontal = false,
-                )
+                drawEndpointDot(canvas, endX, y, hue, level, beatPulse, horizontal = false)
             }
         }
     }
@@ -239,14 +202,15 @@ class StripesOnlyView(context: Context) : View(context) {
     ) {
         val mode = VisualTuningPreferences.endpointMode(context)
         if (mode == EndpointMode.OFF) return
+
+        val activity = (level * .84f + beat * .26f).coerceIn(0f, 1f)
+        if (activity < .13f) return
+
         val strength = mode.strength
-        val core = dp(
-            (if (horizontal) .46f else .72f) +
-                level * (if (horizontal) .85f else 1.32f) +
-                beat * (if (horizontal) .36f else .66f),
-        ) * strength
-        val glow = max(dp(if (horizontal) 1.45f else 2.35f), core * 3.05f)
-        val alphaValue = (.52f + level * .36f + beat * .12f).coerceIn(.50f, 1f)
+        val compact = if (horizontal) .72f else 1f
+        val core = dp((.42f + activity * 1.20f + beat * .28f) * compact) * strength
+        val glow = max(dp(if (horizontal) .95f else 1.20f), core * 2.75f)
+        val alphaValue = (activity * .86f + beat * .10f).coerceIn(.12f, 1f)
 
         dotPaint.shader = RadialGradient(
             x,
@@ -254,7 +218,7 @@ class StripesOnlyView(context: Context) : View(context) {
             glow,
             intArrayOf(
                 hsv(hue + 20f, .28f, 1f, alphaValue),
-                hsv(hue, .84f, 1f, alphaValue * .36f),
+                hsv(hue, .84f, 1f, alphaValue * .30f),
                 Color.TRANSPARENT,
             ),
             null,
@@ -262,8 +226,8 @@ class StripesOnlyView(context: Context) : View(context) {
         )
         canvas.drawCircle(x, y, glow, dotPaint)
         dotPaint.shader = null
-        dotPaint.color = hsv(hue + 22f, .12f, 1f, max(.74f, alphaValue))
-        canvas.drawCircle(x, y, max(dp(.58f), core), dotPaint)
+        dotPaint.color = hsv(hue + 22f, .12f, 1f, alphaValue)
+        canvas.drawCircle(x, y, max(dp(.38f), core), dotPaint)
     }
 
     private fun groupAverage(start: Int, end: Int): Float {
@@ -292,7 +256,7 @@ class StripesOnlyView(context: Context) : View(context) {
     }
 
     private fun hsv(hue: Float, saturation: Float, value: Float, alpha: Float): Int {
-        val brightness = (.64f + intensity * .31f).coerceIn(.65f, 1.20f)
+        val brightness = (.68f + intensity * .32f).coerceIn(.70f, 1.23f)
         val color = Color.HSVToColor(
             floatArrayOf(
                 (hue % 360f + 360f) % 360f,
