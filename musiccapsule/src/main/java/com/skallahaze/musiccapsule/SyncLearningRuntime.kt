@@ -174,6 +174,46 @@ object SyncLearningRuntime {
             huePhase = huePhase,
             updatedAt = now,
         )
+
+        // The neutral BALANCED slot is now the user's "Auto Lernen" mode.
+        // Publish its learned choices so the existing app status immediately
+        // shows what the learner decided, even in the Nur-Striche view where
+        // EdgePanelView itself is intentionally hidden.
+        if (autoMode == AutoTuneMode.BALANCED) {
+            val learnedMotion = when {
+                tempo.tempoFactor > .68f || energyAverage > .60f -> MotionProfile.DIRECT
+                tempo.tempoFactor > .30f || energyAverage > .34f -> MotionProfile.BALANCED
+                else -> MotionProfile.SILKY
+            }
+            val learnedTrail = if (tempo.tempoFactor > .38f || energyAverage > .34f) {
+                TrailMode.SHORT
+            } else {
+                TrailMode.MEDIUM
+            }
+            val learnedBeatFx = when {
+                energyAverage > .62f || bassAverage > .58f -> BeatFxMode.BRUTAL
+                tempo.confidence > .28f -> BeatFxMode.REACTIVE
+                else -> BeatFxMode.SMOOTH
+            }
+            val learnedStars = when {
+                bassAverage > .58f -> StarMode.BEAT_PLUS
+                energyAverage > .34f -> StarMode.BALANCED
+                else -> StarMode.SUBTLE
+            }
+            AutoTuneRuntime.publish(
+                autoMode = autoMode,
+                motion = learnedMotion,
+                trail = learnedTrail,
+                beatFx = learnedBeatFx,
+                stars = learnedStars,
+                energy = energyAverage,
+                bassBias = (bassAverage / max(.08f, energyAverage) / 2.2f).coerceIn(0f, 1f),
+                rhythmConfidence = tempo.confidence,
+                bpm = tempo.bpm,
+                label = "Auto Lernen · $label",
+            )
+        }
+
         state
     }
 
@@ -278,9 +318,14 @@ object SyncLearningRuntime {
         val expected = tempo.intervalMs
         val minimumGap = max(150L, (expected * .66f).toLong())
         if (now - lastBeatAt < minimumGap) return false
-        // If a reliable detector is still firing normally, do not invent extra
-        // beats between its events.
-        if (lastReliableBeatAt > 0L && now - lastReliableBeatAt < expected * 1.40f) return false
+        // If the reliable detector is still firing normally, do not invent an
+        // extra beat between two genuine events.
+        if (
+            lastReliableBeatAt > 0L &&
+            now - lastReliableBeatAt < (expected * 1.40f).toLong()
+        ) {
+            return false
+        }
         return true
     }
 
