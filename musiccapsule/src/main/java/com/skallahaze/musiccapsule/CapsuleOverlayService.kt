@@ -25,6 +25,7 @@ import android.view.Display
 import android.view.Gravity
 import android.view.View
 import android.view.WindowManager
+import android.widget.FrameLayout
 import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
 import kotlin.math.max
@@ -35,10 +36,18 @@ class CapsuleOverlayService : Service() {
     private lateinit var windowManager: WindowManager
     private lateinit var displayManager: DisplayManager
     private lateinit var keyguardManager: KeyguardManager
+
     private var capsuleView: CapsuleOverlayView? = null
     private var capsuleParams: WindowManager.LayoutParams? = null
+
+    // Edge spectrum and Fusion patterns share one touch-through window. Two
+    // separate full-screen overlay windows would combine their obscuring alpha
+    // on Android 12+ and could block touches to the app underneath.
+    private var visualHost: FrameLayout? = null
     private var edgeView: EdgePanelView? = null
-    private var edgeParams: WindowManager.LayoutParams? = null
+    private var fusionView: FusionOverlayView? = null
+    private var visualParams: WindowManager.LayoutParams? = null
+
     private var mediaSessionPoller: CapsuleMediaSessionPoller? = null
     private var expanded = false
     private var screenReceiverRegistered = false
@@ -49,8 +58,9 @@ class CapsuleOverlayService : Service() {
             val intensity = CapsulePreferences.neonIntensity(this@CapsuleOverlayService)
             val edgeEnabled = CapsulePreferences.edgePanelsEnabled(this@CapsuleOverlayService)
             capsuleView?.setSnapshot(snapshot, intensity)
-            ensureEdgePanel(edgeEnabled)
+            ensureVisualHost()
             edgeView?.setSnapshot(snapshot, intensity, edgeEnabled)
+            fusionView?.setSnapshot(snapshot, intensity)
             mainHandler.postDelayed(this, if (snapshot.signal > .01f) 28L else 120L)
         }
     }
@@ -58,18 +68,22 @@ class CapsuleOverlayService : Service() {
     private val displayRelayoutRunnable = Runnable {
         if (!::windowManager.isInitialized) return@Runnable
         val mode = CapsulePreferences.displayMode(this)
-        ensureEdgePanel(CapsulePreferences.edgePanelsEnabled(this))
-        updateEdgeLayout()
+        ensureVisualHost()
+        updateVisualLayout()
         updateCapsuleLayout(mode, expanded, resetPosition = true)
+        visualHost?.requestLayout()
+        visualHost?.invalidate()
         edgeView?.requestLayout()
         edgeView?.invalidate()
+        fusionView?.requestLayout()
+        fusionView?.invalidate()
         capsuleView?.requestLayout()
         capsuleView?.invalidate()
         applyLockScreenVisibility()
         CapsuleRuntime.updateOverlay(
             running = true,
             expanded = expanded,
-            message = "Display neu angepasst · ${screenBounds().width()}×${screenBounds().height()}",
+            message = "Visual Fusion neu angepasst · ${screenBounds().width()}×${screenBounds().height()}",
         )
     }
 
@@ -145,9 +159,9 @@ class CapsuleOverlayService : Service() {
             return START_NOT_STICKY
         }
 
+        ensureVisualHost()
         if (capsuleView == null) attachCapsule()
-        ensureEdgePanel(CapsulePreferences.edgePanelsEnabled(this))
-        updateEdgeLayout()
+        updateVisualLayout()
         if (intent?.action == ACTION_APPLY_SETTINGS) applyCurrentSettings()
 
         requestListenerRebind()
@@ -167,7 +181,7 @@ class CapsuleOverlayService : Service() {
             running = true,
             expanded = expanded,
             message = if (CapsuleRuntime.snapshot().analyzerRunning) {
-                "Final Smooth LIVE · Beat Memory aktiv"
+                "Visual Fusion LIVE · Muster + Endpunkte aktiv"
             } else {
                 "Music Capsule sichtbar · Audioanalyse noch starten"
             },
@@ -193,26 +207,43 @@ class CapsuleOverlayService : Service() {
         updateCapsuleVisibility()
     }
 
-    private fun ensureEdgePanel(enabled: Boolean) {
-        if (enabled && edgeView == null) {
-            val view = EdgePanelView(this)
-            val params = createEdgeParams()
-            edgeView = view
-            edgeParams = params
-            windowManager.addView(view, params)
-            capsuleView?.let { capsule ->
-                capsuleParams?.let { paramsForCapsule ->
-                    runCatching {
-                        windowManager.removeView(capsule)
-                        windowManager.addView(capsule, paramsForCapsule)
-                    }
-                }
-            }
-            updateCapsuleVisibility()
-        } else if (!enabled && edgeView != null) {
-            edgeView?.let { runCatching { windowManager.removeView(it) } }
-            edgeView = null
-            edgeParams = null
+    private fun ensureVisualHost() {
+        if (visualHost != null) return
+        val host = FrameLayout(this).apply {
+            importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
+            isClickable = false
+            isFocusable = false
+        }
+        val edge = EdgePanelView(this)
+        val fusion = FusionOverlayView(this).apply { setStageMode(false) }
+        host.addView(
+            edge,
+            FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT,
+                FrameLayout.LayoutParams.MATCH_PARENT,
+            ),
+        )
+        host.addView(
+            fusion,
+            FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT,
+                FrameLayout.LayoutParams.MATCH_PARENT,
+            ),
+        )
+        visualHost = host
+        edgeView = edge
+        fusionView = fusion
+        visualParams = createVisualParams()
+        windowManager.addView(host, visualParams)
+        bringCapsuleToFront()
+    }
+
+    private fun bringCapsuleToFront() {
+        val capsule = capsuleView ?: return
+        val params = capsuleParams ?: return
+        runCatching {
+            windowManager.removeView(capsule)
+            windowManager.addView(capsule, params)
         }
     }
 
@@ -236,7 +267,7 @@ class CapsuleOverlayService : Service() {
         return params
     }
 
-    private fun createEdgeParams(): WindowManager.LayoutParams {
+    private fun createVisualParams(): WindowManager.LayoutParams {
         val bounds = screenBounds()
         val params = WindowManager.LayoutParams(
             bounds.width(),
@@ -248,6 +279,8 @@ class CapsuleOverlayService : Service() {
             gravity = Gravity.TOP or Gravity.START
             x = bounds.left
             y = bounds.top
+            // Stay below Android's maximum obscuring-opacity threshold so
+            // touches continue to pass to the application underneath.
             alpha = 0.79f
         }
         configureInsets(params, fullScreen = true)
@@ -299,8 +332,8 @@ class CapsuleOverlayService : Service() {
         mainHandler.postDelayed(displayRelayoutRunnable, delayMs)
     }
 
-    private fun updateEdgeLayout() {
-        val params = edgeParams ?: return
+    private fun updateVisualLayout() {
+        val params = visualParams ?: return
         val bounds = screenBounds()
         params.width = bounds.width()
         params.height = bounds.height()
@@ -308,7 +341,7 @@ class CapsuleOverlayService : Service() {
         params.y = bounds.top
         configureInsets(params, fullScreen = true)
         requestHighestRefreshRate(params)
-        edgeView?.let { view ->
+        visualHost?.let { view ->
             runCatching { windowManager.updateViewLayout(view, params) }
         }
     }
@@ -356,12 +389,13 @@ class CapsuleOverlayService : Service() {
             CapsuleRuntime.updateExpanded(false)
         }
         capsuleView?.setDisplayMode(mode)
-        ensureEdgePanel(CapsulePreferences.edgePanelsEnabled(this))
-        updateEdgeLayout()
+        ensureVisualHost()
+        updateVisualLayout()
         updateCapsuleLayout(mode, expanded, resetPosition = false)
         applyLockScreenVisibility()
         requestListenerRebind()
         mediaSessionPoller?.kick()
+        visualHost?.invalidate()
     }
 
     private fun setExpanded(value: Boolean) {
@@ -429,11 +463,7 @@ class CapsuleOverlayService : Service() {
         val locked = forceLocked ?: runCatching { keyguardManager.isKeyguardLocked }.getOrDefault(false)
         val allowed = !locked || CapsulePreferences.lockScreenEnabled(this)
         updateCapsuleVisibility(forceLocked = locked)
-        edgeView?.visibility = if (allowed && CapsulePreferences.edgePanelsEnabled(this)) {
-            View.VISIBLE
-        } else {
-            View.INVISIBLE
-        }
+        visualHost?.visibility = if (allowed) View.VISIBLE else View.INVISIBLE
     }
 
     private fun requestListenerRebind() {
@@ -459,8 +489,8 @@ class CapsuleOverlayService : Service() {
         )
         return NotificationCompat.Builder(this, CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_capsule)
-            .setContentTitle("Music Capsule · Final Smooth")
-            .setContentText("Adaptive Beat Memory, Randmodi und schneller Stille-Fade laufen")
+            .setContentTitle("Music Capsule · Visual Fusion")
+            .setContentText("Rand, Endpunkt-Orbs und begrenzte LIVE-Muster laufen")
             .setContentIntent(openPending)
             .setOngoing(true)
             .setOnlyAlertOnce(true)
@@ -479,7 +509,7 @@ class CapsuleOverlayService : Service() {
                 "Music Capsule Overlay",
                 NotificationManager.IMPORTANCE_LOW,
             ).apply {
-                description = "Music Capsule, Rotation, Sperrbildschirm und Final-Smooth-Effekte"
+                description = "Music Capsule Visual Fusion, Rotation und Sperrbildschirm"
                 lockscreenVisibility = android.app.Notification.VISIBILITY_PUBLIC
                 setShowBadge(false)
             },
@@ -541,11 +571,13 @@ class CapsuleOverlayService : Service() {
             screenReceiverRegistered = false
         }
         capsuleView?.let { runCatching { windowManager.removeView(it) } }
-        edgeView?.let { runCatching { windowManager.removeView(it) } }
+        visualHost?.let { runCatching { windowManager.removeView(it) } }
         capsuleView = null
         capsuleParams = null
+        visualHost = null
+        visualParams = null
         edgeView = null
-        edgeParams = null
+        fusionView = null
         expanded = false
         VisualBeatRuntime.clear()
         CapsuleRuntime.updateOverlay(false, expanded = false, message = "Music Capsule aus")

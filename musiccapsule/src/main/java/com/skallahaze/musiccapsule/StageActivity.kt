@@ -24,11 +24,14 @@ class StageActivity : Activity() {
     private val mainHandler = Handler(Looper.getMainLooper())
     private lateinit var root: FrameLayout
     private lateinit var backgroundView: StageBackgroundView
+    private lateinit var fusionView: FusionOverlayView
     private lateinit var controls: LinearLayout
     private lateinit var titleView: TextView
     private lateinit var statusView: TextView
     private lateinit var styleButton: Button
     private lateinit var patternButton: Button
+    private lateinit var contentButton: Button
+    private lateinit var endpointButton: Button
     private lateinit var widgetButton: Button
     private lateinit var opacityButton: Button
     private lateinit var brightnessButton: Button
@@ -37,8 +40,10 @@ class StageActivity : Activity() {
 
     private val refreshRunnable = object : Runnable {
         override fun run() {
-            refreshStageStatus()
-            mainHandler.postDelayed(this, 260L)
+            val snapshot = CapsuleRuntime.snapshot()
+            fusionView.setSnapshot(snapshot, CapsulePreferences.neonIntensity(this@StageActivity))
+            refreshStageStatus(snapshot)
+            mainHandler.postDelayed(this, 220L)
         }
     }
     private val hideControlsRunnable = Runnable { controls.visibility = View.INVISIBLE }
@@ -49,9 +54,9 @@ class StageActivity : Activity() {
             setShowWhenLocked(true)
         }
 
-        // Stage has its own beat-driven centre patterns. Keep the normal overlay
-        // on its clean outer-border layer so old rectangle shockwaves cannot run
-        // sequentially behind the new pattern engine.
+        // The system overlay keeps the outer frame. Stage's own Fusion layer
+        // supplies centre patterns, side spectrum and endpoint orbs without a
+        // second competing centre-shockwave engine.
         previousVisualMode = CapsulePreferences.visualLayerMode(this)
         CapsulePreferences.setVisualLayerMode(this, VisualLayerMode.BORDER_ONLY)
 
@@ -137,6 +142,15 @@ class StageActivity : Activity() {
             ),
         )
 
+        fusionView = FusionOverlayView(this).apply { setStageMode(true) }
+        frame.addView(
+            fusionView,
+            FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT,
+                FrameLayout.LayoutParams.MATCH_PARENT,
+            ),
+        )
+
         titleView = TextView(this).apply {
             text = "Music Capsule Stage"
             setTextColor(Color.WHITE)
@@ -177,7 +191,7 @@ class StageActivity : Activity() {
 
         statusView = TextView(this).apply {
             setTextColor(Color.rgb(109, 255, 214))
-            textSize = 11f
+            textSize = 10.8f
             gravity = Gravity.CENTER
             setPadding(dp(6), 0, dp(6), dp(8))
         }
@@ -203,6 +217,24 @@ class StageActivity : Activity() {
         controls.addView(firstRow)
 
         val secondRow = horizontalRow().apply { setPadding(0, dp(8), 0, 0) }
+        contentButton = stageButton("Inhalt") {
+            val next = VisualTuningPreferences.stageContentMode(this@StageActivity).next()
+            VisualTuningPreferences.setStageContentMode(this@StageActivity, next)
+            refreshButtons()
+            showControlsTemporarily()
+        }
+        endpointButton = stageButton("Endpunkte") {
+            val next = VisualTuningPreferences.endpointMode(this@StageActivity).next()
+            VisualTuningPreferences.setEndpointMode(this@StageActivity, next)
+            refreshButtons()
+            showControlsTemporarily()
+        }
+        secondRow.addView(contentButton, weightedButtonParams())
+        secondRow.addView(space(dp(8)))
+        secondRow.addView(endpointButton, weightedButtonParams())
+        controls.addView(secondRow)
+
+        val thirdRow = horizontalRow().apply { setPadding(0, dp(8), 0, 0) }
         widgetButton = stageButton("Widget") {
             val next = CapsulePreferences.displayMode(this@StageActivity).next()
             CapsulePreferences.setDisplayMode(this@StageActivity, next)
@@ -213,19 +245,22 @@ class StageActivity : Activity() {
         opacityButton = stageButton("Transparenz") {
             VisualTuningPreferences.nextOpacity(this@StageActivity)
             backgroundView.invalidate()
+            fusionView.invalidate()
+            CapsuleOverlayService.applySettings(this@StageActivity)
             refreshButtons()
             showControlsTemporarily()
         }
-        secondRow.addView(widgetButton, weightedButtonParams())
-        secondRow.addView(space(dp(8)))
-        secondRow.addView(opacityButton, weightedButtonParams())
-        controls.addView(secondRow)
+        thirdRow.addView(widgetButton, weightedButtonParams())
+        thirdRow.addView(space(dp(8)))
+        thirdRow.addView(opacityButton, weightedButtonParams())
+        controls.addView(thirdRow)
 
-        val thirdRow = horizontalRow().apply { setPadding(0, dp(8), 0, 0) }
+        val fourthRow = horizontalRow().apply { setPadding(0, dp(8), 0, 0) }
         brightnessButton = stageButton("Farbe") {
             CapsulePreferences.nextIntensity(this@StageActivity)
             CapsuleOverlayService.applySettings(this@StageActivity)
             backgroundView.invalidate()
+            fusionView.invalidate()
             refreshButtons()
             showControlsTemporarily()
         }
@@ -236,10 +271,10 @@ class StageActivity : Activity() {
             refreshButtons()
             showControlsTemporarily()
         }
-        thirdRow.addView(brightnessButton, weightedButtonParams())
-        thirdRow.addView(space(dp(8)))
-        thirdRow.addView(awakeButton, weightedButtonParams())
-        controls.addView(thirdRow)
+        fourthRow.addView(brightnessButton, weightedButtonParams())
+        fourthRow.addView(space(dp(8)))
+        fourthRow.addView(awakeButton, weightedButtonParams())
+        controls.addView(fourthRow)
 
         val close = stageButton("Stage schließen") { finish() }.apply {
             setTextColor(Color.rgb(255, 206, 236))
@@ -267,8 +302,7 @@ class StageActivity : Activity() {
         return frame
     }
 
-    private fun refreshStageStatus() {
-        val snapshot = CapsuleRuntime.snapshot()
+    private fun refreshStageStatus(snapshot: CapsuleSnapshot) {
         val beat = VisualBeatRuntime.snapshot()
         val auto = AutoTuneRuntime.snapshot()
         titleView.text = buildString {
@@ -278,9 +312,9 @@ class StageActivity : Activity() {
         statusView.text = buildString {
             append(if (snapshot.analyzerRunning) "LIVE" else "Audioanalyse aus")
             append(" · ${auto.autoMode.label}")
-            append(" · Muster ${VisualTuningPreferences.patternMode(this@StageActivity).label}")
+            append(" · ${VisualTuningPreferences.stageContentMode(this@StageActivity).label}")
             if (beat.bpm > 0f) append(" · ${beat.bpm.toInt()} BPM")
-            append("\nBeat-Muster werden direkt pro Schlag gewählt; Wiederholungen sind erlaubt.")
+            append("\nMaximal zwei Muster gleichzeitig · Endpunkt-Orbs folgen den Seitenlinien")
             append("\nTippen: Steuerung · Doppelt: Style · Halten: Display wach")
         }
     }
@@ -295,6 +329,8 @@ class StageActivity : Activity() {
     private fun refreshButtons() {
         styleButton.text = "Style: ${CapsulePreferences.stageStyle(this).label}"
         patternButton.text = "Muster: ${VisualTuningPreferences.patternMode(this).label}"
+        contentButton.text = "Inhalt: ${VisualTuningPreferences.stageContentMode(this).label}"
+        endpointButton.text = "Endpunkte: ${VisualTuningPreferences.endpointMode(this).label}"
         widgetButton.text = "Widget: ${CapsulePreferences.displayMode(this).label}"
         opacityButton.text = "Transparenz: ${(VisualTuningPreferences.opacity(this) * 100).toInt()}%"
         brightnessButton.text = "Farbhelligkeit: ${(CapsulePreferences.neonIntensity(this) * 100).toInt()}%"
@@ -313,7 +349,7 @@ class StageActivity : Activity() {
     private fun showControlsTemporarily() {
         controls.visibility = View.VISIBLE
         mainHandler.removeCallbacks(hideControlsRunnable)
-        mainHandler.postDelayed(hideControlsRunnable, 4_600L)
+        mainHandler.postDelayed(hideControlsRunnable, 4_800L)
     }
 
     private fun applyKeepAwake() {
@@ -357,7 +393,7 @@ class StageActivity : Activity() {
             isAllCaps = false
             minWidth = 0
             minHeight = 0
-            textSize = 11.2f
+            textSize = 10.8f
             setTextColor(Color.WHITE)
             background = rounded(
                 Color.argb(208, 16, 20, 34),

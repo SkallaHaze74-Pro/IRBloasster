@@ -111,30 +111,29 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6
 
-      - name: Validate Music Capsule 1.5.1 Pattern Sync
+      - name: Validate Music Capsule 1.6.0 Visual Fusion
         run: |
           grep -F 'include(":musiccapsule")' settings.gradle
           grep -F "applicationId 'com.skallahaze.musiccapsule'" musiccapsule/build.gradle
-          grep -F "versionName '1.5.1'" musiccapsule/build.gradle
+          grep -F "versionName '1.6.0'" musiccapsule/build.gradle
+          grep -F "versionCode 11" musiccapsule/build.gradle
           grep -F 'TARGET_SMALLEST_WIDTH_DP = 393' musiccapsule/src/main/java/com/skallahaze/musiccapsule/XiaomiDisplayProfile.kt
-          grep -F 'AutoTuneMode.BALANCED' musiccapsule/src/main/java/com/skallahaze/musiccapsule/CapsulePreferences.kt
-          grep -F 'StarMode.BEAT_PLUS' musiccapsule/src/main/java/com/skallahaze/musiccapsule/CapsulePreferences.kt
-          grep -F 'StageStyle.NEON_AURA' musiccapsule/src/main/java/com/skallahaze/musiccapsule/CapsulePreferences.kt
-          grep -F 'INFINITY("infinity"' musiccapsule/src/main/java/com/skallahaze/musiccapsule/VisualTuningPreferences.kt
-          grep -F 'nextOpacity' musiccapsule/src/main/java/com/skallahaze/musiccapsule/VisualTuningPreferences.kt
-          grep -F 'resolveAutoTune' musiccapsule/src/main/java/com/skallahaze/musiccapsule/EdgePanelView.kt
-          grep -F 'spawnBeatStars' musiccapsule/src/main/java/com/skallahaze/musiccapsule/EdgePanelView.kt
-          grep -F 'spawnStarRain' musiccapsule/src/main/java/com/skallahaze/musiccapsule/EdgePanelView.kt
-          grep -F 'alpha = VisualTuningPreferences.opacity' musiccapsule/src/main/java/com/skallahaze/musiccapsule/EdgePanelView.kt
-          grep -F 'object AutoTuneRuntime' musiccapsule/src/main/java/com/skallahaze/musiccapsule/AutoTuneRuntime.kt
-          grep -F 'class StageActivity' musiccapsule/src/main/java/com/skallahaze/musiccapsule/StageActivity.kt
-          grep -F 'class StageBackgroundView' musiccapsule/src/main/java/com/skallahaze/musiccapsule/StageBackgroundView.kt
-          grep -F 'choosePattern' musiccapsule/src/main/java/com/skallahaze/musiccapsule/StageBackgroundView.kt
-          grep -F 'drawInfinityPattern' musiccapsule/src/main/java/com/skallahaze/musiccapsule/StageBackgroundView.kt
-          grep -F 'MIN_PATTERN_GAP_MS' musiccapsule/src/main/java/com/skallahaze/musiccapsule/StageBackgroundView.kt
-          grep -F 'Farbhelligkeit' musiccapsule/src/main/java/com/skallahaze/musiccapsule/MainActivity.kt
-          grep -F 'Transparenz' musiccapsule/src/main/java/com/skallahaze/musiccapsule/MainActivity.kt
-          grep -F 'android:name=".StageActivity"' musiccapsule/src/main/AndroidManifest.xml
+          grep -F 'enum class LivePatternMode' musiccapsule/src/main/java/com/skallahaze/musiccapsule/VisualTuningPreferences.kt
+          grep -F 'EndpointMode.STRONG' musiccapsule/src/main/java/com/skallahaze/musiccapsule/VisualTuningPreferences.kt
+          grep -F 'StageContentMode.FUSION' musiccapsule/src/main/java/com/skallahaze/musiccapsule/VisualTuningPreferences.kt
+          grep -F 'class FusionOverlayView' musiccapsule/src/main/java/com/skallahaze/musiccapsule/FusionOverlayView.kt
+          grep -F 'MAX_PATTERN_PULSES = 3' musiccapsule/src/main/java/com/skallahaze/musiccapsule/FusionOverlayView.kt
+          grep -F 'FusionPattern.INFINITY' musiccapsule/src/main/java/com/skallahaze/musiccapsule/FusionOverlayView.kt
+          grep -F 'FusionPattern.ZIGZAG' musiccapsule/src/main/java/com/skallahaze/musiccapsule/FusionOverlayView.kt
+          grep -F 'FusionPattern.STACKED' musiccapsule/src/main/java/com/skallahaze/musiccapsule/FusionOverlayView.kt
+          grep -F 'drawEndpointAccents' musiccapsule/src/main/java/com/skallahaze/musiccapsule/FusionOverlayView.kt
+          grep -F 'FrameLayout(this)' musiccapsule/src/main/java/com/skallahaze/musiccapsule/CapsuleOverlayService.kt
+          grep -F 'FusionOverlayView(this)' musiccapsule/src/main/java/com/skallahaze/musiccapsule/CapsuleOverlayService.kt
+          grep -F 'setStageMode(true)' musiccapsule/src/main/java/com/skallahaze/musiccapsule/StageActivity.kt
+          grep -F 'Maximal zwei Muster gleichzeitig' musiccapsule/src/main/java/com/skallahaze/musiccapsule/StageActivity.kt
+          grep -F 'Visual Fusion 1.6.0' musiccapsule/src/main/java/com/skallahaze/musiccapsule/MainActivity.kt
+          grep -F 'LIVE-Muster' musiccapsule/src/main/java/com/skallahaze/musiccapsule/MainActivity.kt
+          grep -F 'Endpunkte' musiccapsule/src/main/java/com/skallahaze/musiccapsule/MainActivity.kt
           grep -F 'MICROPHONE_FALLBACK' musiccapsule/src/main/java/com/skallahaze/musiccapsule/PlaybackAnalyzerService.kt
           grep -F 'FLAG_SHOW_WHEN_LOCKED' musiccapsule/src/main/java/com/skallahaze/musiccapsule/CapsuleOverlayService.kt
           grep -F 'registerDisplayListener' musiccapsule/src/main/java/com/skallahaze/musiccapsule/CapsuleOverlayService.kt
@@ -156,7 +155,7 @@ jobs:
       - name: Create ephemeral Music Capsule signing key
         run: |
           mkdir -p "$HOME/.musiccapsule"
-          PASS="ci-music-capsule-1.5.1-only"
+          PASS="ci-music-capsule-1.6.0-only"
           keytool -genkeypair \
             -keystore "$HOME/.musiccapsule/music-capsule-release.jks" \
             -storetype PKCS12 \
@@ -189,16 +188,16 @@ jobs:
 
       - name: Prepare Music Capsule artifact
         run: |
-          cp musiccapsule/build/outputs/apk/release/musiccapsule-release.apk MusicCapsule-v1.5.1-CI-ephemeral-signature.apk
-          sha256sum MusicCapsule-v1.5.1-CI-ephemeral-signature.apk > MusicCapsule-v1.5.1-CI-ephemeral-signature.apk.sha256
+          cp musiccapsule/build/outputs/apk/release/musiccapsule-release.apk MusicCapsule-v1.6.0-CI-ephemeral-signature.apk
+          sha256sum MusicCapsule-v1.6.0-CI-ephemeral-signature.apk > MusicCapsule-v1.6.0-CI-ephemeral-signature.apk.sha256
 
       - name: Upload standalone Music Capsule CI APK
         uses: actions/upload-artifact@v7
         with:
-          name: MusicCapsule-v1.5.1-CI-ephemeral-signature-DO-NOT-USE-FOR-UPDATES
+          name: MusicCapsule-v1.6.0-CI-ephemeral-signature-DO-NOT-USE-FOR-UPDATES
           path: |
-            MusicCapsule-v1.5.1-CI-ephemeral-signature.apk
-            MusicCapsule-v1.5.1-CI-ephemeral-signature.apk.sha256
+            MusicCapsule-v1.6.0-CI-ephemeral-signature.apk
+            MusicCapsule-v1.6.0-CI-ephemeral-signature.apk.sha256
             musiccapsule-apksigner-verify.txt
           if-no-files-found: error
           retention-days: 30
@@ -207,7 +206,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: MusicCapsule-v1.5.1-lint
+          name: MusicCapsule-v1.6.0-lint
           path: musiccapsule/build/reports/lint-results-release.html
           if-no-files-found: ignore
           retention-days: 30
