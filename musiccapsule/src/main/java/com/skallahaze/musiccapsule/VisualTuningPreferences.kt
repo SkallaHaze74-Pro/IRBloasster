@@ -9,6 +9,15 @@ enum class BeatPatternMode(val storedValue: String, val label: String) {
     UP_DOWN("up_down", "Hoch / Runter"),
     HORIZONTAL("horizontal", "Quer"),
     DIAMOND("diamond", "Diamant"),
+    SIDE_WAVES("side_waves", "Seitenwellen"),
+    FLAT_BARS("flat_bars", "Flat Bars"),
+    SERIAL_DOTS("serial_dots", "Serial Dots"),
+    MIRROR_RAIN("mirror_rain", "Mirror Rain"),
+    FIRE_DANCE("fire_dance", "Fire Dance"),
+    STRINGS("strings", "Strings"),
+    BUBBLES("bubbles", "Bubbles"),
+    SNOW("snow", "Snow"),
+    GLOW_PULSE("glow_pulse", "Glow Pulse"),
     OFF("off", "Aus"),
     ;
 
