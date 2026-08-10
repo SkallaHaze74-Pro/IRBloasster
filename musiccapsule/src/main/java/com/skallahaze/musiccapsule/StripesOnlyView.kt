@@ -9,7 +9,6 @@ import kotlin.math.PI
 import kotlin.math.exp
 import kotlin.math.max
 import kotlin.math.pow
-import kotlin.math.sin
 
 /**
  * Minimal main-LIVE style requested from the Xiaomi recordings:
@@ -96,7 +95,7 @@ class StripesOnlyView(context: Context) : View(context) {
             val band = mirroredBand(progress)
             val level = max(.025f, displayLevels[band].pow(.63f))
             val beatWave = kotlin.math.abs(
-                sin(progress * PI.toFloat() * 5f + huePhase * .025f),
+                sinf(progress * PI.toFloat() * 5f + huePhase * .025f),
             ) * beatPulse
             val length = dp(1.8f) + level * dp(9.6f) * intensity + beatWave * dp(5.4f)
             val x = inset + index * gap
@@ -165,6 +164,8 @@ class StripesOnlyView(context: Context) : View(context) {
             Color.blue(color),
         )
     }
+
+    private fun sinf(value: Float): Float = kotlin.math.sin(value.toDouble()).toFloat()
 
     private fun dp(value: Float): Float = value * density * profileScale
 }
