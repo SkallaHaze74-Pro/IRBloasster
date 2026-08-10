@@ -27,6 +27,10 @@ android {
         versionName '1.6.4'
     }
 
+    buildFeatures {
+        buildConfig true
+    }
+
     signingConfigs {
         if (capsuleSigningReady) {
             capsuleStable {
