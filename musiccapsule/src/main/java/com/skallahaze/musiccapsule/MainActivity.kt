@@ -39,6 +39,8 @@ class MainActivity : Activity() {
 
     private lateinit var autoTuneButton: Button
     private lateinit var starButton: Button
+    private lateinit var livePatternButton: Button
+    private lateinit var endpointButton: Button
     private lateinit var motionButton: Button
     private lateinit var trailButton: Button
     private lateinit var beatFxButton: Button
@@ -52,12 +54,13 @@ class MainActivity : Activity() {
     private lateinit var sourceButton: Button
     private lateinit var lockScreenButton: Button
     private lateinit var stageStyleButton: Button
+    private lateinit var stageContentButton: Button
     private lateinit var stageAwakeButton: Button
 
     private val refreshRunnable = object : Runnable {
         override fun run() {
             refreshStatus()
-            mainHandler.postDelayed(this, 320L)
+            mainHandler.postDelayed(this, 300L)
         }
     }
 
@@ -97,12 +100,12 @@ class MainActivity : Activity() {
         root.addView(text("MUSIC CAPSULE", 11f, Color.rgb(91, 255, 210), bold = true).apply {
             letterSpacing = .18f
         })
-        root.addView(text("Smart Auto Stage 1.5.0", 30f, Color.WHITE, bold = true).apply {
+        root.addView(text("Visual Fusion 1.6.0", 31f, Color.WHITE, bold = true).apply {
             setPadding(0, dp(3), 0, 0)
         })
         root.addView(text(
-            "${XiaomiDisplayProfile.diagnosticLabel(this)} · Beat Pattern Engine",
-            12.3f,
+            "${XiaomiDisplayProfile.diagnosticLabel(this)} · LIVE-Muster + Endpunkt-Orbs",
+            12.2f,
             Color.rgb(170, 195, 226),
         ).apply { setPadding(0, dp(4), 0, dp(13)) })
 
@@ -115,8 +118,8 @@ class MainActivity : Activity() {
         root.addView(previewView)
 
         root.addView(autoCard())
+        root.addView(liveFusionCard())
         root.addView(stageCard())
-        root.addView(visualCard())
         root.addView(manualCard())
         root.addView(sourceCard())
         root.addView(permissionCard())
@@ -127,7 +130,7 @@ class MainActivity : Activity() {
         controlRow.addView(outlineButton("STOP") { stopEverything() }, weightedButtonParams(52))
         root.addView(controlRow)
 
-        statusView = text("Bereit", 12.8f, Color.rgb(101, 255, 208), bold = true).apply {
+        statusView = text("Bereit", 12.7f, Color.rgb(101, 255, 208), bold = true).apply {
             setPadding(dp(15), dp(14), dp(15), dp(14))
             background = gradientRounded(
                 intArrayOf(Color.rgb(15, 19, 32), Color.rgb(29, 8, 42), Color.rgb(5, 29, 31)),
@@ -144,9 +147,9 @@ class MainActivity : Activity() {
             ).also { it.bottomMargin = dp(14) },
         )
 
-        root.addView(sectionCard("Neu · Muster auf dem Schlag", Color.rgb(105, 255, 205)).apply {
+        root.addView(sectionCard("Warum nicht zu viel übereinander?", Color.rgb(105, 255, 205)).apply {
             addView(text(
-                "Die Stage läuft nicht mehr stur durch Viereck, Hoch und Runter. Jeder Beat wählt das passende Muster neu; dasselbe Muster darf auch zweimal direkt hintereinander kommen. Neu dabei ist eine querliegende leuchtende Unendlichkeits-8.",
+                "Normal und Auto zeigen meistens nur ein Mittelmuster. Ein zweites darf nur bei einem kräftigen Beat kurz dazukommen. Der Stage-Modus nutzt dieselbe Begrenzung. So bleibt es brutal, aber der Inhalt darunter noch lesbar.",
                 13.2f,
                 Color.rgb(212, 222, 240),
             ))
@@ -158,7 +161,7 @@ class MainActivity : Activity() {
 
     private fun autoCard(): View = sectionCard("Smart Auto Tune", Color.rgb(255, 82, 218)).apply {
         addView(text(
-            "Auto Tune erkennt Energie, Bassanteil, Tempo und schnelle Höhen. Es wählt Bewegung, Nachlauf, Beat FX, Farbtempo und Sterne selbst. Deine manuellen Werte bleiben gespeichert und gelten wieder bei Auto AUS.",
+            "Auto Tune erkennt Energie, Bassanteil, Tempo und Höhenaktivität. Es wählt Bewegung, Nachlauf, Beat FX, Farbtempo und Sterne selbst. Live-Muster bleiben trotzdem auf höchstens zwei begrenzt.",
             13.3f,
             Color.rgb(212, 222, 240),
         ).apply { setPadding(0, dp(6), 0, dp(10)) })
@@ -170,68 +173,40 @@ class MainActivity : Activity() {
             refreshButtons()
         }
         addView(autoTuneButton, fullButtonParams())
-
-        starButton = neonButton("Sterne: Mehr Beat", Color.rgb(255, 187, 68)) {
-            val next = CapsulePreferences.starMode(this@MainActivity).next()
-            CapsulePreferences.setStarMode(this@MainActivity, next)
-            applyLiveSettings()
-            refreshButtons()
-        }
-        addView(starButton, fullButtonParams(topMargin = 9))
-
-        addView(text(
-            "Stern-Modi: Aus · Wenig · Normal · Mehr Beat · Nur Drops. Auto Tune wählt die passende Stufe live.",
-            11.4f,
-            Color.rgb(174, 190, 218),
-        ).apply { setPadding(0, dp(8), 0, 0) })
     }
 
-    private fun stageCard(): View = sectionCard("AMOLED Stage · schwarzer Musikbildschirm", Color.rgb(74, 224, 255)).apply {
+    private fun liveFusionCard(): View = sectionCard("Haupt-LIVE · Visual Fusion", Color.rgb(78, 224, 255)).apply {
         addView(text(
-            "Ein eigener komplett schwarzer Vollbildmodus fürs Hinlegen. In der Mitte erscheinen Beat-Muster direkt auf dem Schlag; der normale Overlay-Layer bleibt dort automatisch auf dem sauberen Außenrand.",
+            "Mehr Muster laufen jetzt auch über normalen Apps. Auto wählt Viereck, ∞, Querwelle, Diamant, Kreuz, Zickzack, Ring oder gestapelte Rechtecke nach Bass/Mitten/Höhen – nicht in einer festen Reihenfolge.",
             13.3f,
             Color.rgb(212, 222, 240),
         ).apply { setPadding(0, dp(6), 0, dp(10)) })
 
-        val row = horizontalRow()
-        stageStyleButton = neonButton("Stage: Neon Aura", Color.rgb(80, 210, 255)) {
-            val next = CapsulePreferences.stageStyle(this@MainActivity).next()
-            CapsulePreferences.setStageStyle(this@MainActivity, next)
+        val patternRow = horizontalRow()
+        livePatternButton = neonButton("LIVE-Muster: Auto", Color.rgb(255, 99, 220)) {
+            val next = VisualTuningPreferences.livePatternMode(this@MainActivity).next()
+            VisualTuningPreferences.setLivePatternMode(this@MainActivity, next)
+            applyLiveSettings()
             refreshButtons()
         }
-        patternButton = neonButton("Muster: Beat Auto", Color.rgb(255, 95, 220)) {
-            val next = VisualTuningPreferences.patternMode(this@MainActivity).next()
-            VisualTuningPreferences.setPatternMode(this@MainActivity, next)
+        endpointButton = neonButton("Endpunkte: Stark", Color.rgb(255, 190, 71)) {
+            val next = VisualTuningPreferences.endpointMode(this@MainActivity).next()
+            VisualTuningPreferences.setEndpointMode(this@MainActivity, next)
+            applyLiveSettings()
             refreshButtons()
         }
-        row.addView(stageStyleButton, weightedButtonParams())
-        row.addView(space(dp(9)))
-        row.addView(patternButton, weightedButtonParams())
-        addView(row)
+        patternRow.addView(livePatternButton, weightedButtonParams())
+        patternRow.addView(space(dp(9)))
+        patternRow.addView(endpointButton, weightedButtonParams())
+        addView(patternRow)
 
-        stageAwakeButton = neonButton("Display wach: AN", Color.rgb(255, 103, 201)) {
-            val next = !CapsulePreferences.stageKeepAwake(this@MainActivity)
-            CapsulePreferences.setStageKeepAwake(this@MainActivity, next)
-            refreshButtons()
-        }
-        addView(stageAwakeButton, fullButtonParams(topMargin = 9))
-
-        addView(primaryButton("STAGE ÖFFNEN") { openStage() }, fullButtonParams(topMargin = 9))
-        addView(text(
-            "Muster: Beat Auto · Viereck · Unendlich ∞ · Hoch/Runter · Quer · Diamant · Aus. Auto arbeitet nach Bass, Mitten und Höhen – nicht nach einer festen Reihenfolge.",
-            11.4f,
-            Color.rgb(174, 190, 218),
-        ).apply { setPadding(0, dp(8), 0, 0) })
-    }
-
-    private fun visualCard(): View = sectionCard("Ansicht · Farbe und Transparenz getrennt", Color.rgb(98, 255, 189)).apply {
         visualButton = neonButton("Visual: Voll", Color.rgb(89, 255, 167)) {
             val next = CapsulePreferences.visualLayerMode(this@MainActivity).next()
             CapsulePreferences.setVisualLayerMode(this@MainActivity, next)
             applyLiveSettings()
             refreshButtons()
         }
-        addView(visualButton, fullButtonParams())
+        addView(visualButton, fullButtonParams(topMargin = 9))
 
         val row = horizontalRow().apply { setPadding(0, dp(9), 0, 0) }
         edgeButton = neonButton("Paneele: AN", Color.rgb(71, 255, 166)) {
@@ -276,14 +251,69 @@ class MainActivity : Activity() {
         addView(lockScreenButton, fullButtonParams(topMargin = 9))
     }
 
+    private fun stageCard(): View = sectionCard("AMOLED Stage · Fusion", Color.rgb(83, 202, 255)).apply {
+        addView(text(
+            "Schwarzbild behält Aura/Hanfblatt und bekommt wahlweise Mittelmuster sowie die Haupt-Seitenlinien mit ihren hellen Endpunkt-Orbs dazu. Der normale Außenrahmen bleibt erhalten.",
+            13.3f,
+            Color.rgb(212, 222, 240),
+        ).apply { setPadding(0, dp(6), 0, dp(10)) })
+
+        val rowOne = horizontalRow()
+        stageStyleButton = neonButton("Stage: Neon Aura", Color.rgb(80, 210, 255)) {
+            val next = CapsulePreferences.stageStyle(this@MainActivity).next()
+            CapsulePreferences.setStageStyle(this@MainActivity, next)
+            refreshButtons()
+        }
+        stageContentButton = neonButton("Inhalt: Fusion", Color.rgb(111, 255, 183)) {
+            val next = VisualTuningPreferences.stageContentMode(this@MainActivity).next()
+            VisualTuningPreferences.setStageContentMode(this@MainActivity, next)
+            refreshButtons()
+        }
+        rowOne.addView(stageStyleButton, weightedButtonParams())
+        rowOne.addView(space(dp(9)))
+        rowOne.addView(stageContentButton, weightedButtonParams())
+        addView(rowOne)
+
+        val rowTwo = horizontalRow().apply { setPadding(0, dp(9), 0, 0) }
+        patternButton = neonButton("Muster: Beat Auto", Color.rgb(255, 95, 220)) {
+            val next = VisualTuningPreferences.patternMode(this@MainActivity).next()
+            VisualTuningPreferences.setPatternMode(this@MainActivity, next)
+            refreshButtons()
+        }
+        stageAwakeButton = neonButton("Display wach: AN", Color.rgb(255, 103, 201)) {
+            val next = !CapsulePreferences.stageKeepAwake(this@MainActivity)
+            CapsulePreferences.setStageKeepAwake(this@MainActivity, next)
+            refreshButtons()
+        }
+        rowTwo.addView(patternButton, weightedButtonParams())
+        rowTwo.addView(space(dp(9)))
+        rowTwo.addView(stageAwakeButton, weightedButtonParams())
+        addView(rowTwo)
+
+        addView(primaryButton("STAGE ÖFFNEN") { openStage() }, fullButtonParams(topMargin = 9))
+        addView(text(
+            "Inhalt: Nur Rahmen · Rahmen + Muster · Fusion mit Seiten. In der Stage kannst du Endpunkte, Transparenz und Farbhelligkeit zusätzlich direkt ändern.",
+            11.4f,
+            Color.rgb(174, 190, 218),
+        ).apply { setPadding(0, dp(8), 0, 0) })
+    }
+
     private fun manualCard(): View = sectionCard("Manuelles Feintuning", Color.rgb(177, 143, 255)).apply {
         addView(text(
-            "Nur aktiv, wenn Auto Tune auf AUS steht. So kannst du weiter selbst experimentieren, musst es aber nicht mehr.",
+            "Bewegung, Nachlauf, Sterne und Beat FX sind nur aktiv, wenn Auto Tune auf AUS steht. Flow und Musterwahl bleiben immer verfügbar.",
             12.5f,
             Color.rgb(190, 201, 225),
         ).apply { setPadding(0, dp(5), 0, dp(9)) })
 
-        val rowOne = horizontalRow()
+        starButton = neonButton("Sterne: Mehr Beat", Color.rgb(255, 187, 68)) {
+            val next = CapsulePreferences.starMode(this@MainActivity).next()
+            CapsulePreferences.setStarMode(this@MainActivity, next)
+            applyLiveSettings()
+            refreshButtons()
+        }
+        addView(starButton, fullButtonParams())
+
+        val rowOne = horizontalRow().apply { setPadding(0, dp(9), 0, 0) }
         motionButton = neonButton("Bewegung: Seidig", Color.rgb(74, 229, 255)) {
             val next = CapsulePreferences.motionProfile(this@MainActivity).next()
             CapsulePreferences.setMotionProfile(this@MainActivity, next)
@@ -340,7 +370,7 @@ class MainActivity : Activity() {
         overlayStateView = stateText()
         addView(permissionRow(
             title = "1 · Overlay",
-            body = "Rand, Paneele, Widget und Stage",
+            body = "Rand, Paneele, Muster, Endpunkte und Stage",
             state = overlayStateView,
             action = "Erlauben",
         ) { openOverlaySettings() })
@@ -385,7 +415,7 @@ class MainActivity : Activity() {
         CapsuleOverlayService.start(this)
         requestNotificationRebind()
         startActivityForResult(projectionManager.createScreenCaptureIntent(), REQUEST_MEDIA_PROJECTION)
-        statusView.text = "Gesamter Bildschirm freigeben – Smart Auto lernt danach den Track."
+        statusView.text = "Gesamter Bildschirm freigeben – Visual Fusion reagiert danach auf den Track."
     }
 
     private fun stopEverything() {
@@ -430,12 +460,14 @@ class MainActivity : Activity() {
         val auto = AutoTuneRuntime.snapshot()
         val bpm = if (visualBeat.bpm > 0f) "${visualBeat.bpm.toInt()} BPM" else "BPM lernt"
         statusView.text = buildString {
-            append(if (snapshot.overlayRunning) "SMART AUTO LIVE" else "Overlay aus")
+            append(if (snapshot.overlayRunning) "VISUAL FUSION LIVE" else "Overlay aus")
             append(" · ")
             append(if (snapshot.analyzerRunning) "FFT LIVE" else "Audioanalyse aus")
             append(" · ${displaySizeLabel()}")
             append("\n${auto.autoMode.label} · ${auto.label}")
-            append("\nAuto: ${auto.motion.label} · ${auto.trail.label} · ${auto.beatFx.label} · Sterne ${auto.stars.label}")
+            append("\nLIVE-Muster ${VisualTuningPreferences.livePatternMode(this@MainActivity).label}")
+            append(" · Endpunkte ${VisualTuningPreferences.endpointMode(this@MainActivity).label}")
+            append(" · Stage ${VisualTuningPreferences.stageContentMode(this@MainActivity).label}")
             append("\nFarbe ${(CapsulePreferences.neonIntensity(this@MainActivity) * 100).toInt()}%")
             append(" · Transparenz ${(VisualTuningPreferences.opacity(this@MainActivity) * 100).toInt()}%")
             append(" · Muster ${VisualTuningPreferences.patternMode(this@MainActivity).label}")
@@ -455,16 +487,19 @@ class MainActivity : Activity() {
         val autoMode = CapsulePreferences.autoTuneMode(this)
         autoTuneButton.text = "Auto Tune: ${autoMode.label}"
         starButton.text = "Sterne: ${CapsulePreferences.starMode(this).label}"
+        livePatternButton.text = "LIVE-Muster: ${VisualTuningPreferences.livePatternMode(this).label}"
+        endpointButton.text = "Endpunkte: ${VisualTuningPreferences.endpointMode(this).label}"
         visualButton.text = "Visual: ${CapsulePreferences.visualLayerMode(this).label}"
         widgetButton.text = "Widget: ${CapsulePreferences.displayMode(this).label}"
         edgeButton.text = "Paneele: ${if (CapsulePreferences.edgePanelsEnabled(this)) "AN" else "AUS"}"
         intensityButton.text = "Farbhelligkeit: ${(CapsulePreferences.neonIntensity(this) * 100).toInt()}%"
         opacityButton.text = "Transparenz: ${(VisualTuningPreferences.opacity(this) * 100).toInt()}%"
         patternButton.text = "Muster: ${VisualTuningPreferences.patternMode(this).label}"
+        stageStyleButton.text = "Stage: ${CapsulePreferences.stageStyle(this).label}"
+        stageContentButton.text = "Inhalt: ${VisualTuningPreferences.stageContentMode(this).label}"
+        stageAwakeButton.text = "Display wach: ${if (CapsulePreferences.stageKeepAwake(this)) "AN" else "AUS"}"
         sourceButton.text = "Quelle: ${CapsulePreferences.sourceLock(this).label}"
         lockScreenButton.text = "Sperrbildschirm: ${if (CapsulePreferences.lockScreenEnabled(this)) "AN" else "AUS"}"
-        stageStyleButton.text = "Stage: ${CapsulePreferences.stageStyle(this).label}"
-        stageAwakeButton.text = "Display wach: ${if (CapsulePreferences.stageKeepAwake(this)) "AN" else "AUS"}"
         motionButton.text = "Bewegung: ${CapsulePreferences.motionProfile(this).label}"
         trailButton.text = "Nachlauf: ${CapsulePreferences.trailMode(this).label}"
         beatFxButton.text = "Beat FX: ${CapsulePreferences.beatFxMode(this).label}"
@@ -477,6 +512,8 @@ class MainActivity : Activity() {
         }
         flowButton.isEnabled = true
         flowButton.alpha = 1f
+        livePatternButton.isEnabled = true
+        livePatternButton.alpha = 1f
         patternButton.isEnabled = true
         patternButton.alpha = 1f
 
@@ -547,7 +584,7 @@ class MainActivity : Activity() {
                 },
             )
             CapsuleOverlayService.start(this)
-            statusView.text = "LIVE – Musik starten. Smart Auto passt sich nach wenigen Sekunden an."
+            statusView.text = "LIVE – Musik starten. Muster und Endpunkt-Orbs reagieren sofort auf Beats."
         } else {
             statusView.text = "Audiofreigabe abgebrochen."
         }
@@ -624,7 +661,7 @@ class MainActivity : Activity() {
         minHeight = 0
         minWidth = 0
         setTextColor(Color.WHITE)
-        textSize = 12.0f
+        textSize = 11.8f
         background = rounded(
             Color.rgb(18, 21, 34),
             dp(20).toFloat(),
