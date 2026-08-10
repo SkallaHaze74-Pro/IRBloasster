@@ -6,6 +6,7 @@ import android.graphics.Color
 import android.graphics.LinearGradient
 import android.graphics.Paint
 import android.graphics.Path
+import android.graphics.RadialGradient
 import android.graphics.RectF
 import android.graphics.Shader
 import android.os.SystemClock
@@ -19,9 +20,12 @@ import kotlin.math.min
 import kotlin.math.pow
 
 /**
- * Lightweight shared layer for main-LIVE patterns, Stage fusion and bright
- * spectrum endpoint orbs. It deliberately caps the number of centre patterns
- * so the underlying app remains readable.
+ * Shared main-LIVE/Stage pattern layer and spectrum endpoint-orb renderer.
+ *
+ * 1.6.1 Sync Fix: pattern lifetime and phase now follow the learned BPM instead
+ * of a fixed animation speed. Endpoint orbs use the exact same interpolated
+ * band level as their bar and are rendered after the centre patterns so they
+ * stay visible in the normal LIVE view and in "Nur Striche".
  */
 class FusionOverlayView(context: Context) : View(context) {
     private enum class FusionPattern {
@@ -40,7 +44,7 @@ class FusionOverlayView(context: Context) : View(context) {
         var active: Boolean = false,
         var pattern: FusionPattern = FusionPattern.INFINITY,
         var progress: Float = 0f,
-        var speed: Float = 1.8f,
+        var speed: Float = 1f,
         var strength: Float = 0f,
         var hue: Float = 0f,
         var predicted: Boolean = false,
@@ -66,6 +70,7 @@ class FusionOverlayView(context: Context) : View(context) {
     private var lastFrameNanos = 0L
     private var phase = 0f
     private var beatEnvelope = 0f
+    private var tempoFactor = 1f
     private var lastAudioBeatSequence = Long.MIN_VALUE
     private var lastVisualBeatSequence = Long.MIN_VALUE
     private var lastSpawnAt = 0L
@@ -102,39 +107,68 @@ class FusionOverlayView(context: Context) : View(context) {
         val nowMs = SystemClock.elapsedRealtime()
 
         snapshot = if (stageMode) CapsuleRuntime.snapshot() else snapshot
+        updateTempoFactor(dt)
         updateLevels(dt)
         detectBeat(nowMs)
         updatePulses(dt)
-        beatEnvelope = max(snapshot.beat, beatEnvelope * exp(-dt * 6.5f))
-        phase = (phase + dt * (4f + snapshot.treble * 72f + beatEnvelope * 138f)) % 360f
+        beatEnvelope = max(snapshot.beat, beatEnvelope * exp(-dt * (6.8f + tempoFactor * 1.7f)))
+
+        // The Fusion hue follows tempo but stays intentionally slower than the
+        // spectrum. Beat gives a short push; it no longer spins independently.
+        val phaseSpeed = 7f + (tempoFactor - .72f).coerceAtLeast(0f) * 27f + beatEnvelope * 44f
+        phase = (phase + dt * phaseSpeed) % 360f
 
         val stageContent = VisualTuningPreferences.stageContentMode(context)
         val liveMode = effectiveLivePatternMode()
         val visualMode = CapsulePreferences.visualLayerMode(context)
 
         if (stageMode) {
-            if (stageContent == StageContentMode.FUSION) {
-                drawEndpointAccents(canvas, drawBars = true)
-            }
             if (stageContent != StageContentMode.FRAME_ONLY) {
                 drawPatterns(canvas, stage = true)
             }
+            if (stageContent == StageContentMode.FUSION) {
+                drawEndpointAccents(canvas, drawBars = true)
+            }
         } else {
-            drawEndpointAccents(canvas, drawBars = false)
             if (
                 liveMode != LivePatternMode.OFF &&
-                visualMode != VisualLayerMode.BORDER_ONLY
+                visualMode != VisualLayerMode.BORDER_ONLY &&
+                visualMode != VisualLayerMode.CLEAN
             ) {
                 drawPatterns(canvas, stage = false)
+            }
+            // In CLEAN / "Nur Striche" there are no centre patterns, but the
+            // endpoint dots remain deliberately visible.
+            if (visualMode != VisualLayerMode.BORDER_ONLY) {
+                drawEndpointAccents(canvas, drawBars = false)
             }
         }
 
         postInvalidateOnAnimation()
     }
 
+    private fun updateTempoFactor(dt: Float) {
+        val beat = VisualBeatRuntime.snapshot()
+        val bpm = when {
+            beat.bpm in 55f..220f -> beat.bpm
+            AutoTuneRuntime.snapshot().bpm in 55f..220f -> AutoTuneRuntime.snapshot().bpm
+            else -> 0f
+        }
+        val target = if (bpm > 0f) {
+            (bpm / 120f).coerceIn(.72f, 1.48f)
+        } else {
+            (.86f + snapshot.spectralFlux * .28f + snapshot.treble * .14f).coerceIn(.76f, 1.28f)
+        }
+        tempoFactor += (target - tempoFactor) * (1f - exp(-dt * 2.6f))
+    }
+
     private fun updateLevels(dt: Float) {
-        val attack = 1f - exp(-dt * 24f)
-        val release = 1f - exp(-dt * 9f)
+        // Attack gets faster with BPM; release stays softer so the visual line
+        // still looks smooth between two quick beats.
+        val attackRate = 28f + tempoFactor * 20f
+        val releaseRate = 10f + tempoFactor * 5.5f
+        val attack = 1f - exp(-dt * attackRate)
+        val release = 1f - exp(-dt * releaseRate)
         for (index in levels.indices) {
             val target = snapshot.levels.getOrNull(index) ?: 0f
             val factor = if (target > levels[index]) attack else release
@@ -150,7 +184,8 @@ class FusionOverlayView(context: Context) : View(context) {
         } else {
             liveMode != LivePatternMode.OFF &&
                 VisualTuningPreferences.patternMode(context) != BeatPatternMode.OFF &&
-                CapsulePreferences.visualLayerMode(context) != VisualLayerMode.BORDER_ONLY
+                CapsulePreferences.visualLayerMode(context) != VisualLayerMode.BORDER_ONLY &&
+                CapsulePreferences.visualLayerMode(context) != VisualLayerMode.CLEAN
         }
         if (!patternEnabled) return
 
@@ -174,20 +209,20 @@ class FusionOverlayView(context: Context) : View(context) {
 
         if (snapshot.beatSequence > lastAudioBeatSequence) {
             trigger = true
-            strength = max(.30f, max(snapshot.beat, snapshot.bass * .88f))
+            strength = max(.32f, max(snapshot.beat, snapshot.bass * .90f))
             lastAudioBeatSequence = snapshot.beatSequence
         } else if (
             liveMode != LivePatternMode.BEAT_ONLY &&
             visualBeat.sequence > lastVisualBeatSequence &&
-            nowMs - lastSpawnAt >= MIN_PATTERN_GAP_MS
+            nowMs - lastSpawnAt >= minimumPatternGapMs()
         ) {
             trigger = true
             predicted = visualBeat.predicted
-            strength = max(.24f, visualBeat.pulse) * if (predicted) .66f else .82f
+            strength = max(.25f, visualBeat.pulse) * if (predicted) .58f else .78f
         }
         lastVisualBeatSequence = max(lastVisualBeatSequence, visualBeat.sequence)
 
-        if (!trigger || nowMs - lastSpawnAt < MIN_PATTERN_GAP_MS) return
+        if (!trigger || nowMs - lastSpawnAt < minimumPatternGapMs()) return
         if (!stageMode && liveMode == LivePatternMode.SUBTLE && snapshot.beatSequence % 2L != 0L) return
 
         spawnPattern(
@@ -196,6 +231,14 @@ class FusionOverlayView(context: Context) : View(context) {
             predicted = predicted,
             nowMs = nowMs,
         )
+    }
+
+    private fun minimumPatternGapMs(): Long {
+        val bpm = VisualBeatRuntime.snapshot().bpm
+        if (bpm !in 55f..220f) return 105L
+        val quarter = 60_000f / bpm
+        // About one third of a quarter note, bounded against double triggers.
+        return (quarter * .31f).toLong().coerceIn(92L, 178L)
     }
 
     private fun effectiveLivePatternMode(): LivePatternMode {
@@ -210,19 +253,16 @@ class FusionOverlayView(context: Context) : View(context) {
     }
 
     private fun maxConcurrentPatterns(strength: Float): Int {
-        if (stageMode) {
-            return if (strength > .76f) 2 else 1
-        }
-        val mode = effectiveLivePatternMode()
-        return when (mode) {
+        if (stageMode) return if (strength > .80f) 2 else 1
+        return when (effectiveLivePatternMode()) {
             LivePatternMode.OFF -> 0
             LivePatternMode.SUBTLE -> 1
             LivePatternMode.BALANCED,
             LivePatternMode.BEAT_ONLY,
-            -> if (strength > .76f) 2 else 1
+            -> if (strength > .82f) 2 else 1
             LivePatternMode.STRONG,
             LivePatternMode.AUTO,
-            -> 2
+            -> if (strength > .68f) 2 else 1
         }
     }
 
@@ -237,24 +277,27 @@ class FusionOverlayView(context: Context) : View(context) {
         val active = pulses.count { it.active }
         val pulse = when {
             active < maxActive -> pulses.firstOrNull { !it.active }
-            strength >= .82f -> pulses.maxByOrNull { it.progress }
+            strength >= .86f -> pulses.maxByOrNull { it.progress }
             else -> null
         } ?: return
 
         pulse.active = true
         pulse.pattern = pattern
         pulse.progress = 0f
-        pulse.speed = when (pattern) {
-            FusionPattern.INFINITY -> 1.72f
+        val baseSpeed = when (pattern) {
+            FusionPattern.INFINITY -> 1.55f
             FusionPattern.HORIZONTAL,
             FusionPattern.UP_DOWN,
             FusionPattern.ZIGZAG,
-            -> 2.18f
-            FusionPattern.RING -> 2.02f
-            else -> 1.88f
+            -> 1.90f
+            FusionPattern.RING -> 1.76f
+            else -> 1.66f
         }
+        // A 90 BPM song stays calmer; a 160 BPM song completes the same shape
+        // faster, so the next beat does not feel visually late.
+        pulse.speed = baseSpeed * tempoFactor.coerceIn(.76f, 1.42f)
         pulse.strength = strength
-        pulse.hue = (phase + random.nextFloat() * 150f) % 360f
+        pulse.hue = phase
         pulse.predicted = predicted
         pulse.phaseOffset = random.nextFloat() * PI.toFloat() * 2f
         lastPattern = pattern
@@ -342,18 +385,21 @@ class FusionOverlayView(context: Context) : View(context) {
         val centerX = width / 2f
         val centerY = height * if (stage) .48f else .54f
         val minSide = min(width, height).toFloat()
-        val baseAlpha = if (stage) .72f else .34f
-        val baseScale = if (stage) .92f else .62f
+        val baseAlpha = if (stage) .68f else .31f
+        val baseScale = if (stage) .90f else .60f
 
         pulses.forEach { pulse ->
             if (!pulse.active) return@forEach
             val p = pulse.progress.coerceIn(0f, 1f)
-            val envelope = sinf(p * PI.toFloat()).coerceAtLeast(0f).pow(.76f)
+            // Strong attack at the start keeps the shape visually on the beat.
+            val attack = (1f - exp(-p * 18f)).coerceIn(0f, 1f)
+            val release = (1f - p).pow(.62f)
+            val envelope = attack * release
             val alpha = envelope * pulse.strength * baseAlpha * opacity *
-                if (pulse.predicted) .58f else 1f
+                if (pulse.predicted) .56f else 1f
             if (alpha <= .012f) return@forEach
-            val scale = baseScale * (.72f + p * .48f + pulse.strength * .09f)
-            val hue = pulse.hue + p * 92f
+            val scale = baseScale * (.78f + p * .36f + pulse.strength * .08f)
+            val hue = pulse.hue + p * (26f + tempoFactor * 18f)
 
             strokePaint.shader = LinearGradient(
                 centerX - minSide * .42f,
@@ -530,9 +576,7 @@ class FusionOverlayView(context: Context) : View(context) {
         val radius = minSide * .27f * scale *
             (1f + snapshot.bass * .10f + sinf(pulse.progress * PI.toFloat()) * .08f)
         canvas.drawCircle(cx, cy, radius, strokePaint)
-        if (pulse.strength > .68f) {
-            canvas.drawCircle(cx, cy, radius * .72f, strokePaint)
-        }
+        if (pulse.strength > .68f) canvas.drawCircle(cx, cy, radius * .72f, strokePaint)
     }
 
     private fun drawStacked(
@@ -561,11 +605,12 @@ class FusionOverlayView(context: Context) : View(context) {
         val endpoint = VisualTuningPreferences.endpointMode(context)
         if (endpoint == EndpointMode.OFF) return
         val opacity = VisualTuningPreferences.opacity(context)
-        val segments = 44
+        val segments = 52
         val top = dp(8f)
         val bottom = height - dp(8f)
         val usable = max(1f, bottom - top)
         val time = SystemClock.uptimeMillis() / 1000f
+        val beat = max(snapshot.beat, VisualBeatRuntime.snapshot().pulse)
 
         repeat(2) { side ->
             val left = side == 0
@@ -574,41 +619,44 @@ class FusionOverlayView(context: Context) : View(context) {
             repeat(segments) { segment ->
                 val progress = segment / (segments - 1f)
                 val band = edgeBandIndex(progress)
-                val level = levels[band].coerceIn(0f, 1f).pow(.62f)
+                val level = levels[band].coerceIn(0f, 1f).pow(.60f)
                 val body = sinf(progress * PI.toFloat()) * dp(13f)
-                val wave = sinf(progress * PI.toFloat() * 5f + time * .72f + side) * dp(2.1f)
-                val baseX = outer + direction * (dp(2f) + body + wave * (.22f + snapshot.mid * .66f))
-                val beatBoost = max(snapshot.beat, beatEnvelope)
-                val length = dp(3.2f) + level * dp(if (stageMode) 24f else 27f) * neonIntensity +
-                    beatBoost * dp(6f)
+                val wave = sinf(progress * PI.toFloat() * 5f + time * (.44f + tempoFactor * .30f) + side) * dp(2.0f)
+                val baseX = outer + direction * (dp(2f) + body + wave * (.18f + snapshot.mid * .58f))
+                val length = dp(3.0f) + level * dp(if (stageMode) 24f else 28f) * neonIntensity + beat * dp(6.5f)
                 val endX = baseX + direction * length
                 val y = top + progress * usable
-                val hue = phase + progress * 430f + side * 145f
-                val visible = (.16f + level * .80f + beatBoost * .12f).coerceIn(.12f, 1f)
+                val hue = phase + progress * 380f + side * 145f
+                val visible = (.30f + level * .62f + beat * .18f).coerceIn(.28f, 1f)
 
                 if (drawBars) {
                     strokePaint.shader = null
-                    strokePaint.color = hsv(hue, .96f, 1f, visible * .70f * opacity)
-                    strokePaint.strokeWidth = dp(.85f + level * 1.75f)
+                    strokePaint.color = hsv(hue, .96f, 1f, visible * .74f * opacity)
+                    strokePaint.strokeWidth = dp(.90f + level * 1.9f)
                     canvas.drawLine(baseX, y, endX, y, strokePaint)
                 }
 
                 val scale = endpoint.strength
-                val glowRadius = dp(.95f + level * 2.05f + beatBoost * .80f) * scale
-                fillPaint.shader = RadialGradientCompat.create(
+                // Keep a real visible core even on quieter bands. This restores
+                // the bright dot seen in the earlier build instead of a faint haze.
+                val coreRadius = dp(.72f + level * 1.35f + beat * .72f) * scale
+                val glowRadius = max(dp(2.2f), coreRadius * 3.15f)
+                fillPaint.shader = RadialGradient(
                     endX,
                     y,
-                    max(dp(.8f), glowRadius * 2.8f),
+                    glowRadius,
                     intArrayOf(
-                        hsv(hue + 18f, .58f, 1f, visible * .66f * opacity),
-                        hsv(hue, .90f, 1f, visible * .20f * opacity),
+                        hsv(hue + 18f, .35f, 1f, visible * .88f * opacity),
+                        hsv(hue, .86f, 1f, visible * .34f * opacity),
                         Color.TRANSPARENT,
                     ),
+                    null,
+                    Shader.TileMode.CLAMP,
                 )
-                canvas.drawCircle(endX, y, glowRadius * 2.8f, fillPaint)
+                canvas.drawCircle(endX, y, glowRadius, fillPaint)
                 fillPaint.shader = null
-                fillPaint.color = hsv(hue + 24f, .34f, 1f, visible * opacity)
-                canvas.drawCircle(endX, y, max(dp(.48f), glowRadius * .44f), fillPaint)
+                fillPaint.color = hsv(hue + 22f, .20f, 1f, max(.62f, visible) * opacity)
+                canvas.drawCircle(endX, y, max(dp(.62f), coreRadius), fillPaint)
             }
         }
     }
@@ -644,23 +692,5 @@ class FusionOverlayView(context: Context) : View(context) {
 
     private companion object {
         const val MAX_PATTERN_PULSES = 3
-        const val MIN_PATTERN_GAP_MS = 110L
     }
-}
-
-/** Small helper to avoid allocating color-stop positions for endpoint glows. */
-private object RadialGradientCompat {
-    fun create(
-        centerX: Float,
-        centerY: Float,
-        radius: Float,
-        colors: IntArray,
-    ): Shader = android.graphics.RadialGradient(
-        centerX,
-        centerY,
-        radius,
-        colors,
-        null,
-        Shader.TileMode.CLAMP,
-    )
 }

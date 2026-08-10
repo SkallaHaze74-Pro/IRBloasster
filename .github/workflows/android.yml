@@ -111,34 +111,28 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6
 
-      - name: Validate Music Capsule 1.6.0 RGB stripes hotfix
+      - name: Validate Music Capsule 1.6.0 Sync Fix
         run: |
           grep -F 'include(":musiccapsule")' settings.gradle
           grep -F "applicationId 'com.skallahaze.musiccapsule'" musiccapsule/build.gradle
           grep -F "versionName '1.6.0'" musiccapsule/build.gradle
-          grep -F "versionCode 12" musiccapsule/build.gradle
+          grep -F "versionCode 13" musiccapsule/build.gradle
           grep -F 'TARGET_SMALLEST_WIDTH_DP = 393' musiccapsule/src/main/java/com/skallahaze/musiccapsule/XiaomiDisplayProfile.kt
           grep -F 'CLEAN("clean", "Nur Striche")' musiccapsule/src/main/java/com/skallahaze/musiccapsule/CapsulePreferences.kt
+          grep -F 'REACTIVE("reactive", "Reactive", .67f)' musiccapsule/src/main/java/com/skallahaze/musiccapsule/CapsulePreferences.kt
+          grep -F 'SILKY("silky", "Seidig", 29f, 10.5f)' musiccapsule/src/main/java/com/skallahaze/musiccapsule/CapsulePreferences.kt
           grep -F 'class StripesOnlyView' musiccapsule/src/main/java/com/skallahaze/musiccapsule/StripesOnlyView.kt
-          grep -F 'No solid frame, centre patterns, stars, symbols or shockwaves' musiccapsule/src/main/java/com/skallahaze/musiccapsule/StripesOnlyView.kt
-          grep -F 'stripesView?.setSnapshot' musiccapsule/src/main/java/com/skallahaze/musiccapsule/CapsuleOverlayService.kt
-          grep -F 'fusionView?.visibility = if (stripesOnly) View.GONE else View.VISIBLE' musiccapsule/src/main/java/com/skallahaze/musiccapsule/CapsuleOverlayService.kt
+          grep -F 'class FusionOverlayView' musiccapsule/src/main/java/com/skallahaze/musiccapsule/FusionOverlayView.kt
+          grep -F 'updateTempoFactor' musiccapsule/src/main/java/com/skallahaze/musiccapsule/FusionOverlayView.kt
+          grep -F 'minimumPatternGapMs' musiccapsule/src/main/java/com/skallahaze/musiccapsule/FusionOverlayView.kt
+          grep -F 'bright dot seen in the earlier build' musiccapsule/src/main/java/com/skallahaze/musiccapsule/FusionOverlayView.kt
           grep -F 'enum class LivePatternMode' musiccapsule/src/main/java/com/skallahaze/musiccapsule/VisualTuningPreferences.kt
           grep -F 'EndpointMode.STRONG' musiccapsule/src/main/java/com/skallahaze/musiccapsule/VisualTuningPreferences.kt
           grep -F 'StageContentMode.FUSION' musiccapsule/src/main/java/com/skallahaze/musiccapsule/VisualTuningPreferences.kt
-          grep -F 'class FusionOverlayView' musiccapsule/src/main/java/com/skallahaze/musiccapsule/FusionOverlayView.kt
-          grep -F 'MAX_PATTERN_PULSES = 3' musiccapsule/src/main/java/com/skallahaze/musiccapsule/FusionOverlayView.kt
-          grep -F 'FusionPattern.INFINITY' musiccapsule/src/main/java/com/skallahaze/musiccapsule/FusionOverlayView.kt
-          grep -F 'FusionPattern.ZIGZAG' musiccapsule/src/main/java/com/skallahaze/musiccapsule/FusionOverlayView.kt
-          grep -F 'FusionPattern.STACKED' musiccapsule/src/main/java/com/skallahaze/musiccapsule/FusionOverlayView.kt
-          grep -F 'drawEndpointAccents' musiccapsule/src/main/java/com/skallahaze/musiccapsule/FusionOverlayView.kt
           grep -F 'FrameLayout(this)' musiccapsule/src/main/java/com/skallahaze/musiccapsule/CapsuleOverlayService.kt
           grep -F 'FusionOverlayView(this)' musiccapsule/src/main/java/com/skallahaze/musiccapsule/CapsuleOverlayService.kt
           grep -F 'setStageMode(true)' musiccapsule/src/main/java/com/skallahaze/musiccapsule/StageActivity.kt
-          grep -F 'Maximal zwei Muster gleichzeitig' musiccapsule/src/main/java/com/skallahaze/musiccapsule/StageActivity.kt
           grep -F 'Visual Fusion 1.6.0' musiccapsule/src/main/java/com/skallahaze/musiccapsule/MainActivity.kt
-          grep -F 'LIVE-Muster' musiccapsule/src/main/java/com/skallahaze/musiccapsule/MainActivity.kt
-          grep -F 'Endpunkte' musiccapsule/src/main/java/com/skallahaze/musiccapsule/MainActivity.kt
           grep -F 'MICROPHONE_FALLBACK' musiccapsule/src/main/java/com/skallahaze/musiccapsule/PlaybackAnalyzerService.kt
           grep -F 'FLAG_SHOW_WHEN_LOCKED' musiccapsule/src/main/java/com/skallahaze/musiccapsule/CapsuleOverlayService.kt
           grep -F 'registerDisplayListener' musiccapsule/src/main/java/com/skallahaze/musiccapsule/CapsuleOverlayService.kt
@@ -160,7 +154,7 @@ jobs:
       - name: Create ephemeral Music Capsule signing key
         run: |
           mkdir -p "$HOME/.musiccapsule"
-          PASS="ci-music-capsule-1.6.0-stripes-only"
+          PASS="ci-music-capsule-1.6.0-sync-fix"
           keytool -genkeypair \
             -keystore "$HOME/.musiccapsule/music-capsule-release.jks" \
             -storetype PKCS12 \
@@ -193,16 +187,16 @@ jobs:
 
       - name: Prepare Music Capsule artifact
         run: |
-          cp musiccapsule/build/outputs/apk/release/musiccapsule-release.apk MusicCapsule-v1.6.0-CI-ephemeral-signature.apk
-          sha256sum MusicCapsule-v1.6.0-CI-ephemeral-signature.apk > MusicCapsule-v1.6.0-CI-ephemeral-signature.apk.sha256
+          cp musiccapsule/build/outputs/apk/release/musiccapsule-release.apk MusicCapsule-v1.6.0-SYNC-FIX-CI-ephemeral-signature.apk
+          sha256sum MusicCapsule-v1.6.0-SYNC-FIX-CI-ephemeral-signature.apk > MusicCapsule-v1.6.0-SYNC-FIX-CI-ephemeral-signature.apk.sha256
 
       - name: Upload standalone Music Capsule CI APK
         uses: actions/upload-artifact@v7
         with:
-          name: MusicCapsule-v1.6.0-CI-ephemeral-signature-DO-NOT-USE-FOR-UPDATES
+          name: MusicCapsule-v1.6.0-SYNC-FIX-CI-ephemeral-signature-DO-NOT-USE-FOR-UPDATES
           path: |
-            MusicCapsule-v1.6.0-CI-ephemeral-signature.apk
-            MusicCapsule-v1.6.0-CI-ephemeral-signature.apk.sha256
+            MusicCapsule-v1.6.0-SYNC-FIX-CI-ephemeral-signature.apk
+            MusicCapsule-v1.6.0-SYNC-FIX-CI-ephemeral-signature.apk.sha256
             musiccapsule-apksigner-verify.txt
           if-no-files-found: error
           retention-days: 30
@@ -211,7 +205,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: MusicCapsule-v1.6.0-stripes-only-lint
+          name: MusicCapsule-v1.6.0-sync-fix-lint
           path: musiccapsule/build/reports/lint-results-release.html
           if-no-files-found: ignore
           retention-days: 30

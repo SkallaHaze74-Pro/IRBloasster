@@ -82,9 +82,11 @@ enum class BeatFxMode(
     val label: String,
     val multiplier: Float,
 ) {
-    SMOOTH("smooth", "Smooth", .62f),
-    REACTIVE("reactive", "Reactive", 1f),
-    BRUTAL("brutal", "Brutal", 1.38f),
+    // 1.6.1 Sync Fix: slower base hue travel. Beat/BPM still accelerates it,
+    // but colors no longer outrun the spectrum and pattern motion.
+    SMOOTH("smooth", "Smooth", .40f),
+    REACTIVE("reactive", "Reactive", .67f),
+    BRUTAL("brutal", "Brutal", .92f),
     ;
 
     fun next(): BeatFxMode {
@@ -122,9 +124,11 @@ enum class MotionProfile(
     val attackRate: Float,
     val releaseRate: Float,
 ) {
-    SILKY("silky", "Seidig", 18f, 8.5f),
-    BALANCED("balanced", "Balance", 25f, 10.5f),
-    DIRECT("direct", "Direkt", 36f, 14f),
+    // Faster attack lets bars reach a kick in the same visual moment; release
+    // remains lower so the motion stays smooth instead of flickering.
+    SILKY("silky", "Seidig", 29f, 10.5f),
+    BALANCED("balanced", "Balance", 42f, 13.5f),
+    DIRECT("direct", "Direkt", 58f, 17f),
     ;
 
     fun next(): MotionProfile {
@@ -145,9 +149,9 @@ enum class TrailMode(
     val particleLifeScale: Float,
     val silenceFadeRate: Float,
 ) {
-    SHORT("short", "Kurz", 5.4f, .78f, 24f),
-    MEDIUM("medium", "Mittel", 4.2f, 1f, 15f),
-    LONG("long", "Lang", 3.1f, 1.28f, 9f),
+    SHORT("short", "Kurz", 6.2f, .76f, 27f),
+    MEDIUM("medium", "Mittel", 4.6f, 1f, 17f),
+    LONG("long", "Lang", 3.3f, 1.24f, 10f),
     ;
 
     fun next(): TrailMode {
