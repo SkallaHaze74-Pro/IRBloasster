@@ -100,7 +100,7 @@ enum class BeatFxMode(
 
 enum class VisualLayerMode(val storedValue: String, val label: String) {
     FULL("full", "Voll"),
-    CLEAN("clean", "Clean"),
+    CLEAN("clean", "Nur Striche"),
     BORDER_ONLY("border", "Nur Rand"),
     BORDER_DROP("border_drop", "Rand + Drop"),
     ;
