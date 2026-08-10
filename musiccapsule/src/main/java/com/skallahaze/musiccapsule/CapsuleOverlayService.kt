@@ -40,11 +40,11 @@ class CapsuleOverlayService : Service() {
     private var capsuleView: CapsuleOverlayView? = null
     private var capsuleParams: WindowManager.LayoutParams? = null
 
-    // Edge spectrum and Fusion patterns share one touch-through window. Two
-    // separate full-screen overlay windows would combine their obscuring alpha
-    // on Android 12+ and could block touches to the app underneath.
+    // Edge spectrum, the minimal stripes preset and Fusion patterns share one
+    // touch-through window. This avoids stacking overlay alpha on Android 12+.
     private var visualHost: FrameLayout? = null
     private var edgeView: EdgePanelView? = null
+    private var stripesView: StripesOnlyView? = null
     private var fusionView: FusionOverlayView? = null
     private var visualParams: WindowManager.LayoutParams? = null
 
@@ -57,9 +57,14 @@ class CapsuleOverlayService : Service() {
             val snapshot = CapsuleRuntime.snapshot()
             val intensity = CapsulePreferences.neonIntensity(this@CapsuleOverlayService)
             val edgeEnabled = CapsulePreferences.edgePanelsEnabled(this@CapsuleOverlayService)
+            val stripesOnly =
+                CapsulePreferences.visualLayerMode(this@CapsuleOverlayService) == VisualLayerMode.CLEAN
+
             capsuleView?.setSnapshot(snapshot, intensity)
             ensureVisualHost()
-            edgeView?.setSnapshot(snapshot, intensity, edgeEnabled)
+            edgeView?.setSnapshot(snapshot, intensity, edgeEnabled && !stripesOnly)
+            stripesView?.setSnapshot(snapshot, intensity, edgeEnabled && stripesOnly)
+            fusionView?.visibility = if (stripesOnly) View.GONE else View.VISIBLE
             fusionView?.setSnapshot(snapshot, intensity)
             mainHandler.postDelayed(this, if (snapshot.signal > .01f) 28L else 120L)
         }
@@ -75,6 +80,8 @@ class CapsuleOverlayService : Service() {
         visualHost?.invalidate()
         edgeView?.requestLayout()
         edgeView?.invalidate()
+        stripesView?.requestLayout()
+        stripesView?.invalidate()
         fusionView?.requestLayout()
         fusionView?.invalidate()
         capsuleView?.requestLayout()
@@ -215,9 +222,17 @@ class CapsuleOverlayService : Service() {
             isFocusable = false
         }
         val edge = EdgePanelView(this)
+        val stripes = StripesOnlyView(this)
         val fusion = FusionOverlayView(this).apply { setStageMode(false) }
         host.addView(
             edge,
+            FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT,
+                FrameLayout.LayoutParams.MATCH_PARENT,
+            ),
+        )
+        host.addView(
+            stripes,
             FrameLayout.LayoutParams(
                 FrameLayout.LayoutParams.MATCH_PARENT,
                 FrameLayout.LayoutParams.MATCH_PARENT,
@@ -232,6 +247,7 @@ class CapsuleOverlayService : Service() {
         )
         visualHost = host
         edgeView = edge
+        stripesView = stripes
         fusionView = fusion
         visualParams = createVisualParams()
         windowManager.addView(host, visualParams)
@@ -577,6 +593,7 @@ class CapsuleOverlayService : Service() {
         visualHost = null
         visualParams = null
         edgeView = null
+        stripesView = null
         fusionView = null
         expanded = false
         VisualBeatRuntime.clear()
