@@ -18,9 +18,9 @@ import kotlin.math.pow
  * only short RGB spectrum stripes around all four display edges.
  * No solid frame, centre patterns, stars, symbols or shockwaves.
  *
- * 1.6 Sync Fix: bar attack/release and hue travel now follow learned tempo;
- * bright endpoint dots are rendered directly here so they remain visible even
- * when the heavier Fusion layer is disabled by the "Nur Striche" mode.
+ * Sync/Learn Fix: this view is also the central observer for the shared
+ * SyncLearningRuntime. Even while hidden it keeps learning the current track,
+ * so all other visual layers can use exactly the same BPM and beat clock.
  */
 class StripesOnlyView(context: Context) : View(context) {
     private val density = resources.displayMetrics.density
@@ -36,13 +36,12 @@ class StripesOnlyView(context: Context) : View(context) {
     private val displayLevels = FloatArray(CapsuleRuntime.BAND_COUNT)
 
     private var snapshot = CapsuleRuntime.snapshot()
+    private var sync = SyncLearningRuntime.snapshot()
     private var intensity = 1.35f
     private var enabled = false
     private var lastFrameNanos = 0L
-    private var huePhase = 0f
-    private var hueVelocity = 0f
     private var beatPulse = 0f
-    private var tempoFactor = 1f
+    private var lastSyncBeatSequence = Long.MIN_VALUE
 
     init {
         setLayerType(LAYER_TYPE_HARDWARE, null)
@@ -53,6 +52,7 @@ class StripesOnlyView(context: Context) : View(context) {
 
     fun setSnapshot(value: CapsuleSnapshot, neonIntensity: Float, enabled: Boolean) {
         snapshot = value
+        sync = SyncLearningRuntime.observe(context, value)
         intensity = neonIntensity.coerceIn(.75f, 1.8f)
         this.enabled = enabled
         alpha = VisualTuningPreferences.opacity(context)
@@ -74,57 +74,37 @@ class StripesOnlyView(context: Context) : View(context) {
             ((now - lastFrameNanos) / 1_000_000_000f).coerceIn(1f / 240f, .08f)
         }
         lastFrameNanos = now
+        sync = SyncLearningRuntime.snapshot()
 
-        updateTempo(dt)
+        if (lastSyncBeatSequence == Long.MIN_VALUE || sync.beatSequence < lastSyncBeatSequence) {
+            lastSyncBeatSequence = sync.beatSequence
+        }
+        if (sync.beatSequence > lastSyncBeatSequence) {
+            beatPulse = max(beatPulse, .67f + sync.beatStrength * .33f)
+            lastSyncBeatSequence = sync.beatSequence
+        }
 
-        val attackRate = 31f + tempoFactor * 24f
-        val releaseRate = 10.5f + tempoFactor * 5.5f
-        val attack = 1f - exp(-dt * attackRate)
-        val release = 1f - exp(-dt * releaseRate)
+        val attack = 1f - exp(-dt * sync.attackRate)
+        val release = 1f - exp(-dt * sync.releaseRate)
         for (index in displayLevels.indices) {
             val target = targetLevels[index]
             val factor = if (target > displayLevels[index]) attack else release
             displayLevels[index] += (target - displayLevels[index]) * factor
         }
 
-        val visualBeat = VisualBeatRuntime.snapshot()
-        beatPulse = max(max(snapshot.beat, visualBeat.pulse), beatPulse * exp(-dt * (7.2f + tempoFactor * 1.8f)))
+        val beatDecay = 6.4f + sync.tempoFactor * 3.2f
+        beatPulse *= exp(-dt * beatDecay)
+        val huePhase = SyncLearningRuntime.hueAt()
 
-        // Slow base rotation with BPM-coupled acceleration. Beat adds a pulse,
-        // but does not spin the colors several times faster than the bars.
-        val desiredHueSpeed =
-            4.5f +
-                (tempoFactor - .72f).coerceAtLeast(0f) * 26f +
-                snapshot.treble * 16f +
-                beatPulse * 34f
-        hueVelocity += (desiredHueSpeed - hueVelocity) * (1f - exp(-dt * 5.5f))
-        huePhase = (huePhase + dt * hueVelocity) % 360f
-
-        drawHorizontalStripes(canvas, top = true)
-        drawHorizontalStripes(canvas, top = false)
-        drawVerticalStripes(canvas, left = true)
-        drawVerticalStripes(canvas, left = false)
+        drawHorizontalStripes(canvas, top = true, huePhase = huePhase)
+        drawHorizontalStripes(canvas, top = false, huePhase = huePhase)
+        drawVerticalStripes(canvas, left = true, huePhase = huePhase)
+        drawVerticalStripes(canvas, left = false, huePhase = huePhase)
 
         postInvalidateOnAnimation()
     }
 
-    private fun updateTempo(dt: Float) {
-        val visualBeat = VisualBeatRuntime.snapshot()
-        val auto = AutoTuneRuntime.snapshot()
-        val bpm = when {
-            visualBeat.bpm in 55f..220f -> visualBeat.bpm
-            auto.bpm in 55f..220f -> auto.bpm
-            else -> 0f
-        }
-        val target = if (bpm > 0f) {
-            (bpm / 120f).coerceIn(.72f, 1.48f)
-        } else {
-            (.88f + snapshot.spectralFlux * .24f + snapshot.treble * .12f).coerceIn(.78f, 1.26f)
-        }
-        tempoFactor += (target - tempoFactor) * (1f - exp(-dt * 2.6f))
-    }
-
-    private fun drawHorizontalStripes(canvas: Canvas, top: Boolean) {
+    private fun drawHorizontalStripes(canvas: Canvas, top: Boolean, huePhase: Float) {
         val segments = 76
         val inset = dp(7f)
         val usable = width - inset * 2f
@@ -137,9 +117,9 @@ class StripesOnlyView(context: Context) : View(context) {
             val band = mirroredBand(progress)
             val level = max(.018f, displayLevels[band].pow(.63f))
             val beatWave = abs(
-                sinf(progress * PI.toFloat() * 5f + huePhase * .018f),
+                sinf(progress * PI.toFloat() * 5f + huePhase * .012f),
             ) * beatPulse
-            val length = dp(1.5f) + level * dp(9.4f) * intensity + beatWave * dp(5.8f)
+            val length = dp(1.5f) + level * dp(9.4f) * intensity + beatWave * dp(5.2f)
             val x = inset + index * gap
             val hue = huePhase + progress * 430f + if (top) 0f else 165f
             paint.strokeWidth = dp(.72f) + level * dp(1.55f)
@@ -149,13 +129,15 @@ class StripesOnlyView(context: Context) : View(context) {
                 1f,
                 .22f + level * .74f + beatPulse * .08f,
             )
-            canvas.drawLine(x, baseY, x, baseY + direction * length, paint)
+            val endY = baseY + direction * length
+            canvas.drawLine(x, baseY, x, endY, paint)
 
+            // Top/bottom points stay sparse so the minimal mode remains clean.
             if (VisualTuningPreferences.endpointMode(context) != EndpointMode.OFF && index % 3 == 0) {
                 drawEndpointDot(
                     canvas = canvas,
                     x = x,
-                    y = baseY + direction * length,
+                    y = endY,
                     hue = hue,
                     level = level,
                     beat = beatPulse,
@@ -165,7 +147,7 @@ class StripesOnlyView(context: Context) : View(context) {
         }
     }
 
-    private fun drawVerticalStripes(canvas: Canvas, left: Boolean) {
+    private fun drawVerticalStripes(canvas: Canvas, left: Boolean, huePhase: Float) {
         val segments = 78
         val inset = dp(6f)
         val usable = height - inset * 2f
@@ -177,7 +159,7 @@ class StripesOnlyView(context: Context) : View(context) {
             val progress = index / max(1f, (segments - 1).toFloat())
             val band = edgeBand(progress)
             val level = max(.018f, displayLevels[band].pow(.61f))
-            val length = dp(2.5f) + level * dp(27.5f) * intensity + beatPulse * dp(5.2f)
+            val length = dp(2.5f) + level * dp(27.5f) * intensity + beatPulse * dp(4.8f)
             val y = inset + index * gap
             val hue = huePhase + progress * 520f + if (left) 42f else 218f
             paint.strokeWidth = dp(.82f) + level * dp(1.95f)
@@ -217,20 +199,20 @@ class StripesOnlyView(context: Context) : View(context) {
         if (mode == EndpointMode.OFF) return
         val strength = mode.strength
         val core = dp(
-            (if (horizontal) .46f else .68f) +
-                level * (if (horizontal) .85f else 1.28f) +
-                beat * (if (horizontal) .36f else .62f),
+            (if (horizontal) .46f else .72f) +
+                level * (if (horizontal) .85f else 1.32f) +
+                beat * (if (horizontal) .36f else .66f),
         ) * strength
-        val glow = max(dp(if (horizontal) 1.45f else 2.2f), core * 3.0f)
-        val alpha = (.50f + level * .38f + beat * .12f).coerceIn(.48f, 1f)
+        val glow = max(dp(if (horizontal) 1.45f else 2.35f), core * 3.05f)
+        val alphaValue = (.52f + level * .36f + beat * .12f).coerceIn(.50f, 1f)
 
         dotPaint.shader = RadialGradient(
             x,
             y,
             glow,
             intArrayOf(
-                hsv(hue + 20f, .30f, 1f, alpha),
-                hsv(hue, .86f, 1f, alpha * .34f),
+                hsv(hue + 20f, .28f, 1f, alphaValue),
+                hsv(hue, .84f, 1f, alphaValue * .36f),
                 Color.TRANSPARENT,
             ),
             null,
@@ -238,8 +220,8 @@ class StripesOnlyView(context: Context) : View(context) {
         )
         canvas.drawCircle(x, y, glow, dotPaint)
         dotPaint.shader = null
-        dotPaint.color = hsv(hue + 22f, .16f, 1f, max(.70f, alpha))
-        canvas.drawCircle(x, y, max(dp(.55f), core), dotPaint)
+        dotPaint.color = hsv(hue + 22f, .12f, 1f, max(.74f, alphaValue))
+        canvas.drawCircle(x, y, max(dp(.58f), core), dotPaint)
     }
 
     private fun mirroredBand(progress: Float): Int {
