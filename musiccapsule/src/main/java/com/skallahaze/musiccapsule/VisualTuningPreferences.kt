@@ -81,7 +81,7 @@ enum class EndpointMode(
 enum class StageContentMode(val storedValue: String, val label: String) {
     FRAME_ONLY("frame", "Nur Rahmen"),
     FRAME_PATTERNS("patterns", "Rahmen + Muster"),
-    FUSION("fusion", "Fusion mit Seiten"),
+    FUSION("fusion", "Fusion + Striche"),
     ;
 
     fun next(): StageContentMode {
@@ -95,6 +95,28 @@ enum class StageContentMode(val storedValue: String, val label: String) {
     }
 }
 
+enum class StageStripeMode(
+    val storedValue: String,
+    val label: String,
+    val multiplier: Float,
+) {
+    OFF("off", "Aus", 0f),
+    SOFT("soft", "Wenig", .78f),
+    NORMAL("normal", "Normal", 1f),
+    STRONG("strong", "Stark", 1.24f),
+    ;
+
+    fun next(): StageStripeMode {
+        val values = entries
+        return values[(ordinal + 1) % values.size]
+    }
+
+    companion object {
+        fun from(value: String?): StageStripeMode =
+            entries.firstOrNull { it.storedValue == value } ?: STRONG
+    }
+}
+
 object VisualTuningPreferences {
     private const val PREFS = "music_capsule_visual_tuning"
     private const val KEY_OPACITY = "visual_opacity"
@@ -102,6 +124,7 @@ object VisualTuningPreferences {
     private const val KEY_LIVE_PATTERNS = "live_pattern_mode"
     private const val KEY_ENDPOINT_MODE = "endpoint_mode"
     private const val KEY_STAGE_CONTENT = "stage_content_mode"
+    private const val KEY_STAGE_STRIPES = "stage_stripe_mode"
 
     /** Visual alpha inside the existing touch-through overlay window. */
     fun opacity(context: Context): Float =
@@ -174,6 +197,18 @@ object VisualTuningPreferences {
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
             .edit()
             .putString(KEY_STAGE_CONTENT, mode.storedValue)
+            .apply()
+    }
+
+    fun stageStripeMode(context: Context): StageStripeMode = StageStripeMode.from(
+        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+            .getString(KEY_STAGE_STRIPES, StageStripeMode.STRONG.storedValue),
+    )
+
+    fun setStageStripeMode(context: Context, mode: StageStripeMode) {
+        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+            .edit()
+            .putString(KEY_STAGE_STRIPES, mode.storedValue)
             .apply()
     }
 }

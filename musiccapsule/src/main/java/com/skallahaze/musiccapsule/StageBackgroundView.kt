@@ -21,9 +21,12 @@ import kotlin.math.min
 import kotlin.math.sin
 
 /**
- * AMOLED-black Stage background. Beat patterns and edge endpoints are rendered
- * by [FusionOverlayView], keeping the aura/leaf layer clean and preventing two
- * independent pattern engines from drawing on top of one another.
+ * AMOLED-black Stage background.
+ *
+ * 1.6.4 changes the centre from a simple zoom pulse into an organic oval
+ * breathing motion. Width and height move against each other around the same
+ * SyncLearning clock, so the aura/leaf opens and closes like the reference
+ * video instead of merely becoming a larger circle.
  */
 class StageBackgroundView(context: Context) : View(context) {
     private val density = resources.displayMetrics.density
@@ -43,6 +46,7 @@ class StageBackgroundView(context: Context) : View(context) {
     private var style = CapsulePreferences.stageStyle(context)
     private var lastFrameNanos = 0L
     private var phase = 0f
+    private var breathPhase = 0f
     private var displayBass = 0f
     private var displayMid = 0f
     private var displayTreble = 0f
@@ -73,19 +77,28 @@ class StageBackgroundView(context: Context) : View(context) {
 
         style = CapsulePreferences.stageStyle(context)
         val snapshot = CapsuleRuntime.snapshot()
+        val sync = SyncLearningRuntime.snapshot()
         val visualBeat = VisualBeatRuntime.snapshot()
-        val attack = 1f - exp(-dt * 24f)
-        val release = 1f - exp(-dt * 8.5f)
+        val attack = 1f - exp(-dt * max(24f, sync.attackRate * .72f))
+        val release = 1f - exp(-dt * max(8.5f, sync.releaseRate * .78f))
         for (index in displayLevels.indices) {
             val target = snapshot.levels.getOrNull(index) ?: 0f
             val factor = if (target > displayLevels[index]) attack else release
             displayLevels[index] += (target - displayLevels[index]) * factor
         }
-        displayBass = smooth(displayBass, snapshot.bass, dt, 27f, 7f)
-        displayMid = smooth(displayMid, snapshot.mid, dt, 22f, 8f)
-        displayTreble = smooth(displayTreble, snapshot.treble, dt, 31f, 11f)
-        displayBeat = max(visualBeat.pulse, displayBeat * exp(-dt * 5.4f))
-        phase = (phase + dt * (4f + displayTreble * 64f + displayBeat * 155f)) % 360f
+        displayBass = smooth(displayBass, snapshot.bass, dt, 31f, 8.5f)
+        displayMid = smooth(displayMid, snapshot.mid, dt, 25f, 9.5f)
+        displayTreble = smooth(displayTreble, snapshot.treble, dt, 34f, 12f)
+        displayBeat = max(
+            max(visualBeat.pulse, sync.beatStrength * if (sync.beatReliable) .92f else .58f),
+            displayBeat * exp(-dt * (6.1f + sync.tempoFactor * 2.0f)),
+        )
+
+        phase = SyncLearningRuntime.hueAt()
+        val bpm = sync.bpm.takeIf { it in 55f..220f } ?: 105f
+        val breathsPerSecond = (bpm / 60f * .48f).coerceIn(.55f, 1.65f)
+        breathPhase = (breathPhase + dt * breathsPerSecond * PI.toFloat() * 2f) %
+            (PI.toFloat() * 2f)
 
         when (style) {
             StageStyle.AMOLED_BLACK -> drawPureBlackAccent(canvas)
@@ -96,17 +109,33 @@ class StageBackgroundView(context: Context) : View(context) {
         postInvalidateOnAnimation()
     }
 
+    /** Returns width/height multipliers that mostly exchange shape, not size. */
+    private fun ovalScales(): Pair<Float, Float> {
+        val wave = sinf(breathPhase)
+        val beatOpen = displayBeat * .055f
+        val widthScale = (
+            1f + wave * .17f + displayMid * .035f + beatOpen
+            ).coerceIn(.80f, 1.28f)
+        val heightScale = (
+            1f - wave * .13f + displayBass * .055f + beatOpen * .42f
+            ).coerceIn(.82f, 1.24f)
+        return widthScale to heightScale
+    }
+
     private fun drawPureBlackAccent(canvas: Canvas) {
         val centerX = width / 2f
         val centerY = height / 2f
-        val radius = min(width, height) * (.06f + displayBeat * .035f)
+        val radius = min(width, height) * .072f
+        val (ovalX, ovalY) = ovalScales()
+        val save = canvas.save()
+        canvas.scale(ovalX, ovalY, centerX, centerY)
         fillPaint.shader = RadialGradient(
             centerX,
             centerY,
             max(1f, radius * 3.2f),
             intArrayOf(
-                hsv(phase + 190f, .90f, 1f, .10f + displayBeat * .12f),
-                hsv(phase + 305f, .92f, 1f, .035f),
+                hsv(phase + 190f, .90f, 1f, .12f + displayBeat * .14f),
+                hsv(phase + 305f, .92f, 1f, .042f),
                 Color.TRANSPARENT,
             ),
             null,
@@ -114,61 +143,97 @@ class StageBackgroundView(context: Context) : View(context) {
         )
         canvas.drawCircle(centerX, centerY, radius * 3.2f, fillPaint)
         fillPaint.shader = null
+        canvas.restoreToCount(save)
     }
 
     private fun drawAura(canvas: Canvas, drawLeaf: Boolean) {
         val centerX = width / 2f
         val centerY = height * .46f
         val minSide = min(width, height).toFloat()
-        val auraRadius = minSide * (.27f + displayBass * .055f + displayBeat * .035f)
+        val baseRadius = minSide * .27f
+        val (ovalX, ovalY) = ovalScales()
 
+        val auraSave = canvas.save()
+        canvas.scale(ovalX, ovalY, centerX, centerY)
         fillPaint.shader = RadialGradient(
             centerX,
             centerY,
-            auraRadius * 1.55f,
+            baseRadius * 1.58f,
             intArrayOf(
-                hsv(phase + 180f, .88f, 1f, .18f + displayBass * .14f),
-                hsv(phase + 270f, .92f, 1f, .10f + displayMid * .09f),
-                hsv(phase + 330f, .92f, 1f, .045f),
+                hsv(phase + 180f, .88f, 1f, .20f + displayBass * .15f),
+                hsv(phase + 270f, .92f, 1f, .115f + displayMid * .10f),
+                hsv(phase + 330f, .92f, 1f, .052f),
                 Color.TRANSPARENT,
             ),
             floatArrayOf(0f, .34f, .66f, 1f),
             Shader.TileMode.CLAMP,
         )
-        canvas.drawCircle(centerX, centerY, auraRadius * 1.55f, fillPaint)
+        canvas.drawCircle(centerX, centerY, baseRadius * 1.58f, fillPaint)
         fillPaint.shader = null
+        canvas.restoreToCount(auraSave)
 
         repeat(5) { ring ->
             val level = displayLevels[(ring * 3).coerceAtMost(displayLevels.lastIndex)]
-            val radius = auraRadius * (.45f + ring * .15f) + level * dp(22f) + displayBeat * dp(13f)
+            val radius = baseRadius * (.45f + ring * .15f) + level * dp(18f)
+            val ringW = radius * ovalX + displayBeat * dp(4f)
+            val ringH = radius * ovalY + displayBeat * dp(2.2f)
             strokePaint.shader = LinearGradient(
-                centerX - radius,
-                centerY - radius,
-                centerX + radius,
-                centerY + radius,
+                centerX - ringW,
+                centerY - ringH,
+                centerX + ringW,
+                centerY + ringH,
                 intArrayOf(
-                    hsv(phase + ring * 32f, .94f, 1f, .55f),
-                    hsv(phase + 120f + ring * 32f, .90f, 1f, .28f),
-                    hsv(phase + 250f + ring * 32f, .93f, 1f, .50f),
+                    hsv(phase + ring * 32f, .94f, 1f, .62f),
+                    hsv(phase + 120f + ring * 32f, .90f, 1f, .34f),
+                    hsv(phase + 250f + ring * 32f, .93f, 1f, .58f),
                 ),
                 null,
                 Shader.TileMode.MIRROR,
             )
-            strokePaint.strokeWidth = dp(.7f + level * 1.5f + displayBeat * .7f)
-            canvas.drawCircle(centerX, centerY, radius, strokePaint)
+            strokePaint.strokeWidth = dp(.82f + level * 1.65f + displayBeat * .72f)
+            canvas.drawOval(
+                RectF(centerX - ringW, centerY - ringH, centerX + ringW, centerY + ringH),
+                strokePaint,
+            )
         }
         strokePaint.shader = null
 
-        drawRadialSpectrum(canvas, centerX, centerY, auraRadius * .82f)
+        drawRadialSpectrum(
+            canvas = canvas,
+            cx = centerX,
+            cy = centerY,
+            radiusX = baseRadius * .82f * ovalX,
+            radiusY = baseRadius * .82f * ovalY,
+        )
 
         if (drawLeaf) {
-            drawLeaf(canvas, centerX, centerY, auraRadius * 1.05f)
+            drawLeaf(
+                canvas = canvas,
+                cx = centerX,
+                cy = centerY,
+                widthSize = baseRadius * 1.06f * ovalX,
+                heightSize = baseRadius * 1.06f * ovalY,
+            )
         } else {
-            drawArtwork(canvas, CapsuleRuntime.snapshot().artwork, centerX, centerY, auraRadius * .48f)
+            drawArtwork(
+                canvas,
+                CapsuleRuntime.snapshot().artwork,
+                centerX,
+                centerY,
+                baseRadius * .48f,
+                ovalX,
+                ovalY,
+            )
         }
     }
 
-    private fun drawRadialSpectrum(canvas: Canvas, cx: Float, cy: Float, radius: Float) {
+    private fun drawRadialSpectrum(
+        canvas: Canvas,
+        cx: Float,
+        cy: Float,
+        radiusX: Float,
+        radiusY: Float,
+    ) {
         val count = 48
         repeat(count) { index ->
             val band = ((index / count.toFloat()) * displayLevels.size)
@@ -176,29 +241,36 @@ class StageBackgroundView(context: Context) : View(context) {
                 .coerceIn(0, displayLevels.lastIndex)
             val level = displayLevels[band]
             val angle = index / count.toFloat() * PI.toFloat() * 2f - PI.toFloat() / 2f
-            val start = radius
-            val end = radius + dp(5f) + level * dp(34f) + displayBeat * dp(8f)
+            val extension = dp(5f) + level * dp(30f) + displayBeat * dp(7f)
+            val cos = cosf(angle)
+            val sin = sinf(angle)
+            val startX = cx + cos * radiusX
+            val startY = cy + sin * radiusY
+            val endX = cx + cos * (radiusX + extension)
+            val endY = cy + sin * (radiusY + extension * .78f)
             strokePaint.color = hsv(
                 phase + index * (300f / count),
                 .92f,
                 1f,
-                .20f + level * .72f + displayBeat * .08f,
+                .24f + level * .73f + displayBeat * .10f,
             )
-            strokePaint.strokeWidth = dp(.75f + level * 1.25f)
-            canvas.drawLine(
-                cx + cosf(angle) * start,
-                cy + sinf(angle) * start,
-                cx + cosf(angle) * end,
-                cy + sinf(angle) * end,
-                strokePaint,
-            )
+            strokePaint.strokeWidth = dp(.82f + level * 1.35f)
+            canvas.drawLine(startX, startY, endX, endY, strokePaint)
         }
     }
 
-    private fun drawLeaf(canvas: Canvas, cx: Float, cy: Float, size: Float) {
-        val pulse = 1f + displayBass * .08f + displayBeat * .07f
-        val half = size * pulse / 2f
-        val target = RectF(cx - half, cy - half, cx + half, cy + half)
+    private fun drawLeaf(
+        canvas: Canvas,
+        cx: Float,
+        cy: Float,
+        widthSize: Float,
+        heightSize: Float,
+    ) {
+        val beatWidth = 1f + displayBeat * .035f
+        val beatHeight = 1f + displayBass * .035f
+        val halfW = widthSize * beatWidth / 2f
+        val halfH = heightSize * beatHeight / 2f
+        val target = RectF(cx - halfW, cy - halfH, cx + halfW, cy + halfH)
         transformMatrix.reset()
         transformMatrix.setRectToRect(RectF(0f, 0f, 24f, 24f), target, Matrix.ScaleToFit.CENTER)
         transformedLeafPath.reset()
@@ -210,9 +282,9 @@ class StageBackgroundView(context: Context) : View(context) {
             target.right,
             target.bottom,
             intArrayOf(
-                hsv(phase + 110f, .82f, 1f, .78f),
-                hsv(phase + 195f, .87f, 1f, .88f),
-                hsv(phase + 295f, .78f, 1f, .82f),
+                hsv(phase + 110f, .82f, 1f, .82f),
+                hsv(phase + 195f, .87f, 1f, .92f),
+                hsv(phase + 295f, .78f, 1f, .86f),
             ),
             null,
             Shader.TileMode.CLAMP,
@@ -220,12 +292,12 @@ class StageBackgroundView(context: Context) : View(context) {
         canvas.drawPath(transformedLeafPath, fillPaint)
         fillPaint.shader = null
         strokePaint.color = Color.argb(
-            (190f * VisualTuningPreferences.opacity(context)).toInt().coerceIn(0, 255),
+            (205f * VisualTuningPreferences.opacity(context)).toInt().coerceIn(0, 255),
             239,
             255,
             249,
         )
-        strokePaint.strokeWidth = dp(1.0f + displayBeat * .5f)
+        strokePaint.strokeWidth = dp(1.05f + displayBeat * .58f)
         canvas.drawPath(transformedLeafPath, strokePaint)
     }
 
@@ -235,15 +307,19 @@ class StageBackgroundView(context: Context) : View(context) {
         cx: Float,
         cy: Float,
         radius: Float,
+        ovalX: Float,
+        ovalY: Float,
     ) {
+        val halfW = radius * ovalX
+        val halfH = radius * ovalY
         if (bitmap == null || bitmap.isRecycled) {
-            fillPaint.color = hsv(phase + 165f, .82f, 1f, .45f)
-            canvas.drawCircle(cx, cy, radius, fillPaint)
+            fillPaint.color = hsv(phase + 165f, .82f, 1f, .48f)
+            canvas.drawOval(RectF(cx - halfW, cy - halfH, cx + halfW, cy + halfH), fillPaint)
             return
         }
-        val destination = RectF(cx - radius, cy - radius, cx + radius, cy + radius)
+        val destination = RectF(cx - halfW, cy - halfH, cx + halfW, cy + halfH)
         val save = canvas.save()
-        canvas.clipRounded(destination, radius, radius)
+        canvas.clipOval(destination)
         val scale = max(destination.width() / bitmap.width, destination.height() / bitmap.height)
         val sourceWidth = destination.width() / scale
         val sourceHeight = destination.height() / scale
@@ -268,8 +344,8 @@ class StageBackgroundView(context: Context) : View(context) {
     private fun hsv(hue: Float, saturation: Float, value: Float, alpha: Float): Int {
         val brightness = CapsulePreferences.neonIntensity(context).coerceIn(.75f, 1.8f)
         val opacity = VisualTuningPreferences.opacity(context)
-        val effectiveValue = (value * (.62f + brightness * .34f)).coerceIn(0f, 1f)
-        val effectiveAlpha = (alpha * opacity * (.70f + brightness * .20f)).coerceIn(0f, 1f)
+        val effectiveValue = (value * (.64f + brightness * .34f)).coerceIn(0f, 1f)
+        val effectiveAlpha = (alpha * opacity * (.74f + brightness * .18f)).coerceIn(0f, 1f)
         val color = Color.HSVToColor(
             floatArrayOf((hue % 360f + 360f) % 360f, saturation, effectiveValue),
         )
