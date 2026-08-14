@@ -71,7 +71,7 @@ keytool -list -v -keystore "$KEYSTORE" -storepass "$STORE_PASS" -alias smartir 2
 ./gradlew --stop >/dev/null 2>&1 || true
 rm -rf .gradle app/build
 
-# Build only SmartIR. The separate Music Capsule module has its own key and script.
+# Build SmartIR.
 ./gradlew --no-daemon :app:clean :app:assembleRelease
 
 VERSION="$(sed -n "s/.*versionName '\([^']*\)'.*/\1/p" app/build.gradle | head -n1)"
