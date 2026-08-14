@@ -1,0 +1,48 @@
+name: SoundCloud TV Pro Check
+
+on:
+  push:
+    branches: [feature/soundcloud-webos-1.0]
+    paths:
+      - 'webos-soundcloud/**'
+      - '.github/workflows/soundcloud-tv-check.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'webos-soundcloud/**'
+      - '.github/workflows/soundcloud-tv-check.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Check JavaScript and shell syntax
+        run: |
+          node --check webos-soundcloud/app.js
+          bash -n webos-soundcloud/package-termux.sh
+          bash -n webos-soundcloud/install-termux.sh
+
+      - name: Generate deterministic package assets
+        run: |
+          mkdir -p "$RUNNER_TEMP/fakebin"
+          printf '#!/bin/sh\nexit 0\n' > "$RUNNER_TEMP/fakebin/ares-package"
+          chmod +x "$RUNNER_TEMP/fakebin/ares-package"
+          PATH="$RUNNER_TEMP/fakebin:$PATH" bash webos-soundcloud/package-termux.sh
+
+      - name: Verify Sound Share build
+        run: |
+          test -s webos-soundcloud/icon.png
+          test -s webos-soundcloud/largeicon.png
+          test ! -d webos-soundcloud/media
+          grep -q 'com.webos.app.btspeakerapp' webos-soundcloud/app.js
+          grep -q 'com.webos.app.homeconnect' webos-soundcloud/app.js
+          grep -q '"version": "1.4.0"' webos-soundcloud/appinfo.json
